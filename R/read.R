@@ -1,6 +1,7 @@
 #' Read tables from a DeST model and convert to SQLite
 #'
-#' @param file \[string\] Path to the DeST model file.
+#' @param accdb \[string\] Path to the DeST model file. Usually a Microsoft
+#'       Access database file with `.accdb` extension.
 #'
 #' @param tables \[character\] Vector of table names to read from the DeST
 #'        model. If `NULL`, which is the default, all tables will be read.
@@ -8,52 +9,40 @@
 #' @param sqlite \[string\] Path to the SQLite database file. If `:memory:`,
 #'        which is the default, a temporary in-memory database will be created.
 #'
+#' @param verbose \[logical\] Whether to print information about the conversion
+#'       process. Default is `TRUE`.
+#'
 #' @return \[DBIConnection\] A SQLite database connection with all specified tables..
 #'
 #' @note Tables with the same name will be overwritten in the SQLite database.
 #'
 #' @export
-read_dest <- function(file, tables = NULL, sqlite = ":memory:") {
-    if (!(length(file) == 1L && is.character(file) && !is.na(file))) {
-        stop("'file' should be a single file path string")
-    }
-
-    # make sure that the file exists before attempting to connect
-    if (!file.exists(file)) {
-        stop(sprintf("DB file does not exist at '%s'", file))
-    }
-
-    file <- normalizePath(file)
-
+read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = TRUE) {
     # use Microsoft Access Driver on Windows
     if (.Platform$OS.type == "windows") {
-        access_to_sqlite_dbi(file, sqlite, tables, drop = TRUE)
+        access_to_sqlite_dbi(accdb, sqlite, tables, drop = TRUE, verbose = verbose)
     } else {
-        access_to_sqlite_mdbtools(file, sqlite, tables, drop = TRUE)
+        access_to_sqlite_mdbtools(accdb, sqlite, tables, drop = TRUE, verbose = verbose)
     }
 }
 
 #' Convert Microsoft Access database to SQLite using DBI
 #'
-#' @param accdb \[string\] Path to the Microsoft Access database file.
-#'
-#' @param sqlite \[string\] Path to the SQLite database file. If `:memory:`,
-#'        which is the default, a temporary in-memory database will be created.
-#'
-#' @param tables \[character\] Vector of table names to convert from the
-#'        Microsoft Access database to the SQLite database. If `NULL`, which
-#'        is the default, all tables will be converted.
+#' @inheritParams read_dest
 #'
 #' @param drop \[logical\] Whether to drop tables in the SQLite database if
 #'        they already exist. Default is `TRUE`.
-#'
-#' @return \[DBIConnection\] A SQLite database connection.
 #'
 #' @note This only works on Windows. For macOS and Linux, use
 #'       [access_to_sqlite_mdbtools()] instead.
 #'
 #' @keywords internal
-access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE) {
+access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = TRUE) {
+    if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
+        stop("'accdb' should be a single file path string")
+    }
+
+    # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
         stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
     }
@@ -85,6 +74,7 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 
     conn_sql <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
 
+    if (verbose) message("Converting Microsoft Access database to SQLite...")
     DBI::dbWithTransaction(conn_sql, {
         for (tbl in tables) {
             # drop table if exists
@@ -92,7 +82,7 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 
             # TODO: get the schema
 
-            message(sprintf("Importing table '%s' to SQLite database...", tbl))
+            if (verbose) message(sprintf("  - Importing table '%s'...", tbl))
             DBI::dbWriteTable(conn_sql, tbl, DBI::dbReadTable(conn_accdb, tbl))
         }
     })
@@ -102,26 +92,20 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 
 #' Convert Microsoft Access database to SQLite using mdbtools
 #'
-#' @param accdb \[string\] Path to the Microsoft Access database file.
-#'
-#' @param sqlite \[string\] Path to the SQLite database file. If `:memory:`,
-#'        which is the default, a temporary in-memory database will be created.
-#'
-#' @param tables \[character\] Vector of table names to convert from the
-#'        Microsoft Access database to the SQLite database. If `NULL`, which
-#'        is the default, all tables will be converted.
-#'
-#' @param drop \[logical\] Whether to drop tables in the SQLite database if
-#'        they already exist. Default is `TRUE`.
-#'
-#' @return \[DBIConnection\] A SQLite database connection.
+#' @inheritParams read_dest
+#' @inheritParams access_to_sqlite_dbi
 #'
 #' @note This function requires 'mdbtools' installed and can be found in PATH,
 #'       which means that it only works on macOS and Linux. For Windows, use
 #'       [access_to_sqlite_dbi()] instead.
 #'
 #' @keywords internal
-access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE) {
+access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = TRUE) {
+    if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
+        stop("'accdb' should be a single file path string")
+    }
+
+    # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
         stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
     }
@@ -142,6 +126,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     if (!is.null(tables)) {
         tables <- unique(tables)
     } else {
+        if (verbose) message("Listing tables from Microsoft Access database...")
         tables <- system2(
             mdbtools["mdb-tables"], args = c("-1", accdb),
             stdout = TRUE, stderr = TRUE
@@ -154,11 +139,13 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     # create a SQLite database connection
     conn <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
 
+    if (verbose) message("Converting Microsoft Access database to SQLite...")
     DBI::dbWithTransaction(conn, {
         for (tbl in tables) {
             # drop table if exists
             if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS %s", tbl))
 
+            if (verbose) message(sprintf("  - Extract schema o table '%s'...", tbl))
             # dump the table schema in SQLite format
             schema <- system2(
                 mdbtools["mdb-schema"], c("-T", tbl, accdb, "sqlite"),
@@ -171,6 +158,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             # create the empty table
             DBI::dbExecute(conn, paste0(schema, collapse = "\n"))
 
+            if (verbose) message(sprintf("  - Importing data o table '%s'...", tbl))
             # export table data in SQLite format
             data <- system2(
                 mdbtools["mdb-export"],
@@ -211,8 +199,6 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             old <- getOption("warn")
             options("warn" = 1L)
             on.exit(options(warn = old), add = TRUE)
-
-            message(sprintf("Importing table '%s' to SQLite database...", tbl))
 
             # insert data to the table if not empty
             for (d in data) DBI::dbExecute(conn, paste0(d, collapse = "\n"))

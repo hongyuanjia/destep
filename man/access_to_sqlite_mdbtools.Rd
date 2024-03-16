@@ -8,24 +8,25 @@ access_to_sqlite_mdbtools(
   accdb,
   sqlite = ":memory:",
   tables = NULL,
-  drop = TRUE
+  drop = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{accdb}{[string] Path to the Microsoft Access database file.}
+\item{accdb}{[string] Path to the DeST model file. Usually a Microsoft
+Access database file with \code{.accdb} extension.}
 
 \item{sqlite}{[string] Path to the SQLite database file. If \verb{:memory:},
 which is the default, a temporary in-memory database will be created.}
 
-\item{tables}{[character] Vector of table names to convert from the
-Microsoft Access database to the SQLite database. If \code{NULL}, which
-is the default, all tables will be converted.}
+\item{tables}{[character] Vector of table names to read from the DeST
+model. If \code{NULL}, which is the default, all tables will be read.}
 
 \item{drop}{[logical] Whether to drop tables in the SQLite database if
 they already exist. Default is \code{TRUE}.}
-}
-\value{
-[DBIConnection] A SQLite database connection.
+
+\item{verbose}{[logical] Whether to print information about the conversion
+process. Default is \code{TRUE}.}
 }
 \description{
 Convert Microsoft Access database to SQLite using mdbtools
