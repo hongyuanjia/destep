@@ -13,5 +13,7 @@ Imports:
     DBI,
     odbc
 Suggests: 
+    archive,
+    httr2,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
