@@ -38,6 +38,7 @@ read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = TRUE)
 #'
 #' @keywords internal
 access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = TRUE) {
+    # TODO: support DBIConnection input
     if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
         stop("'accdb' should be a single file path string")
     }
@@ -47,6 +48,12 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
         stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
     }
 
+    if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
+        stop("'drop' should be a single logical value of 'TRUE' or 'FALSE'")
+    }
+    if (!(length(verbose) == 1L && is.logical(verbose) && !is.na(verbose))) {
+        stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
+    }
     conn_accdb <- DBI::dbConnect(odbc::odbc(),
         driver = "Microsoft Access Driver (*.mdb, *.accdb)",
         dbq = accdb
@@ -56,6 +63,9 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
     if (is.null(tables)) {
         tables <- DBI::dbListTables(conn_accdb)
     } else {
+        if (!is.character(tables) || anyNA(tables)) {
+            stop("'tables' should be a character vector with no missing values")
+        }
         tables <- unique(tables)
     }
 
@@ -104,10 +114,16 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
         stop("'accdb' should be a single file path string")
     }
-
     # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
         stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
+    }
+
+    if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
+        stop("'drop' should be a single logical value of 'TRUE' or 'FALSE'")
+    }
+    if (!(length(verbose) == 1L && is.logical(verbose) && !is.na(verbose))) {
+        stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 
     # use mdbtools on macOS and Linux
@@ -124,6 +140,9 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     }
 
     if (!is.null(tables)) {
+        if (!is.character(tables) || anyNA(tables)) {
+            stop("'tables' should be a character vector with no missing values")
+        }
         tables <- unique(tables)
     } else {
         if (verbose) message("Listing tables from Microsoft Access database...")
