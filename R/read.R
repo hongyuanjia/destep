@@ -45,7 +45,7 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 
     # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
-        stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
+        stop(sprintf("Input 'accdb' file '%s' did not exist", accdb))
     }
 
     if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
@@ -88,7 +88,7 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
     DBI::dbWithTransaction(conn_sql, {
         for (tbl in tables) {
             # drop table if exists
-            if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS %s", tbl))
+            if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
 
             # TODO: get the schema
 
@@ -116,7 +116,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     }
     # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
-        stop(sprintf("Input 'accdb' file '%s' did not exists", accdb))
+        stop(sprintf("Input 'accdb' file '%s' did not exist", accdb))
     }
 
     if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
@@ -150,6 +150,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             mdbtools["mdb-tables"], args = c("-1", accdb),
             stdout = TRUE, stderr = TRUE
         )
+
         if (!is.null(attr(tables, "status"))) {
             stop(sprintf("Failed to list tables from '%s': %s", accdb, tables))
         }
@@ -162,7 +163,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     DBI::dbWithTransaction(conn, {
         for (tbl in tables) {
             # drop table if exists
-            if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS %s", tbl))
+            if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
 
             if (verbose) message(sprintf("  - Extract schema o table '%s'...", tbl))
             # dump the table schema in SQLite format
