@@ -11,5 +11,6 @@
 ^docs$
 
 ^test/testthat/fixture/*[.]accdb$
+^test/testthat/fixture/*[.]laccdb$
 
 ^cran-comments\.md$
