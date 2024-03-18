@@ -147,7 +147,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     } else {
         if (verbose) message("Listing tables from Microsoft Access database...")
         tables <- system2(
-            mdbtools["mdb-tables"], args = c("-1", accdb),
+            mdbtools["mdb-tables"], args = c("-1", shQuote(accdb)),
             stdout = TRUE, stderr = TRUE
         )
 
@@ -165,10 +165,10 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             # drop table if exists
             if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
 
-            if (verbose) message(sprintf("  - Extract schema o table '%s'...", tbl))
+            if (verbose) message(sprintf("  - Extract schema of table '%s'...", tbl))
             # dump the table schema in SQLite format
             schema <- system2(
-                mdbtools["mdb-schema"], c("-T", tbl, accdb, "sqlite"),
+                mdbtools["mdb-schema"], c("-T", shQuote(tbl), shQuote(accdb), "sqlite"),
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(schema, "status"))) {
@@ -178,11 +178,11 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             # create the empty table
             DBI::dbExecute(conn, paste0(schema, collapse = "\n"))
 
-            if (verbose) message(sprintf("  - Importing data o table '%s'...", tbl))
+            if (verbose) message(sprintf("  - Importing data of table '%s'...", tbl))
             # export table data in SQLite format
             data <- system2(
                 mdbtools["mdb-export"],
-                c("-I", "sqlite", "-b", "octal", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), accdb, tbl),
+                c("-I", "sqlite", "-b", "octal", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), shQuote(accdb), shQuote(tbl)),
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(data, "status"))) {
