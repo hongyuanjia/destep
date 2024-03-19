@@ -45,7 +45,18 @@ This package is still under heavy development and is not ready for use. Currentl
 * [ ] Shading
 * [ ] HVAC
 
-```r
+## Get started
+
+```{r example}
 library(destep)
-# TBD
+
+# use a DeST typical building model as an example
+path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
+
+# make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not
+# installed
+eplusr::use_idd(23.1, download = "auto")
+
+# read the DeST model and convert it to an EnergyPlus model
+read_dest(path) |> to_eplus(23.1)
 ```
