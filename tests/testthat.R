@@ -1,4 +1,4 @@
 library(testthat)
-library(destup)
+library(destep)
 
-test_check("destup")
+test_check("destep")

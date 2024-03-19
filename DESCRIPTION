@@ -1,10 +1,10 @@
-Package: destup
+Package: destep
 Title: A toolkit to convert 'DeST' models to 'EnergyPlus' models
 Version: 0.0.0.9000
 Authors@R: 
     person("Hongyuan", "Jia", , "hongyuanjia@cqust.edu.cn", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0075-8183"))
-Description: A toolkit to convert 'DeST' models to 'EnergyPlus' models
+Description: A toolkit to convert 'DeST' models to 'EnergyPlus' models.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -15,7 +15,8 @@ Imports:
     data.table,
     DBI,
     eplusr,
-    odbc
+    odbc,
+    RSQLite
 Suggests: 
     archive,
     httr2,

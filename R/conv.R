@@ -89,7 +89,8 @@ MAP_ID_NAME <- list(
 #'
 #' @param ver \[string\] A character string specifying the EnergyPlus version.
 #'        It can be `"latest"`, which is the default, to indicate using the
-#'        latest EnergyPlus version supported by the {eplusr} package.
+#'        latest EnergyPlus version supported by the
+#'        \{[eplusr](https://cran.r-project.org/package=eplusr)\} package.
 #'
 #' @param copy \[logical\] Whether to copy the input DeST database to a
 #'        temporary SQLite database. Note that if `FALSE`, the input database
@@ -1179,7 +1180,7 @@ destep_conv_surface <- function(dest, ep) {
                 # 04: Zone Name
                 zone_name = ROOM[[1L]],
                 # 05: Space Name - Space was introduced in EnergyPlus v9.6
-                if (ep$version() > 9.5) space_name = NULL,
+                if (ep$version() > "9.5") space_name = NULL,
                 # 06: Outside Boundary Condition
                 outside_boundary_condition = BOUNDARY[[1L]],
                 # 07: Outside Boundary Condition Object

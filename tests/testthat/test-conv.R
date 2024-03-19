@@ -62,5 +62,5 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(surface, "table"), "data.table")
 
     # can convert a DeST model to an EnergyPlus model
-    expect_s3_class(expect_message(idf <- to_eplus(dest)), "Idf")
+    expect_message(expect_s3_class(idf <- to_eplus(dest), "Idf"))
 })
