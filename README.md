@@ -4,6 +4,8 @@
 # destep
 
 <!-- badges: start -->
+
+[![R-CMD-check](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 > A toolkit to convert ‘DeST’ models to ‘EnergyPlus’ models
