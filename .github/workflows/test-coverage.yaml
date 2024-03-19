@@ -19,7 +19,7 @@ jobs:
 
       - name: Install mdbtools
         id: install-mdbtools-apt
-        if: ${{ input.os == 'ubuntu-latest' }}
+        if: ${{ runner.os == 'ubuntu-latest' }}
         run: sudo apt install mdbtools
 
       - uses: r-lib/actions/setup-r@v2

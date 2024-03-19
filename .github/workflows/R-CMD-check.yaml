@@ -37,7 +37,7 @@ jobs:
       - name: Install mdbtools
         id: install-mdbtools-brew
         if: ${{ matrix.config.os == 'macos-latest' }}
-        run: brew mdbtools
+        run: brew install mdbtools
 
       - name: Install mdbtools
         id: install-mdbtools-apt
