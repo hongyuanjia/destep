@@ -14,7 +14,7 @@ test_that("read_dest()", {
     DBI::dbDisconnect(dest)
 
     # can read all tables
-    expect_s4_class(dest <- read_dest(path, verbose = FALSE), "SQLiteConnection")
+    expect_message(expect_s4_class(dest <- read_dest(path, verbose = TRUE), "SQLiteConnection"))
     expect_true("WINDOW" %in% DBI::dbListTables(dest))
     DBI::dbDisconnect(dest)
 })

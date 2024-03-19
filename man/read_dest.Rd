@@ -4,7 +4,7 @@
 \alias{read_dest}
 \title{Read tables from a DeST model and convert to SQLite}
 \usage{
-read_dest(accdb, tables = NULL, sqlite = ":memory:", verbose = TRUE)
+read_dest(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE)
 }
 \arguments{
 \item{accdb}{[string] Path to the DeST model file. Usually a Microsoft
@@ -17,7 +17,7 @@ model. If \code{NULL}, which is the default, all tables will be read.}
 which is the default, a temporary in-memory database will be created.}
 
 \item{verbose}{[logical] Whether to print information about the conversion
-process. Default is \code{TRUE}.}
+process. Default is \code{FALSE}.}
 }
 \value{
 [DBIConnection] A SQLite database connection with all specified tables..

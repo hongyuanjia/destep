@@ -10,14 +10,14 @@
 #'        which is the default, a temporary in-memory database will be created.
 #'
 #' @param verbose \[logical\] Whether to print information about the conversion
-#'       process. Default is `TRUE`.
+#'       process. Default is `FALSE`.
 #'
 #' @return \[DBIConnection\] A SQLite database connection with all specified tables..
 #'
 #' @note Tables with the same name will be overwritten in the SQLite database.
 #'
 #' @export
-read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = TRUE) {
+read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE) {
     # use Microsoft Access Driver on Windows
     if (.Platform$OS.type == "windows") {
         access_to_sqlite_dbi(accdb, sqlite, tables, drop = TRUE, verbose = verbose)
@@ -37,7 +37,7 @@ read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = TRUE)
 #'       [access_to_sqlite_mdbtools()] instead.
 #'
 #' @keywords internal
-access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = TRUE) {
+access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
     # TODO: support DBIConnection input
     if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
         stop("'accdb' should be a single file path string")
@@ -110,7 +110,7 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 #'       [access_to_sqlite_dbi()] instead.
 #'
 #' @keywords internal
-access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = TRUE) {
+access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
     if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
         stop("'accdb' should be a single file path string")
     }
@@ -178,7 +178,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             # create the empty table
             DBI::dbExecute(conn, paste0(schema, collapse = "\n"))
 
-            if (verbose) message(sprintf("  - Importing data of table '%s'...", tbl))
+            if (verbose) message(sprintf("  - Importing data o table '%s'...", tbl))
             # export table data in SQLite format
             data <- system2(
                 mdbtools["mdb-export"],

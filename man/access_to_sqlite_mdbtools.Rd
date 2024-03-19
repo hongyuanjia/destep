@@ -9,7 +9,7 @@ access_to_sqlite_mdbtools(
   sqlite = ":memory:",
   tables = NULL,
   drop = TRUE,
-  verbose = TRUE
+  verbose = FALSE
 )
 }
 \arguments{
@@ -26,7 +26,7 @@ model. If \code{NULL}, which is the default, all tables will be read.}
 they already exist. Default is \code{TRUE}.}
 
 \item{verbose}{[logical] Whether to print information about the conversion
-process. Default is \code{TRUE}.}
+process. Default is \code{FALSE}.}
 }
 \description{
 Convert Microsoft Access database to SQLite using mdbtools
