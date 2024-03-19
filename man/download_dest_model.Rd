@@ -18,10 +18,6 @@ workding directory.}
 }
 \value{
 [character] Path to the downloaded file.
-
-\dontrun{
-download_typical_dest("Commerical office A", "Chongqin", 2015)
-}
 }
 \description{
 Download a typical building model from the DeST website
@@ -32,4 +28,10 @@ The downloaded \verb{7z} file will be unachieved using the \code{{archive}} pack
 \note{
 Information about all available models can be retrieved by sending a
 \code{GET} request to \verb{https://svr.dest.net.cn/api/v1/all_model_names}.
+}
+\examples{
+\dontrun{
+download_typical_dest("Commerical office A", "Chongqin", 2015)
+}
+
 }

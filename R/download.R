@@ -17,6 +17,7 @@
 #'
 #' @return \[character\] Path to the downloaded file.
 #'
+#' @examples
 #' \dontrun{
 #' download_typical_dest("Commerical office A", "Chongqin", 2015)
 #' }
