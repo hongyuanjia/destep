@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# destup
+# destep
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -10,7 +10,7 @@
 
 ## Installation
 
-You can install the development version of destup like so:
+You can install the development version of destep like so:
 
 ``` r
 install.packages("destep",
@@ -27,12 +27,13 @@ This package is still under heavy development and is not ready for use.
 Currently, the following components are supported:
 
 - [x] Geometry
-- [x] Materials
+- [x] Material
 - [x] Construction
 - [ ] Internal gains \[WIP\]
+- [ ] Shading
 - [ ] HVAC
 
 ``` r
-library(destup)
-## basic example code
+library(destep)
+# TBD
 ```

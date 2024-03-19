@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# destup
+# destep
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -22,7 +22,7 @@ knitr::opts_chunk$set(
 
 ## Installation
 
-You can install the development version of destup like so:
+You can install the development version of destep like so:
 
 ```r
 install.packages("destep",
@@ -38,12 +38,13 @@ install.packages("destep",
 This package is still under heavy development and is not ready for use. Currently, the following components are supported:
 
 * [x] Geometry
-* [x] Materials
+* [x] Material
 * [x] Construction
 * [ ] Internal gains [WIP]
+* [ ] Shading
 * [ ] HVAC
 
-```{r example}
-library(destup)
-## basic example code
+```r
+library(destep)
+# TBD
 ```
