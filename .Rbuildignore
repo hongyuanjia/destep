@@ -4,11 +4,11 @@
 ^\.github$
 ^\.gitignore$
 ^_pkgdown\.yml$
+^pkgdown$
+^docs$
 
 ^LICENSE\.md$
 ^README\.Rmd$
-
-^docs$
 
 ^test/testthat/fixture/*[.]accdb$
 ^test/testthat/fixture/*[.]laccdb$
