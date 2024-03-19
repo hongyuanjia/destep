@@ -1078,6 +1078,8 @@ destep_conv_surface <- function(dest, ep) {
             E.SURFACE_ID                                   AS ID,
             E.PLANE                                        AS PLANE,
             S.NAME                                         AS NAME,
+            E.KIND                                         AS KIND_ENCLOSURE,
+            S.TYPE                                         AS TYPE_SURFACE,
             CASE
                 WHEN E.KIND = 1 OR E.KIND = 2 THEN 'Wall'
                 WHEN E.KIND = 3 OR E.KIND = 6 THEN 'Roof'
@@ -1152,7 +1154,15 @@ destep_conv_surface <- function(dest, ep) {
     # find the adjacent surfaces
     surface[BOUNDARY == "Surface", by = "PLANE", BOUNDARY_OBJECT := rev(NAME)]
     # TODO: reverse the order of the vertices for the adjacent surface
-    browser()
+    # If 'MAIN_ENCLOSURE$KIND' = 5, it means that this enclosure can either be a
+    # ceiling or floor. The actual surface type is determined by the
+    # 'SURFACE$TYPE'. If 'SURFACE$TYPE' = 4, this is a floor. The coordinates
+    # should be reversed. If 'SURFACE$TYPE' = 5, this is a ceiling.
+    surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 4L, by = "ID", `:=`(
+        TYPE = "Floor",
+        POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
+    )]
+    surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 5L, TYPE := "Ceiling"]
 
     # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
     # TODO: how does EnergyPlus handle "empty floor slab"?
