@@ -34,6 +34,11 @@ jobs:
         if: ${{ matrix.config.os == 'macos-latest' }}
         uses: Homebrew/actions/setup-homebrew@master
 
+      - name: Install Microsoft Access Runtime
+        id: install-access
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        run: choco install access2016runtime
+
       - name: Install mdbtools
         id: install-mdbtools-brew
         if: ${{ matrix.config.os == 'macos-latest' }}
