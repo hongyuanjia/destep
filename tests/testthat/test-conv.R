@@ -1,5 +1,6 @@
 test_that("to_eplus() works", {
     skip_on_cran()
+    eplusr::use_idd(23.1, "auto")
     ep <- eplusr::empty_idf(23.1)
 
     path <- ensure_dest_test_file()
@@ -55,7 +56,7 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(const, "table"), "data.table")
 
     # can convert 'BuildingSurface:Detailed'
-    expect_is(surface <- destep_conv_surface(dest, ep), "list")
+    expect_type(surface <- destep_conv_surface(dest, ep), "list")
     expect_named(surface, c("object", "value"))
     expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
     expect_s3_class(attr(surface, "table"), "data.table")
