@@ -42,7 +42,12 @@ jobs:
       - name: Install mdbtools
         id: install-mdbtools-brew
         if: ${{ matrix.config.os == 'macos-latest' }}
-        run: brew install mdbtools
+        run: |
+          # Unlink and re-link to prevent errors when GitHub mac runner images
+          # https://github.com/actions/setup-python/issues/577
+          brew list -1 | grep python | while read formula; do brew unlink $formula; brew link --overwrite $formula; done
+          brew update
+          brew install mdbtools
 
       - name: Install mdbtools
         id: install-mdbtools-apt
