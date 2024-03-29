@@ -101,14 +101,14 @@ MAP_ID_NAME <- list(
 #' @export
 # TODO: How about ROOM_GROUP? and STOREY_GROUP?
 to_eplus <- function(dest, ver = "latest", copy = TRUE) {
-    if (is.character(dest) && length(dest) == 1L && file.exists(dest)) {
+    if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
     } else if (!inherits(dest, "DBIConnection")) {
         stop("'dest' should be a path to a DeST model file or a DBIConnection object.")
     }
 
-    if (!(length(copy) == 1L && is.logical(copy) && !is.na(copy))) {
+    if (!is_flag(copy)) {
         stop("'copy' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 

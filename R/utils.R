@@ -1,9 +1,21 @@
+is_scalar <- function(x) {
+    length(x) == 1L
+}
+
 is_integerish <- function(x) {
-    all(!is.na(x)) && (is.integer(x) || (is.double(x) && all(x %% 1 == 0)))
+    (is.integer(x) || (is.double(x) && all(x %% 1 == 0))) && all(!is.na(x))
 }
 
 is_character <- function(x) {
-    all(!is.na(x)) && is.character(x)
+    is.character(x) && all(!is.na(x))
+}
+
+is_string <- function(x) {
+    is_scalar(x) && is_character(x)
+}
+
+is_flag <- function(x) {
+    is_scalar(x) && is.logical(x) && !is.na(x)
 }
 
 utils::globalVariables(c(
