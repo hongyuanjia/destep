@@ -96,13 +96,16 @@ MAP_ID_NAME <- list(
 #'        temporary SQLite database. Note that if `FALSE`, the input database
 #'        will be modified during the conversion. Default is `TRUE`.
 #'
+#' @param verbose \[logical\] Whether to show verbose messages. Default is
+#'       `FALSE`.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model.
 #'
 #' @export
 # TODO: How about ROOM_GROUP? and STOREY_GROUP?
-to_eplus <- function(dest, ver = "latest", copy = TRUE) {
+to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     if (is_string(dest) && file.exists(dest)) {
-        dest <- read_dest(dest)
+        dest <- read_dest(dest, verbose = verbose)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
     } else if (!inherits(dest, "DBIConnection")) {
         stop("'dest' should be a path to a DeST model file or a DBIConnection object.")
@@ -110,6 +113,9 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE) {
 
     if (!is_flag(copy)) {
         stop("'copy' should be a single logical value of 'TRUE' or 'FALSE'")
+    }
+    if (!is_flag(verbose)) {
+        stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 
     # copy the DeST database to a temporary SQLite database since we need to
@@ -124,7 +130,11 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE) {
     }
 
     # create an empty EnergyPlus model
-    ep <- eplusr::empty_idf(ver)
+    if (verbose) {
+        ep <- eplusr::with_verbose(eplusr::empty_idf(ver))
+    } else {
+        ep <- eplusr::empty_idf(ver)
+    }
 
     # add GlobalGeometryRules
     ep$add("GlobalGeometryRules" := list(
