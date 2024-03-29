@@ -126,6 +126,14 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE) {
     # create an empty EnergyPlus model
     ep <- eplusr::empty_idf(ver)
 
+    # add GlobalGeometryRules
+    ep$add("GlobalGeometryRules" := list(
+        starting_vertex_position                      = "UpperLeftCorner",
+        vertex_entry_direction                        = "Counterclockwise",
+        coordinate_system                             = "Relative",
+        daylighting_reference_point_coordinate_system = "Relative"
+    ))
+
     # update object names and make sure all names are unique
     destep_update_name(tmpdb)
 
