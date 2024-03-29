@@ -1173,6 +1173,9 @@ destep_conv_surface <- function(dest, ep) {
     )]
     surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 5L, TYPE := "Ceiling"]
 
+    # remove the surface indicating outside environment and grounds
+    surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
+
     # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
     # TODO: how does EnergyPlus handle "empty floor slab"?
 
