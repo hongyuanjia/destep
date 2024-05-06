@@ -593,9 +593,6 @@ destep_conv_zone <- function(dest, ep) {
         "SELECT
             R.ID                 AS ID,
             R.NAME               AS NAME,
-            ROUND(R.X / 1000, 3) AS X,
-            ROUND(R.Y / 1000, 3) AS Y,
-            ROUND(R.Z / 1000, 3) AS Z,
             ROUND(R.VOLUME, 3)   AS VOLUME,
             ROUND(R.AREA, 3)     AS AREA,
             S.NAME               AS STOREY_NAME,
@@ -631,10 +628,6 @@ destep_conv_zone <- function(dest, ep) {
         # Zone
         quote("Zone" := list(
             name = room$NAME,
-            # TODO: handle origin
-            # x_origin = room$X,
-            # y_origin = room$Y,
-            # z_origin = room$Z,
             # NOTE: DeST use room types to refer to default loads and etc.
             # However, 'type' field is not used by EnergyPlus and is always set
             # to 1.
