@@ -182,7 +182,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             # export table data in SQLite format
             data <- system2(
                 mdbtools["mdb-export"],
-                c("-I", "sqlite", "-b", "octal", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), shQuote(accdb), shQuote(tbl)),
+                c("-I", "sqlite", "-b", "hex", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), shQuote(accdb), shQuote(tbl)),
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(data, "status"))) {
