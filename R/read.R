@@ -139,6 +139,36 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
         ))
     }
 
+    # NOTE: In mdbtools v1.0.1, index and primary key output to the SQLite
+    # schema writer backend was added. The feature is enabled by default which
+    # complex the schema extraction logic. So here we explicitly disable the
+    # feature.
+    # See: https://github.com/mdbtools/mdbtools/pull/402
+    mdb_schema_ver <- system2(mdbtools["mdb-schema"], "--version", stdout = TRUE, stderr = TRUE)
+    if (!is.null(attr(mdb_schema_ver, "status"))) {
+        stop("Failed to get the version of 'mdb-schema'.")
+    }
+    mdb_schema_ver <- numeric_version(sub("mdbtools v", "", mdb_schema_ver, fixed = TRUE))
+    if (mdb_schema_ver > "1.0.0") {
+        mdb_schema_args <- c(
+            "--no-drop-table",
+            "--no-not-null",
+            "--no-default-values",
+            "--no-not_empty",
+            "--no-comments",
+            "--no-relations",
+            "--no-indexes"
+        )
+    } else {
+        mdb_schema_args <- c(
+            "--no-drop-table",
+            "--no-not-null",
+            "--no-default-values",
+            "--no-not_empty",
+            "--no-comments"
+        )
+    }
+
     if (!is.null(tables)) {
         if (!is.character(tables) || anyNA(tables)) {
             stop("'tables' should be a character vector with no missing values")
@@ -159,6 +189,11 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     # create a SQLite database connection
     conn <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
 
+    # issue warnings immediately when they occur
+    old <- getOption("warn")
+    options("warn" = 1L)
+    on.exit(options(warn = old), add = TRUE)
+
     if (verbose) message("Converting Microsoft Access database to SQLite...")
     DBI::dbWithTransaction(conn, {
         for (tbl in tables) {
@@ -168,15 +203,17 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             if (verbose) message(sprintf("  - Extract schema of table '%s'...", tbl))
             # dump the table schema in SQLite format
             schema <- system2(
-                mdbtools["mdb-schema"], c("-T", shQuote(tbl), shQuote(accdb), "sqlite"),
+                mdbtools["mdb-schema"], c(mdb_schema_args, "-T", shQuote(tbl), shQuote(accdb), "sqlite"),
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(schema, "status"))) {
                 stop(sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema))
             }
-
-            # create the empty table
-            DBI::dbExecute(conn, paste0(schema, collapse = "\n"))
+            # remove empty lines
+            schema_clean <- schema[nzchar(schema)]
+            # remove comments
+            schema_clean <- schema_clean[!startsWith(schema_clean, "--")]
+            DBI::dbExecute(conn, paste0(schema_clean, collapse = "\n"))
 
             if (verbose) message(sprintf("  - Importing data o table '%s'...", tbl))
             # export table data in SQLite format
@@ -214,11 +251,6 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
                     stmt
                 }
             ))
-
-            # issue warnings immediately when they occur
-            old <- getOption("warn")
-            options("warn" = 1L)
-            on.exit(options(warn = old), add = TRUE)
 
             # insert data to the table if not empty
             for (d in data) DBI::dbExecute(conn, paste0(d, collapse = "\n"))
