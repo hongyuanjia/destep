@@ -12,6 +12,7 @@ RoxygenNote: 7.3.1
 SystemRequirements: mdbtools (<https://github.com/mdbtools/mdbtools>, required
     on macOS and Linux); Microsoft Access ODBC Driver on Windows
 Imports: 
+    collapse(>= 2.1.0),
     data.table,
     DBI,
     eplusr,
