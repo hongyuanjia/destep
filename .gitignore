@@ -6,3 +6,4 @@
 *.laccdb
 *.sql
 docs
+.cursor

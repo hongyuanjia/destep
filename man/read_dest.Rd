@@ -4,7 +4,13 @@
 \alias{read_dest}
 \title{Read tables from a DeST model and convert to SQLite}
 \usage{
-read_dest(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE)
+read_dest(
+  accdb,
+  tables = NULL,
+  sqlite = ":memory:",
+  verbose = FALSE,
+  drop = TRUE
+)
 }
 \arguments{
 \item{accdb}{[string] Path to the DeST model file. Usually a Microsoft
@@ -18,12 +24,49 @@ which is the default, a temporary in-memory database will be created.}
 
 \item{verbose}{[logical] Whether to print information about the conversion
 process. Default is \code{FALSE}.}
+
+\item{drop}{[logical] Whether to drop tables in the SQLite database if
+they already exist. Default is \code{TRUE}.}
 }
 \value{
-[DBIConnection] A SQLite database connection with all specified tables..
+[DBIConnection] A SQLite database connection with all specified tables.
 }
 \description{
 Read tables from a DeST model and convert to SQLite
+}
+\details{
+The function converts a Microsoft Access database (\code{.accdb} or \code{.mdb}) to SQLite
+using the following approach:
+\enumerate{
+\item \strong{Driver Selection}: The function tries to use ODBC drivers first:
+\itemize{
+\item On Windows: Primarily uses "\verb{Microsoft Access Driver (*.mdb, *.accdb)}"
+\item On macOS/Linux: Tries to find available drivers like "\verb{MDBTools Driver}"
+}
+\item \strong{Fallback Mechanism}: If ODBC connection fails, on non-Windows systems,
+the function falls back to using MDBTools command-line utilities
+\item \strong{Table Selection}:
+\itemize{
+\item If \code{tables = NULL}, all tables are read except for system tables (MSys*)
+\item Otherwise, only the specified tables are processed
+}
+\item \strong{Data Transfer}: For each table:
+\itemize{
+\item Optionally drops existing table in target SQLite database
+\item Reads the entire table from Access
+\item Writes the data to SQLite
+}
+\item \strong{Schema Handling}: Table structure (columns and types) is automatically
+preserved during the transfer process
+}
+
+For systems without proper ODBC drivers (especially some Linux distributions),
+consider installing one of the following:
+\itemize{
+\item \code{MDBTools}: Open-source utilities for reading Access databases
+\item \verb{LibreOffice Base}: Provides ODBC drivers for Access
+\item Commercial drivers: \verb{Actual Technologies} or \verb{Easysoft ODBC drivers}
+}
 }
 \note{
 Tables with the same name will be overwritten in the SQLite database.

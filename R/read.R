@@ -12,59 +12,166 @@
 #' @param verbose \[logical\] Whether to print information about the conversion
 #'       process. Default is `FALSE`.
 #'
-#' @return \[DBIConnection\] A SQLite database connection with all specified tables..
-#'
-#' @note Tables with the same name will be overwritten in the SQLite database.
-#'
-#' @export
-read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE) {
-    # use Microsoft Access Driver on Windows
-    if (.Platform$OS.type == "windows") {
-        access_to_sqlite_dbi(accdb, sqlite, tables, drop = TRUE, verbose = verbose)
-    } else {
-        access_to_sqlite_mdbtools(accdb, sqlite, tables, drop = TRUE, verbose = verbose)
-    }
-}
-
-#' Convert Microsoft Access database to SQLite using DBI
-#'
-#' @inheritParams read_dest
-#'
 #' @param drop \[logical\] Whether to drop tables in the SQLite database if
 #'        they already exist. Default is `TRUE`.
 #'
-#' @note This only works on Windows. For macOS and Linux, use
-#'       [access_to_sqlite_mdbtools()] instead.
+#' @return \[DBIConnection\] A SQLite database connection with all specified tables.
 #'
-#' @keywords internal
-access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
+#' @note Tables with the same name will be overwritten in the SQLite database.
+#'
+#' @details
+#' The function converts a Microsoft Access database (`.accdb` or `.mdb`) to SQLite
+#' using the following approach:
+#'
+#' 1. **Driver Selection**: The function tries to use ODBC drivers first:
+#'    - On Windows: Primarily uses "`Microsoft Access Driver (*.mdb, *.accdb)`"
+#'    - On macOS/Linux: Tries to find available drivers like "`MDBTools Driver`"
+#'
+#' 2. **Fallback Mechanism**: If ODBC connection fails, on non-Windows systems,
+#'    the function falls back to using MDBTools command-line utilities
+#'
+#' 3. **Table Selection**:
+#'    - If `tables = NULL`, all tables are read except for system tables (MSys*)
+#'    - Otherwise, only the specified tables are processed
+#'
+#' 4. **Data Transfer**: For each table:
+#'    - Optionally drops existing table in target SQLite database
+#'    - Reads the entire table from Access
+#'    - Writes the data to SQLite
+#'
+#' 5. **Schema Handling**: Table structure (columns and types) is automatically
+#'    preserved during the transfer process
+#'
+#' For systems without proper ODBC drivers (especially some Linux distributions),
+#' consider installing one of the following:
+#' - `MDBTools`: Open-source utilities for reading Access databases
+#' - `LibreOffice Base`: Provides ODBC drivers for Access
+#' - Commercial drivers: `Actual Technologies` or `Easysoft ODBC drivers`
+#'
+#' @export
+read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE, drop = TRUE) {
     # TODO: support DBIConnection input
-    if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
-        stop("'accdb' should be a single file path string")
+    if (!is_string(accdb)) {
+        abort("'accdb' should be a single file path string", "error_invalid_accdb_path")
     }
 
     # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
-        stop(sprintf("Input 'accdb' file '%s' did not exist", accdb))
+        abort(sprintf("Input 'accdb' file '%s' did not exist", accdb), "error_accdb_file_not_found")
     }
 
-    if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
-        stop("'drop' should be a single logical value of 'TRUE' or 'FALSE'")
+    if (!is.null(tables) && !is_character(tables)) {
+        abort("'tables' should be a character vector", "error_invalid_argument")
     }
-    if (!(length(verbose) == 1L && is.logical(verbose) && !is.na(verbose))) {
-        stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
+
+    if (!is_flag(drop)) {
+        abort("'drop' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
     }
-    conn_accdb <- DBI::dbConnect(odbc::odbc(),
-        driver = "Microsoft Access Driver (*.mdb, *.accdb)",
-        dbq = accdb
+
+    if (!is_flag(verbose)) {
+        abort("'verbose' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
+    }
+
+    # Try to use ODBC first
+    if (.Platform$OS.type == "windows") {
+        # On Windows, we only use ODBC
+        access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose)
+    } else {
+        # On non-Windows, we try ODBC first, then MDBTools
+        fall_back <- function(e) {
+            if (verbose) {
+                cli::cli_alert_warning(paste0("ODBC connection failed with error: ", e$message))
+                cli::cli_alert_info("Falling back to MDBTools command-line utilities...")
+            }
+            access_to_sqlite_mdbtools(accdb, sqlite, tables, drop, verbose)
+        }
+        tryCatch(
+            access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose),
+            error_odbc_driver_missing = fall_back,
+            error_odbc_connection_failed = fall_back,
+            error_list_tables_failed = fall_back,
+            error_invalid_attribute_option_identifier = fall_back
+        )
+    }
+}
+
+#' Connect to Microsoft Access database using ODBC
+#'
+#' @inheritParams read_dest
+#'
+#' @keywords internal
+access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
+    # check for available ODBC drivers
+    odbc_drivers <- odbc::odbcListDrivers()
+
+    # select the driver based on current platform
+    if (.Platform$OS.type == "windows") {
+        possible_drivers <- c(
+            "Microsoft Access Driver (*.mdb, *.accdb)",
+            "Microsoft Access Driver (*.mdb)",
+            "Microsoft Access Driver (*.accdb)",
+            "Actual Access Driver",
+            "Easysoft Access ODBC Driver",
+            "LibreOffice Base Driver"
+        )
+    } else {
+        # try to find a UnixODBC driver
+        possible_drivers <- c(
+            "MDBTools Driver",
+            "Actual Access Driver",
+            "Easysoft Access ODBC Driver",
+            "LibreOffice Base Driver"
+        )
+    }
+    driver <- intersect(possible_drivers, odbc_drivers$name)
+    if (length(driver) == 0L) {
+        msg <- "No suitable ODBC driver for Access found."
+        if (.Platform$OS.type == "windows") {
+            msg <- paste(msg, "Please install Microsoft Access or another Access-compatible ODBC driver.")
+        } else {
+            msg <- paste(msg, "Please install mdbtools or another Access-compatible ODBC driver.")
+            if (Sys.info()["sysname"] == "Darwin") {
+                msg <- paste(
+                    msg, "You can also install 'mdbtools' with ODBC driver support via 'brew':\n",
+                    "    brew install hongyuanjia/mdbtools-odbc/mdbtools"
+                )
+            } else {
+                msg <- paste(msg, "You can also install 'mdbtools' ODBC driver via your package manager.")
+                msg <- paste(msg, "For Debian/Ubuntu:\n    sudo apt-get install odbc-mdbtools")
+            }
+        }
+        abort(msg, "error_odbc_driver_missing")
+    }
+
+    if (verbose) cli::cli_alert_info(sprintf("Using ODBC driver: '%s'", driver[1L]))
+
+    # connect to the Access database
+    if (verbose) cli::cli_progress_step("Connecting to the Access database")
+    conn_accdb <- tryCatch(
+        DBI::dbConnect(odbc::odbc(), driver = driver[1L], dbq = accdb),
+        error = function(e) {
+            abort(
+                paste0("Failed to connect using ODBC: ", e$message),
+                class = "error_odbc_connection_failed"
+            )
+        }
     )
+
     on.exit(DBI::dbDisconnect(conn_accdb), add = TRUE)
 
     if (is.null(tables)) {
-        tables <- DBI::dbListTables(conn_accdb)
+        tables <- tryCatch(
+            DBI::dbListTables(conn_accdb),
+            error = function(e) {
+                abort(
+                    paste0("Failed to list tables from Access database: ", e$message),
+                    class = "error_list_tables_failed"
+                )
+            }
+        )
     } else {
         if (!is.character(tables) || anyNA(tables)) {
-            stop("'tables' should be a character vector with no missing values")
+            abort("'tables' should be a character vector with no missing values", "error_invalid_table_names")
         }
         tables <- unique(tables)
     }
@@ -81,21 +188,48 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
             "MSysRelationships",          "MSysResources"
         )
     )
+    if (length(tables) == 0L) {
+        abort("No tables to convert", "error_no_tables_to_convert")
+    }
 
     conn_sql <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
 
-    if (verbose) message("Converting Microsoft Access database to SQLite...")
-    DBI::dbWithTransaction(conn_sql, {
-        for (tbl in tables) {
-            # drop table if exists
-            if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
+    tryCatch(
+        DBI::dbWithTransaction(conn_sql, {
+            if (verbose) {
+                i <- 0L
+                n <- length(tables)
+                tbl <- tables[[1L]]
+                step <- cli::cli_progress_step(
+                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
+                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
+                    spinner = TRUE
+                )
+            }
+            for (tbl in tables) {
+                # drop table if exists
+                if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
 
-            # TODO: get the schema
+                # TODO: get the schema
 
-            if (verbose) message(sprintf("  - Importing table '%s'...", tbl))
-            DBI::dbWriteTable(conn_sql, tbl, DBI::dbReadTable(conn_accdb, tbl))
+                DBI::dbWriteTable(conn_sql, tbl, DBI::dbReadTable(conn_accdb, tbl))
+                if (verbose) {
+                    i <- i + 1L
+                    cli::cli_progress_update(id = step)
+                }
+            }
+        }),
+        error = function(e) {
+            if (grepl("Invalid attribute/option identifier", e$message)) {
+                abort(
+                    sprintf("Failed to convert Microsoft Access database to SQLite: %s", e$message),
+                    "error_invalid_attribute_option_identifier"
+                )
+            } else {
+                stop(e)
+            }
         }
-    })
+    )
 
     conn_sql
 }
@@ -103,40 +237,24 @@ access_to_sqlite_dbi <- function(accdb, sqlite = ":memory:", tables = NULL, drop
 #' Convert Microsoft Access database to SQLite using mdbtools
 #'
 #' @inheritParams read_dest
-#' @inheritParams access_to_sqlite_dbi
 #'
 #' @note This function requires 'mdbtools' installed and can be found in PATH,
 #'       which means that it only works on macOS and Linux. For Windows, use
-#'       [access_to_sqlite_dbi()] instead.
+#'       [access_to_sqlite_odbc()] instead.
 #'
 #' @keywords internal
 access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
-    if (!(length(accdb) == 1L && is.character(accdb) && !is.na(accdb))) {
-        stop("'accdb' should be a single file path string")
-    }
-    # make sure that the file exists before attempting to connect
-    if (!file.exists(accdb)) {
-        stop(sprintf("Input 'accdb' file '%s' did not exist", accdb))
-    }
-
-    if (!(length(drop) == 1L && is.logical(drop) && !is.na(drop))) {
-        stop("'drop' should be a single logical value of 'TRUE' or 'FALSE'")
-    }
-    if (!(length(verbose) == 1L && is.logical(verbose) && !is.na(verbose))) {
-        stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
-    }
-
     # use mdbtools on macOS and Linux
     mdbtools <- c(Sys.which("mdb-tables"), Sys.which("mdb-schema"), Sys.which("mdb-export"))
 
     if (any(miss <- mdbtools == "")) {
-        stop(sprintf(
+        abort(sprintf(
             paste(
                 "'%s' executable was not found on system PATH.",
                 "Please install 'mdbtools' and try again."
             ),
             names(miss)[miss][[1L]]
-        ))
+        ), "error_mdbtools_not_found")
     }
 
     # NOTE: In mdbtools v1.0.1, index and primary key output to the SQLite
@@ -146,7 +264,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     # See: https://github.com/mdbtools/mdbtools/pull/402
     mdb_schema_ver <- system2(mdbtools["mdb-schema"], "--version", stdout = TRUE, stderr = TRUE)
     if (!is.null(attr(mdb_schema_ver, "status"))) {
-        stop("Failed to get the version of 'mdb-schema'.")
+        abort("Failed to get the version of 'mdb-schema'.", "error_mdbtools_schema_version_failed")
     }
     mdb_schema_ver <- numeric_version(sub("mdbtools v", "", mdb_schema_ver, fixed = TRUE))
     if (mdb_schema_ver > "1.0.0") {
@@ -170,19 +288,17 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     }
 
     if (!is.null(tables)) {
-        if (!is.character(tables) || anyNA(tables)) {
-            stop("'tables' should be a character vector with no missing values")
-        }
         tables <- unique(tables)
     } else {
-        if (verbose) message("Listing tables from Microsoft Access database...")
+        if (verbose) cli::cli_progress_message("Listing tables from Microsoft Access database...")
         tables <- system2(
-            mdbtools["mdb-tables"], args = c("-1", shQuote(accdb)),
+            mdbtools["mdb-tables"],
+            args = c("-1", shQuote(accdb)),
             stdout = TRUE, stderr = TRUE
         )
 
         if (!is.null(attr(tables, "status"))) {
-            stop(sprintf("Failed to list tables from '%s': %s", accdb, tables))
+            abort(sprintf("Failed to list tables from '%s': %s", accdb, tables), "error_mdb_tables_failed")
         }
     }
 
@@ -194,20 +310,36 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     options("warn" = 1L)
     on.exit(options(warn = old), add = TRUE)
 
-    if (verbose) message("Converting Microsoft Access database to SQLite...")
     DBI::dbWithTransaction(conn, {
+        if (verbose) {
+            i <- 0L
+            n <- length(tables)
+            tbl <- tables[[1L]]
+            step <- cli::cli_progress_step(
+                "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
+                "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
+                spinner = TRUE
+            )
+        }
         for (tbl in tables) {
+            if (verbose) {
+                i <- i + 1L
+                cli::cli_progress_update(id = step)
+            }
+
             # drop table if exists
             if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
 
-            if (verbose) message(sprintf("  - Extract schema of table '%s'...", tbl))
             # dump the table schema in SQLite format
             schema <- system2(
                 mdbtools["mdb-schema"], c(mdb_schema_args, "-T", shQuote(tbl), shQuote(accdb), "sqlite"),
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(schema, "status"))) {
-                stop(sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema))
+                abort(
+                    sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema),
+                    "error_mdb_schema_failed"
+                )
             }
             # remove empty lines
             schema_clean <- schema[nzchar(schema)]
@@ -215,7 +347,6 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             schema_clean <- schema_clean[!startsWith(schema_clean, "--")]
             DBI::dbExecute(conn, paste0(schema_clean, collapse = "\n"))
 
-            if (verbose) message(sprintf("  - Importing data o table '%s'...", tbl))
             # export table data in SQLite format
             data <- system2(
                 mdbtools["mdb-export"],
@@ -223,7 +354,10 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
                 stdout = TRUE, stderr = TRUE
             )
             if (!is.null(attr(data, "status"))) {
-                stop(sprintf("Failed to export data of table '%s' from '%s': %s", tbl, accdb, data))
+                abort(
+                    sprintf("Failed to export data of table '%s' from '%s': %s", tbl, accdb, data),
+                    "error_mdb_export_failed"
+                )
             }
 
             # skip if empty table

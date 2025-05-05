@@ -34,6 +34,6 @@ Convert Microsoft Access database to SQLite using mdbtools
 \note{
 This function requires 'mdbtools' installed and can be found in PATH,
 which means that it only works on macOS and Linux. For Windows, use
-\code{\link[=access_to_sqlite_dbi]{access_to_sqlite_dbi()}} instead.
+\code{\link[=access_to_sqlite_odbc]{access_to_sqlite_odbc()}} instead.
 }
 \keyword{internal}
