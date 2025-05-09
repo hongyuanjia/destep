@@ -18,6 +18,22 @@ is_flag <- function(x) {
     is_scalar(x) && is.logical(x) && !is.na(x)
 }
 
+abort <- function(message, class = NULL, call = NULL, ...) {
+    ori <- getOption("warning.length")
+    options(warning.length = 8170L)
+    on.exit(options(warning.length = ori), add = TRUE)
+
+    stop(errorCondition(message, ..., class = class, call = call))
+}
+
+warn <- function(message, class = NULL, call = NULL, ...) {
+    ori <- getOption("warning.length")
+    options(warning.length = 8170L)
+    on.exit(options(warning.length = ori), add = TRUE)
+
+    warning(warningCondition(message, ..., class = class, call = call))
+}
+
 utils::globalVariables(c(
     ".SD", "J", ":=", ".BY", # data.table
 
