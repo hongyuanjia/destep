@@ -154,15 +154,8 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     destep_update_name(tmpdb)
 
     # update Version comments
-    # TODO: currently eplusr does not support updating comments for Version
-    # object
-    # TODO: change to use `IdfObject$comment()`
     ver <- destep_comment_version(tmpdb, ep)
-    idf_env_obj <- eplusr::get_priv_env(ep)$idf_env()$object
-    data.table::set(idf_env_obj,
-        which(eplusr::get_priv_env(ep)$idf_env()$obj == "Version"),
-        "comment", list(ver$value$comment)
-    )
+    ep$Version$comment(un_list(ver$object$comment))
 
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
@@ -179,7 +172,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     num_obj <- 0L
     for (cv in conv) {
         data.table::set(cv$object, NULL, "rleid", cv$object$rleid + num_obj)
-        data.table::set(cv$value,  NULL, "rleid", cv$value$rleid + num_obj)
+        data.table::set(cv$value, NULL, "rleid", cv$value$rleid + num_obj)
         num_obj <- max(cv$object$rleid)
     }
 
@@ -189,7 +182,8 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     add <- eplusr::add_idf_object(
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
-        obj, val, default = TRUE, unique = FALSE, empty = TRUE,
+        obj, val,
+        default = TRUE, unique = FALSE, empty = TRUE,
         level = "draft"
     )
 
