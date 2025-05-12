@@ -98,9 +98,29 @@ destep_conv_surface <- function(dest, ep) {
         POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
     )]
     surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 5L, TYPE := "Ceiling"]
-
     # remove the surface indicating outside environment and grounds
     surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
+
+    # for walls, reverse the order of the vertices if the side is 2
+    surface[TYPE == "Wall" & SIDE == 2L, by = "ID", `:=`(
+        POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
+    )]
+    # use newall vector to determine the correct side of the surface for ceilings and floors
+    # Reference: https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal#Newell.27s_Method
+    ids_ceiling <- surface[TYPE %in% c("Ceiling", "Roof"), by = "ID", {
+        nx <- seq_len(.N) %% .N + 1L
+        list(z = sum((POINT_Y + POINT_Y[nx]) * (POINT_X - POINT_X[nx])))
+    }][z < 0.0, ID]
+    ids_floor <- surface[TYPE %in% c("Floor", "Ground"), by = "ID", {
+        nx <- seq_len(.N) %% .N + 1L
+        list(z = sum((POINT_Y + POINT_Y[nx]) * (POINT_X - POINT_X[nx])))
+    }][z > 0.0, ID]
+    ids <- c(ids_ceiling, ids_floor)
+    if (length(ids) > 0L) {
+        surface[J(ids), on = "ID", by = "ID", `:=`(
+            POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
+        )]
+    }
 
     # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
     # TODO: how does EnergyPlus handle "empty floor slab"?
@@ -118,7 +138,7 @@ destep_conv_surface <- function(dest, ep) {
                 # 04: Zone Name
                 zone_name = ROOM[[1L]],
                 # 05: Space Name - Space was introduced in EnergyPlus v9.6
-                if (ep$version() > "9.5") space_name <- NULL,
+                space_name = NULL,
                 # 06: Outside Boundary Condition
                 outside_boundary_condition = BOUNDARY[[1L]],
                 # 07: Outside Boundary Condition Object
@@ -141,6 +161,14 @@ destep_conv_surface <- function(dest, ep) {
             )))
         )))
     ]$value
+
+    # remove space name field
+    if (ep$version() <= "9.5") {
+        ind <- which(names(value[[1L]]) == "space_name")
+        if (length(ind) > 0L) {
+            value <- lapply(value, .subset, -ind)
+        }
+    }
 
     out <- eval(as.call(c(
         destep_add, dest, ep,
