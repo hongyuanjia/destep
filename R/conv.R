@@ -163,7 +163,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         building = destep_conv_building(tmpdb, ep),
         zone     = destep_conv_zone(tmpdb, ep),
         surface  = destep_conv_surface(tmpdb, ep),
-        # window  = destep_conv_window(tmpdb, ep)
+        window   = destep_conv_window(tmpdb, ep),
         const    = destep_conv_const(tmpdb, ep),
         schedule = destep_conv_schedule(tmpdb, ep)
     )
@@ -174,6 +174,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ))) {
         conv$internal_gains <- destep_conv_internal_gains(tmpdb, ep)
     }
+    conv <- Filter(Negate(is.null), conv)
 
     # update rleid
     num_obj <- 0L
