@@ -168,6 +168,13 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         schedule = destep_conv_schedule(tmpdb, ep)
     )
 
+    if (any(vapply(
+        c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
+        destep_has_rows, logical(1L), dest = tmpdb
+    ))) {
+        conv$internal_gains <- destep_conv_internal_gains(tmpdb, ep)
+    }
+
     # update rleid
     num_obj <- 0L
     for (cv in conv) {
@@ -254,7 +261,7 @@ destep_load <- function(dest, ep, ..., .env = parent.frame()) {
 }
 
 destep_field <- function(dest, ep, class, num_fields) {
-    fields <- getFromNamespace("get_idd_field", "eplusr")(
+    fields <- utils::getFromNamespace("get_idd_field", "eplusr")(
         eplusr::get_priv_env(ep)$idd_env(),
         class = rep(class, length(num_fields)),
         field = num_fields,
@@ -263,6 +270,17 @@ destep_field <- function(dest, ep, class, num_fields) {
     fields <- collapse::ss(fields, j = c("rleid", "class_name", "field_index"))
     data.table::setnames(fields, c("id", "class", "index"))
     fields
+}
+
+destep_idd_field_name <- function(ep, class, field) {
+    fields <- utils::getFromNamespace("get_idd_field", "eplusr")(
+        eplusr::get_priv_env(ep)$idd_env(),
+        class = class,
+        field = field,
+        complete = FALSE
+    )
+
+    fields$field_name[[1L]]
 }
 
 #' Update NAME column in DeST tables

@@ -6,6 +6,7 @@ test_that("can convert 'Construction' and 'Material'", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path, verbose = TRUE)
+    destep_update_name(dest)
 
     # can convert 'Material', 'Construction'
     expect_type(expect_message(const <- destep_conv_const(dest, ep)), "list")

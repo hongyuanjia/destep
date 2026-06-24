@@ -2,7 +2,7 @@ ENUM_SCH_DAYTYPE <- c(
     Sunday = 1L, Monday = 2L, Tuesday = 3L, Wednesday = 4L, Thursday = 5L, Friday = 6L, Saturday = 7L,
     Holiday = 8L, SummerDesignDay = 9L, WinterDesignDay = 10L,
     CustomDay1 = 11L, CustomDay2 = 12L,
-    Weekday = 13L, Weekend = 14L, AllDay = 15L, AllOtherDay = 16L
+    Weekdays = 13L, Weekends = 14L, AllDays = 15L, AllOtherDays = 16L
 )
 ENUM_SCH_DAYTYPE_NORMAL <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE <= ENUM_SCH_DAYTYPE["CustomDay2"]]
 ENUM_SCH_DAYTYPE_SPECIAL <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE > ENUM_SCH_DAYTYPE["CustomDay2"]]
@@ -266,11 +266,11 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
             rleid_day <- days[attr(grp_days, "starts", exact = TRUE)]
             len_day <- length(rleid_day)
 
-            # if all day schedules are the same, return "AllDay"
+            # if all day schedules are the same, return "AllDays"
             if (attr(grp_days, "N.groups", exact = TRUE) == 1L) {
                 return(list(
                     rleid = rep(rleid, len_day),
-                    daytype = rep(ENUM_SCH_DAYTYPE[["AllDay"]], len_day),
+                    daytype = rep(ENUM_SCH_DAYTYPE[["AllDays"]], len_day),
                     rleid_day = rleid_day
                 ))
             }
@@ -282,13 +282,13 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
 
                     m_weekday <- collapse::fmatch(ENUM_SCH_DAYTYPE_WEEKDAY, daytypes, 0L)
                     if (sum(m_weekday != 0L) == length(ENUM_SCH_DAYTYPE_WEEKDAY)) {
-                        out <- c(ENUM_SCH_DAYTYPE[["Weekday"]])
+                        out <- c(ENUM_SCH_DAYTYPE[["Weekdays"]])
                         daytypes <- daytypes[-m_weekday]
                     }
 
                     m_weekend <- collapse::fmatch(ENUM_SCH_DAYTYPE_WEEKEND, daytypes, 0L)
                     if (sum(m_weekend != 0L) == length(ENUM_SCH_DAYTYPE_WEEKEND)) {
-                        out <- c(out, ENUM_SCH_DAYTYPE[["Weekend"]])
+                        out <- c(out, ENUM_SCH_DAYTYPE[["Weekends"]])
                         daytypes <- daytypes[-m_weekend]
                     }
 
@@ -308,7 +308,7 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
                         compacted[[ind_others]][
                             collapse::fmatch(compacted[[ind_others]], ENUM_SCH_DAYTYPE_SPECIAL, 0L) != 0L
                         ],
-                        ENUM_SCH_DAYTYPE[["AllOtherDay"]]
+                        ENUM_SCH_DAYTYPE[["AllOtherDays"]]
                     )
                 }
             }
@@ -329,26 +329,17 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
     )
     week_daytype <- data.table::rbindlist(pairs)
 
-    grp_day <- collapse::group(
-        list(week_daytype$rleid, week_daytype$rleid_day),
-        group.sizes = TRUE, starts = TRUE
-    )
     num_fld <- attr(collapse::groupv(
-        week_daytype$rleid[attr(grp_day, "starts", exact = TRUE)],
+        week_daytype$rleid,
         group.sizes = TRUE
     ), "group.sizes", exact = TRUE)
     num_fld <- num_fld * 2L + 1L
 
-    fld_daytype <- vapply(
-        collapse::gsplit(names(ENUM_SCH_DAYTYPE)[week_daytype$daytype], grp_day),
-        paste,
-        collapse = " ", FUN.VALUE = character(1L)
-    )
-    fld_daytype <- paste("For:", fld_daytype)
+    fld_daytype <- paste("For:", names(ENUM_SCH_DAYTYPE)[week_daytype$daytype])
 
     fld_day <- days$name[
         collapse::fmatch(
-            week_daytype$rleid_day[attr(grp_day, "starts", exact = TRUE)],
+            week_daytype$rleid_day,
             days$id
         )
     ]
@@ -488,7 +479,7 @@ unique_value <- function(value, cols = NULL, full = TRUE) {
 
             # use 'fsubset.data.frame' instead of 'funique.data.frame' since we
             # already have the group info
-            pair <- collapse:::fsubset.data.frame(pair, attr(grp, "starts"))
+            pair <- collapse::fsubset.data.frame(pair, attr(grp, "starts"))
 
             n_grp <- attr(grp, "N.groups", exact = TRUE)
             out <- list(
