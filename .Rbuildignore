@@ -10,8 +10,8 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 
-^test/testthat/fixture/*[.]accdb$
-^test/testthat/fixture/*[.]laccdb$
-^test/testthat/fixture/*[.]sql$
+^tests/testthat/fixture/.*[.]accdb$
+^tests/testthat/fixture/.*[.]laccdb$
+^tests/testthat/fixture/.*[.]sql$
 
 ^cran-comments\.md$
