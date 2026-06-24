@@ -35,6 +35,24 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
+      - name: Cache EnergyPlus 23.1
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Applications/EnergyPlus-23-1-0
+            ~/.local/EnergyPlus-23-1-0
+            ~/AppData/Local/EnergyPlusV23-1-0
+          key: ${{ runner.os }}-energyplus-23.1-portable-v1
+
+      - name: Install EnergyPlus 23.1
+        run: |
+          if (!eplusr::is_avail_eplus(23.1)) {
+            eplusr::install_eplus(23.1, local = TRUE, portable = TRUE)
+          }
+          eplusr::use_eplus(23.1)
+          stopifnot(file.exists(eplusr::path_eplus(23.1, "Energy+.idd", strict = TRUE)))
+        shell: Rscript {0}
+
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
