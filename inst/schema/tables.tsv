@@ -1,0 +1,50 @@
+table	category	status	primary_key	converter	used_by	energyplus_classes	future_energyplus_classes	candidate_energyplus_classes	semantics	notes
+BUILDING	model	converted	BUILDING_ID	destep_conv_building		Building			Top-level DeST building record.	
+ENVIRONMENT	site	converted	ENVIRONMENT_ID	destep_conv_location		Site:Location			Site/location metadata for the DeST model.	
+SYS_CITY	site	observed	CITY_ID						DeST city/weather library metadata referenced by ENVIRONMENT.	Likely bridge from site metadata to CLIMATE_DATA and GROUND_DATA.
+STOREY	geometry	supporting	ID		destep_conv_zone	ZoneList; ZoneGroup			Building storey records used to group rooms and provide storey height/multiplier.	
+ROOM	geometry	converted	ID	destep_conv_zone		Zone; ZoneList; ZoneGroup			Thermal room/zone record.	
+ROOM_GROUP	load_and_hvac	observed	ROOM_GROUP_ID						Room group, room type, HVAC schedule, and setpoint grouping metadata.	Candidate source for thermostat/setpoint and HVAC grouping conversion.
+OUTSIDE	geometry	supporting	OUTSIDE_ID						Synthetic external boundary marker used by surface naming and boundary handling.	
+GROUND	geometry	supporting	GROUND_ID						Synthetic ground boundary marker used by surface naming and boundary handling.	
+SURFACE	geometry	converted	SURFACE_ID	destep_conv_surface		BuildingSurface:Detailed			DeST room surface record; geometry is referenced through GEOMETRY.	
+MAIN_ENCLOSURE	envelope	converted	ID	destep_conv_surface		BuildingSurface:Detailed			Envelope relationship table linking paired DeST surfaces, construction kind, and middle plane.	
+PLANE	geometry	supporting	PLANE_ID						Plane-to-geometry bridge for surfaces, enclosures, windows, and doors.	
+GEOMETRY	geometry	supporting	GEOMETRY_ID						Geometry record pointing to a boundary loop.	
+LOOP_POINT	geometry	supporting							Ordered point membership for a DeST geometry loop.	
+POINT	geometry	supporting	POINT_ID						3D Cartesian point used by geometry loops.	
+DEFAULT_SETTING	defaults	supporting							Default values for model tables and fields when object-level values are zero or omitted.	Currently used by window conversion to resolve WINDOW_CONSTRUCTION = 0.
+SCHEDULE_YEAR	schedules	converted	SCHEDULE_ID	destep_conv_schedule		ScheduleTypeLimits; Schedule:Day:Interval; Schedule:Week:Compact; Schedule:Year			Year-long DeST schedule; DATA stores 8760 hourly double values in a raw vector.	
+SYS_MATERIAL	construction	converted	MATERIAL_ID	destep_conv_const		Material			Opaque material library table.	
+SYS_OUTWALL	construction	converted	STRUCT_ID	destep_conv_const		Construction			External wall construction library.	
+SYS_OUTWALL_MATERIAL	construction	supporting							Layer stack for SYS_OUTWALL constructions.	
+SYS_INWALL	construction	converted	STRUCT_ID	destep_conv_const		Construction			Internal wall construction library.	
+SYS_INWALL_MATERIAL	construction	supporting							Layer stack for SYS_INWALL constructions.	
+SYS_ROOF	construction	converted	STRUCT_ID	destep_conv_const		Construction			Roof construction library.	
+SYS_ROOF_MATERIAL	construction	supporting							Layer stack for SYS_ROOF constructions.	
+SYS_GROUNDFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Ground floor construction library.	
+SYS_GROUNDFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_GROUNDFLOOR constructions.	
+SYS_MIDDLEFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Intermediate floor/ceiling construction library.	
+SYS_MIDDLEFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_MIDDLEFLOOR constructions.	
+SYS_AIRFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Air floor construction library.	
+SYS_AIRFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_AIRFLOOR constructions.	
+SYS_WINDOW	construction	converted	WINDOW_ID	destep_conv_const		Construction			Window construction library.	Optical properties are not one-to-one with EnergyPlus; current converter uses a fallback glazing.
+SYS_WINDOW_MATERIAL	construction	supporting							Layer stack for SYS_WINDOW constructions.	
+SYS_APP_MATERIAL	construction	supporting	APP_MATERIAL_ID						Glass/application material library used by windows and glazed doors.	
+SYS_DOOR	construction	planned	DOOR_ID					Door; GlazedDoor; Construction	Door construction library, including optional glazing metadata.	
+WINDOW	fenestration	converted	ID	destep_conv_window		FenestrationSurface:Detailed			Window instance table linked to MAIN_ENCLOSURE and window construction libraries.	Shading, curtain, and detailed type handling are not converted yet.
+WINDOW_TYPE_DATA	fenestration	observed	ID						Per-window type performance data such as K and SC.	Candidate source for future glazing optical-property reconciliation.
+DOOR	fenestration	planned	ID					Door; GlazedDoor	Door instance table analogous to WINDOW, linked to MAIN_ENCLOSURE and SYS_DOOR.	
+SHADING	shading	deferred	ID						Project shading instance table.	The current fixture has no shading instances; postpone until a model with shading is available.
+SYS_SHADING	shading	observed	SHIELD_ID						System shading library table.	
+LIB_SHADING	shading	observed	ID						User/library shading parameter table.	
+DIST_MODE	loads	supporting	DIST_MODE_ID						Distribution mode fractions for radiant, convective, and related heat-gain partitions.	
+OCCUPANT_GAINS	loads	converted	GAIN_ID	destep_conv_people		People	DesignSpecification:OutdoorAir		Occupant internal gains and fresh-air requirement inputs.	
+LIGHT_GAINS	loads	converted	GAIN_ID	destep_conv_lights		Lights			Lighting internal gains.	
+EQUIPMENT_GAINS	loads	converted	GAIN_ID	destep_conv_electric_equipment		ElectricEquipment			Electric equipment internal gains.	
+CLIMATE_DATA	weather	deferred	ID						Hourly weather-like data embedded in the DeST model.	Likely future source for EPW generation or weather validation.
+GROUND_DATA	weather	deferred	ID						Hourly ground temperature data embedded in the DeST model.	Likely future source for Site:GroundTemperature objects or EPW support.
+AC_SYS	hvac	deferred	AC_SYS_ID						Air-conditioning system definition table.	
+AHU	hvac	deferred	AHU_ID						Air-handling unit table.	
+VRV_SOURCE	hvac	deferred	ID						VRV outdoor/source equipment table.	
+VRV_TERMINAL	hvac	deferred	ID						VRV terminal equipment table.	

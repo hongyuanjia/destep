@@ -1,4 +1,5 @@
 ^\.Rproj\.user$
+^\.git$
 \.Rproj$
 
 ^\.github$
@@ -9,6 +10,8 @@
 
 ^LICENSE\.md$
 ^README\.Rmd$
+
+^data-raw$
 
 ^tests/testthat/fixture/.*[.]accdb$
 ^tests/testthat/fixture/.*[.]laccdb$
