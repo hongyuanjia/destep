@@ -6,6 +6,7 @@ test_that("can convert 'Zone'", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path, verbose = TRUE)
+    destep_update_name(dest)
 
     # can convert 'Zone', 'ZoneList', 'ZoneGroup'
     expect_type(zn <- destep_conv_zone(dest, ep), "list")

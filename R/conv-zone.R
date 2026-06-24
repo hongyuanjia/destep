@@ -9,7 +9,8 @@ destep_conv_zone <- function(dest, ep) {
             ROUND(R.VOLUME, 3)   AS VOLUME,
             ROUND(R.AREA, 3)     AS AREA,
             S.NAME               AS STOREY_NAME,
-            S.MULTIPLE           AS STOREY_MULTIPLIER
+            S.MULTIPLE           AS STOREY_MULTIPLIER,
+            ROUND(S.HEIGHT, 3)   AS HEIGHT
         FROM ROOM R
         INNER JOIN STOREY S
         ON R.OF_STOREY = S.ID
@@ -20,7 +21,7 @@ destep_conv_zone <- function(dest, ep) {
 
     #  construct ZoneList input
     zonelist <- lapply(room[, by = "STOREY_NAME",
-        list(value = list(c(.BY$STOREY_NAME, NAME)))
+        list(value = list(c(unname(.BY$STOREY_NAME), unname(NAME))))
     ]$value, as.list)
 
     # construct ZoneGroup input

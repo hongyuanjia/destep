@@ -35,9 +35,13 @@ warn <- function(message, class = NULL, call = NULL, ...) {
 }
 
 utils::globalVariables(c(
-    ".SD", "J", ":=", ".BY", # data.table
+    ".", ".SD", ".N", "J", ":=", ".BY", # data.table
 
-    "BOUNDARY_OBJECT", "BOUNDARY", "CONSTRUCTION", "KIND_ENCLOSURE", "LAYER_NO",
-    "MATERIAL_NAME", "MATERIAL_ID", "NAME", "POINT_NO", "POINT_X", "POINT_Y",
-    "POINT_Z", "ROOM", "STOREY_MULTIPLIER", "TYPE_SURFACE", "TYPE"
+    "ACTIVITY_LEVEL", "ACTIVITY_SCHEDULE_NAME", "BOUNDARY_OBJECT", "BOUNDARY",
+    "CONSTRUCTION", "FRACTION_RADIANT", "FRACTION_REPLACEABLE", "ID",
+    "KIND_ENCLOSURE", "LAYER_NO", "MATERIAL_NAME", "MATERIAL_ID", "NAME",
+    "POINT_NO", "POINT_X", "POINT_Y", "POINT_Z", "ROOM", "ROOM_NAME",
+    "SCHEDULE_NAME", "SENSIBLE_HEAT_FRACTION", "SIDE", "SOURCE_TABLE",
+    "STOREY_MULTIPLIER", "SURFACE_NAME", "TYPE_SURFACE", "TYPE",
+    "surface", "z"
 ))
