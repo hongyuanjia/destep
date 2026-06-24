@@ -10,44 +10,57 @@ if (!nzchar(sqlite) || !file.exists(sqlite)) {
     )
 }
 
-table_path <- file.path("inst", "schema", "tables.tsv")
-field_path <- file.path("inst", "schema", "fields.tsv")
-observation_path <- file.path("inst", "schema", "observations.tsv")
-if (!file.exists(table_path) || !file.exists(field_path) || !file.exists(observation_path)) {
+required_files <- c(
+    file.path("R", "schema.R"),
+    file.path("inst", "schema", "tables.tsv"),
+    file.path("inst", "schema", "fields.tsv"),
+    file.path("inst", "schema", "observations.tsv")
+)
+if (!all(file.exists(required_files))) {
     stop("Run this script from the package root.", call. = FALSE)
 }
 
-read_schema_tsv <- function(path) {
-    utils::read.delim(
-        path,
-        sep = "\t",
-        quote = "",
-        comment.char = "",
-        na.strings = character(),
-        colClasses = "character",
-        stringsAsFactors = FALSE,
-        check.names = FALSE
-    )
+schema_env <- new.env(parent = globalenv())
+source(file.path("R", "schema.R"), local = schema_env)
+schema_env$destep_schema_path <- function(file = NULL) {
+    if (is.null(file)) {
+        return(file.path("inst", "schema"))
+    }
+
+    file.path("inst", "schema", file)
 }
 
-tables <- read_schema_tsv(table_path)
-fields <- read_schema_tsv(field_path)
-observations <- read_schema_tsv(observation_path)
-con <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
-on.exit(DBI::dbDisconnect(con), add = TRUE)
+write_field_groups <- function(title, x) {
+    if (!nrow(x)) return(invisible())
 
-db_tables <- sort(DBI::dbListTables(con))
-db_rows <- vapply(db_tables, function(table) {
-    DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS N FROM `%s`", table))$N[[1L]]
-}, numeric(1))
+    cat("\n", title, ":\n", sep = "")
+    fields_by_table <- split(x$field, x$table)
+    for (table in names(fields_by_table)) {
+        prefix <- paste0("  - ", table, ": ")
+        lines <- strwrap(
+            paste(fields_by_table[[table]], collapse = ", "),
+            width = 78,
+            initial = prefix,
+            prefix = strrep(" ", nchar(prefix))
+        )
+        cat(lines, sep = "\n")
+        cat("\n")
+    }
+}
 
-catalog_tables <- tables$table
-missing_tables <- setdiff(catalog_tables, db_tables)
-uncataloged_nonempty <- setdiff(db_tables[db_rows > 0], catalog_tables)
+coverage <- schema_env$destep_schema_coverage(sqlite)
+tables <- coverage$tables
+fields <- coverage$fields
 
-cat("Database tables:  ", length(db_tables), "\n", sep = "")
-cat("Non-empty tables: ", sum(db_rows > 0), "\n", sep = "")
-cat("Catalog tables:   ", length(catalog_tables), "\n", sep = "")
+missing_tables <- tables$table[tables$in_catalog & !tables$in_database]
+uncataloged_nonempty <- tables$table[!tables$in_catalog & tables$is_non_empty]
+missing_fields <- fields[fields$in_catalog & !fields$in_database, ]
+new_fields <- fields[fields$in_database & !fields$in_catalog, ]
+
+cat("Database tables:  ", sum(tables$in_database), "\n", sep = "")
+cat("Non-empty tables: ", sum(tables$in_database & tables$is_non_empty), "\n", sep = "")
+cat("Catalog tables:   ", sum(tables$in_catalog), "\n", sep = "")
+cat("Catalog fields:   ", sum(fields$in_catalog), "\n", sep = "")
 
 if (length(missing_tables)) {
     cat("\nCatalog tables missing from database:\n")
@@ -61,81 +74,13 @@ if (length(uncataloged_nonempty)) {
     cat("\n")
 }
 
-column_mismatches <- list()
-for (table in intersect(catalog_tables, db_tables)) {
-    expected <- fields$field[fields$table == table]
-    observed <- DBI::dbListFields(con, table)
-    missing_columns <- setdiff(expected, observed)
-    new_columns <- setdiff(observed, expected)
-    if (length(missing_columns) || length(new_columns)) {
-        column_mismatches[[table]] <- list(
-            missing_columns = missing_columns,
-            new_columns = new_columns
-        )
-    }
-}
-
-row_mismatches <- data.frame(
-    source_model = character(),
-    table = character(),
-    expected_rows = character(),
-    actual_rows = character(),
-    stringsAsFactors = FALSE
-)
-for (i in seq_len(nrow(observations))) {
-    table <- observations$table[[i]]
-    if (!table %in% db_tables || !nzchar(observations$rows[[i]])) next
-
-    count <- db_rows[[table]]
-    expected <- as.integer(observations$rows[[i]])
-    if (is.na(expected) || count != expected) {
-        row_mismatches <- rbind(row_mismatches, data.frame(
-            source_model = observations$source_model[[i]],
-            table = observations$table[[i]],
-            expected_rows = observations$rows[[i]],
-            actual_rows = as.character(count),
-            stringsAsFactors = FALSE
-        ))
-    }
-}
-
-if (length(column_mismatches)) {
-    cat("\nColumn mismatches:\n")
-    for (table in names(column_mismatches)) {
-        cat("  - ", table, "\n", sep = "")
-        if (length(column_mismatches[[table]]$missing_columns)) {
-            cat("    missing in database: ",
-                paste(column_mismatches[[table]]$missing_columns, collapse = ", "),
-                "\n",
-                sep = ""
-            )
-        }
-        if (length(column_mismatches[[table]]$new_columns)) {
-            cat("    not in catalog: ",
-                paste(column_mismatches[[table]]$new_columns, collapse = ", "),
-                "\n",
-                sep = ""
-            )
-        }
-    }
-}
-
-if (nrow(row_mismatches)) {
-    cat("\nRow-count mismatches:\n")
-    for (i in seq_len(nrow(row_mismatches))) {
-        cat(
-            "  - ", row_mismatches$table[[i]],
-            " (", row_mismatches$source_model[[i]], "): expected ",
-            row_mismatches$expected_rows[[i]], ", found ",
-            row_mismatches$actual_rows[[i]], "\n",
-            sep = ""
-        )
-    }
-}
+write_field_groups("Catalog fields missing from database", missing_fields)
+write_field_groups("Database fields not yet cataloged", new_fields)
 
 invisible(list(
     missing_tables = missing_tables,
     uncataloged_nonempty = uncataloged_nonempty,
-    column_mismatches = column_mismatches,
-    row_mismatches = row_mismatches
+    missing_fields = missing_fields,
+    new_fields = new_fields,
+    coverage = coverage
 ))
