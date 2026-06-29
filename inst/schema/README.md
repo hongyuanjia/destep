@@ -20,6 +20,11 @@ change.
 When Access inspection or fixture analysis clarifies a table, update these
 files instead of leaving that knowledge only in converter comments.
 
+## Catalog updates
+
+- `ROOM_TYPE_DATA` was cataloged in PR #11 as the room-type template source for
+  internal-gain defaults and setpoint schedule metadata.
+
 ## Status values
 
 - `converted`: a converter consumes the table directly and tests cover it.
