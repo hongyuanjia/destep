@@ -22,6 +22,9 @@ files instead of leaving that knowledge only in converter comments.
 
 ## Catalog updates
 
+- `ROOM_RELATION` was cataloged in PR #12 as the observed room ventilation or
+  air-exchange relation table, including schedule, outside-boundary, and
+  relation-line point references.
 - `ROOM_TYPE_DATA` was cataloged in PR #11 as the room-type template source for
   internal-gain defaults and setpoint schedule metadata.
 
