@@ -60,7 +60,7 @@ destep_schema_observations <- function() {
 }
 
 destep_read_schema_tsv <- function(file) {
-    utils::read.delim(
+    tsv <- utils::read.delim(
         destep_schema_path(file),
         sep = "\t",
         quote = "",
@@ -70,6 +70,12 @@ destep_read_schema_tsv <- function(file) {
         stringsAsFactors = FALSE,
         check.names = FALSE
     )
+
+    tsv[] <- lapply(tsv, function(column) {
+        column[column == "\"\""] <- ""
+        column
+    })
+    tsv
 }
 
 destep_schema_connection <- function(dest) {

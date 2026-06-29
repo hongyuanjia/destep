@@ -7,3 +7,5 @@
 - Cataloged `ROOM_RELATION` as the observed room ventilation/air-exchange
   relation table, using Access field descriptions as the field-semantics source
   of truth (#12).
+- Added `fields_cn.tsv` with Access field descriptions extracted from a real
+  DeST model, and refreshed English field semantics from those comments (#13).
