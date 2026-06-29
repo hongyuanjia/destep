@@ -136,17 +136,17 @@ ROOM_TYPE_DATA	AC_T_MAX_SCHEDULE	37	foreign_key	Default HVAC maximum temperature
 ROOM_TYPE_DATA	SET_MIN_LUMINANCE	38		Default minimum illuminance setting.	Lighting control conversion is not implemented yet.
 ROOM_TYPE_DATA	REMARK	39		Free-text remark.	Not used by converters.
 ROOM_TYPE_DATA	EXT_PROPERTY	40		Extended property reference.	Extended properties are not decoded yet.
-ROOM_RELATION	ID	1	primary_key	Ventilation relation identifier.	Observed in CoA_Chongqin_2015.
-ROOM_RELATION	NAME	2		Relation name.	Fixture values are ".".
-ROOM_RELATION	OF_BUILDING	3	foreign_key	Foreign key to BUILDING.BUILDING_ID.	Observed value 101 in CoA_Chongqin_2015.
-ROOM_RELATION	ROOM_ID	4	foreign_key	Source room, foreign key to ROOM.ID.	Candidate EnergyPlus source zone.
-ROOM_RELATION	RELA_ROOM_ID	5	foreign_key	Related room or boundary identifier.	CoA_Chongqin_2015 values reference OUTSIDE.OUTSIDE_ID rather than ROOM.ID.
-ROOM_RELATION	VENT_SCHEDULE_ID	6	foreign_key	Ventilation schedule, foreign key to SCHEDULE_YEAR.SCHEDULE_ID.	CoA_Chongqin_2015 uses schedule 4643.
-ROOM_RELATION	VENT_SET_MAX	7		Maximum ventilation or air-exchange setting.	Unit needs Access confirmation before conversion.
-ROOM_RELATION	VENT_TYPE	8		Ventilation relation type code.	CoA_Chongqin_2015 uses only type 1.
-ROOM_RELATION	START_POINT_ID	9	foreign_key	Start point for the relation line, foreign key to POINT.POINT_ID.	Likely used for DeST geometry display or air-path placement.
-ROOM_RELATION	END_POINT_ID	10	foreign_key	End point for the relation line, foreign key to POINT.POINT_ID.	Likely used for DeST geometry display or air-path placement.
-ROOM_RELATION	EXT_PROPERTY	11		Extended property reference.	Extended properties are not decoded yet.
+ROOM_RELATION	ID	1	primary_key	ID	Access Description from CoA_Chongqin_2015.
+ROOM_RELATION	NAME	2		名称	Access Description from CoA_Chongqin_2015; fixture values are ".".
+ROOM_RELATION	OF_BUILDING	3	foreign_key	所属建筑的ID	Access Description from CoA_Chongqin_2015; fixture values reference BUILDING.BUILDING_ID.
+ROOM_RELATION	ROOM_ID	4	foreign_key	本房间的ID	Access Description from CoA_Chongqin_2015; fixture values reference ROOM.ID.
+ROOM_RELATION	RELA_ROOM_ID	5	foreign_key	相邻房间的ID(可以为室外）	Access Description from CoA_Chongqin_2015; fixture values reference OUTSIDE.OUTSIDE_ID.
+ROOM_RELATION	VENT_SCHEDULE_ID	6	foreign_key	换气次数对应的Schedule_id	Access Description from CoA_Chongqin_2015; fixture values reference SCHEDULE_YEAR.SCHEDULE_ID.
+ROOM_RELATION	VENT_SET_MAX	7		房间与外界通风最大能力	Access Description from CoA_Chongqin_2015; unit still needs confirmation before conversion.
+ROOM_RELATION	VENT_TYPE	8		通风定义的含义：0:换气次数；1:附加换气次数范围	Access Description from CoA_Chongqin_2015; fixture uses only type 1.
+ROOM_RELATION	START_POINT_ID	9	foreign_key	START	Access Description from CoA_Chongqin_2015; fixture values reference POINT.POINT_ID.
+ROOM_RELATION	END_POINT_ID	10	foreign_key	END	Access Description from CoA_Chongqin_2015; fixture values reference POINT.POINT_ID.
+ROOM_RELATION	EXT_PROPERTY	11		扩展属性(扩展属性编号,对应EXT_PROPERTY表)	Access Description from CoA_Chongqin_2015; extended properties are not decoded yet.
 OUTSIDE	OUTSIDE_ID	1	primary_key		
 OUTSIDE	NAME	2			
 OUTSIDE	X	3			

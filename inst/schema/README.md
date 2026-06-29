@@ -23,8 +23,8 @@ files instead of leaving that knowledge only in converter comments.
 ## Catalog updates
 
 - `ROOM_RELATION` was cataloged in PR #12 as the observed room ventilation or
-  air-exchange relation table, including schedule, outside-boundary, and
-  relation-line point references.
+  air-exchange relation table, using Access field descriptions for field
+  semantics.
 - `ROOM_TYPE_DATA` was cataloged in PR #11 as the room-type template source for
   internal-gain defaults and setpoint schedule metadata.
 
@@ -41,6 +41,10 @@ files instead of leaving that knowledge only in converter comments.
 
 - Keep table names and field names exactly as they appear in the DeST SQLite
   database.
+- Treat Access field `Description` comments as the primary source for field
+  semantics when they are available.
+- Put fixture observations and inferred mappings in `notes`, and mark
+  uncertainty instead of promoting guesses to `semantics`.
 - Add row counts only to `observations.tsv`, and only for real fixtures that
   can be checked in tests.
 - Use `notes` for uncertainty; do not delete uncertain entries just because the

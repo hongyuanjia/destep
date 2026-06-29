@@ -5,4 +5,5 @@
 - Cataloged `ROOM_TYPE_DATA` as the room-type template table behind `ROOM.TYPE`,
   including internal-gain defaults and setpoint schedule metadata (#11).
 - Cataloged `ROOM_RELATION` as the observed room ventilation/air-exchange
-  relation table, including schedule and outside-boundary references (#12).
+  relation table, using Access field descriptions as the field-semantics source
+  of truth (#12).
