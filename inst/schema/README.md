@@ -3,7 +3,7 @@
 This directory records observed DeST database tables, inferred semantics, and
 current EnergyPlus conversion coverage.
 
-The catalog is split into two tab-separated files:
+The catalog is split into three tab-separated files:
 
 - `tables.tsv`: one row per DeST table, including category, conversion status,
   EnergyPlus mapping, and table-level notes.

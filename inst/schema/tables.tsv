@@ -5,6 +5,7 @@ SYS_CITY	site	observed	CITY_ID						DeST city/weather library metadata reference
 STOREY	geometry	supporting	ID		destep_conv_zone	ZoneList; ZoneGroup			Building storey records used to group rooms and provide storey height/multiplier.	
 ROOM	geometry	converted	ID	destep_conv_zone		Zone; ZoneList; ZoneGroup			Thermal room/zone record.	
 ROOM_GROUP	load_and_hvac	observed	ROOM_GROUP_ID						Room group, room type, HVAC schedule, and setpoint grouping metadata.	Candidate source for thermostat/setpoint and HVAC grouping conversion.
+ROOM_TYPE_DATA	load_and_hvac	observed	ID				People; Lights; ElectricEquipment; ThermostatSetpoint:DualSetpoint	DesignSpecification:OutdoorAir	Room-type default/template data referenced by ROOM.TYPE, including internal gains, schedules, minimum luminance, and HVAC setpoint schedules.	Current models may also materialize per-room OCCUPANT_GAINS/LIGHT_GAINS/EQUIPMENT_GAINS rows; use this table as fallback/template only until precedence is confirmed.
 OUTSIDE	geometry	supporting	OUTSIDE_ID						Synthetic external boundary marker used by surface naming and boundary handling.	
 GROUND	geometry	supporting	GROUND_ID						Synthetic ground boundary marker used by surface naming and boundary handling.	
 SURFACE	geometry	converted	SURFACE_ID	destep_conv_surface		BuildingSurface:Detailed			DeST room surface record; geometry is referenced through GEOMETRY.	

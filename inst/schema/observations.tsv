@@ -5,6 +5,7 @@ CoA_Chongqin_2015	SYS_CITY	203
 CoA_Chongqin_2015	STOREY	3	
 CoA_Chongqin_2015	ROOM	36	
 CoA_Chongqin_2015	ROOM_GROUP	36	
+CoA_Chongqin_2015	ROOM_TYPE_DATA	44	Room type templates referenced by ROOM.TYPE.
 CoA_Chongqin_2015	OUTSIDE	1	
 CoA_Chongqin_2015	GROUND	1	
 CoA_Chongqin_2015	SURFACE	560	
