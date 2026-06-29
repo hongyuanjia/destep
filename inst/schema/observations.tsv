@@ -6,6 +6,7 @@ CoA_Chongqin_2015	STOREY	3
 CoA_Chongqin_2015	ROOM	36	
 CoA_Chongqin_2015	ROOM_GROUP	36	
 CoA_Chongqin_2015	ROOM_TYPE_DATA	44	Room type templates referenced by ROOM.TYPE.
+CoA_Chongqin_2015	ROOM_RELATION	28	All rows link ROOM.ID values to OUTSIDE.OUTSIDE_ID = 1 through schedule 4643.
 CoA_Chongqin_2015	OUTSIDE	1	
 CoA_Chongqin_2015	GROUND	1	
 CoA_Chongqin_2015	SURFACE	560	
