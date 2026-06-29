@@ -3,7 +3,7 @@
 This directory records observed DeST database tables, inferred semantics, and
 current EnergyPlus conversion coverage.
 
-The catalog is split into two tab-separated files:
+The catalog is split into three tab-separated files:
 
 - `tables.tsv`: one row per DeST table, including category, conversion status,
   EnergyPlus mapping, and table-level notes.
@@ -19,6 +19,11 @@ change.
 
 When Access inspection or fixture analysis clarifies a table, update these
 files instead of leaving that knowledge only in converter comments.
+
+## Catalog updates
+
+- `ROOM_TYPE_DATA` was cataloged in PR #11 as the room-type template source for
+  internal-gain defaults and setpoint schedule metadata.
 
 ## Status values
 

@@ -75,8 +75,17 @@ test_that("destep_schema_coverage reports real fixture coverage", {
     room_type_data <- coverage$tables[coverage$tables$table == "ROOM_TYPE_DATA", ]
     expect_equal(nrow(room_type_data), 1L)
     expect_true(room_type_data$in_database)
-    expect_false(room_type_data$in_catalog)
+    expect_true(room_type_data$in_catalog)
+    expect_equal(room_type_data$rows, 44L)
+    expect_equal(room_type_data$status, "observed")
     expect_true(room_type_data$is_non_empty)
+    expect_false(room_type_data$is_converted)
+
+    room_relation <- coverage$tables[coverage$tables$table == "ROOM_RELATION", ]
+    expect_equal(nrow(room_relation), 1L)
+    expect_true(room_relation$in_database)
+    expect_false(room_relation$in_catalog)
+    expect_true(room_relation$is_non_empty)
 
     missing_catalog_fields <- coverage$fields[
         coverage$fields$in_catalog & !coverage$fields$in_database,

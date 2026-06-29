@@ -30,9 +30,9 @@ test_that("DeST schema catalog has the expected shape", {
 
     required_tables <- c(
         "BUILDING", "ENVIRONMENT", "STOREY", "ROOM", "SURFACE",
-        "MAIN_ENCLOSURE", "PLANE", "GEOMETRY", "LOOP_POINT", "POINT",
-        "SCHEDULE_YEAR", "WINDOW", "OCCUPANT_GAINS", "LIGHT_GAINS",
-        "EQUIPMENT_GAINS"
+        "ROOM_TYPE_DATA", "MAIN_ENCLOSURE", "PLANE", "GEOMETRY",
+        "LOOP_POINT", "POINT", "SCHEDULE_YEAR", "WINDOW",
+        "OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"
     )
     expect_true(all(required_tables %in% tables$table))
 

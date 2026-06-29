@@ -49,7 +49,7 @@ ROOM	ID	1	primary_key
 ROOM	OF_ROOM_GROUP	2			
 ROOM	NAME	3			
 ROOM	OF_STOREY	4	foreign_key	Foreign key to STOREY.ID.	
-ROOM	TYPE	5			
+ROOM	TYPE	5	foreign_key	Foreign key to ROOM_TYPE_DATA.ID for room type/template defaults.	Observed in CoA_Chongqin_2015.
 ROOM	SPACE_TYPE	6			
 ROOM	AREA	7		Zone floor area.	
 ROOM	VOLUME	8		Zone air volume.	
@@ -96,6 +96,46 @@ ROOM_GROUP	VIEW_TEMPERATURE	20
 ROOM_GROUP	VIEW_DAMP	21			
 ROOM_GROUP	VIEW_BASE_TEMPERATURE	22			
 ROOM_GROUP	EXT_PROPERTY	23			
+ROOM_TYPE_DATA	ID	1	primary_key	Room type/template identifier.	Referenced by ROOM.TYPE.
+ROOM_TYPE_DATA	NAME	2		Room type/template name.	Fixture values are room type names.
+ROOM_TYPE_DATA	FURNITURE_COEF	3		Default furniture coefficient for rooms of this type.	May overlap ROOM.FURNITURE_COEF.
+ROOM_TYPE_DATA	O_SCHEDULE	4	foreign_key	Occupant schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MAXNUMBER	5		Occupant maximum people count or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MINNUMBER	6		Occupant minimum people count or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_HEAT_PER_PERSON	7		Occupant sensible heat per person template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_DAMP_PER_PERSON	8		Occupant humidity generation template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MIN_REQUIRE_FRESH_AIR	9		Occupant minimum outdoor air requirement template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_PER_AREA	10		Occupant per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_A	11		Occupant empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_B	12		Occupant empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_DIST_MODE	13	foreign_key	Occupant heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_SCHEDULE	14	foreign_key	Lighting schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_MAXPOWER	15		Lighting maximum power or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_MINPOWER	16		Lighting minimum power or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_HEAT_RATE	17		Lighting heat-rate/fraction template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_PER_AREA	18		Lighting per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_A	19		Lighting empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_B	20		Lighting empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_DIST_MODE	21	foreign_key	Lighting heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_SCHEDULE	22	foreign_key	Equipment schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MAXPOWER	23		Equipment maximum power or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MINPOWER	24		Equipment minimum power or density template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MAX_HUM	25		Equipment maximum humidity contribution template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MIN_HUM	26		Equipment minimum humidity contribution template.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_PER_AREA	27		Equipment per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_A	28		Equipment empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_B	29		Equipment empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_DIST_MODE	30	foreign_key	Equipment heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	AC_SCHEDULE_ID	31	foreign_key	Default HVAC availability schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_T_MIN_SCHEDULE	32	foreign_key	Default heating setpoint schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_T_MAX_SCHEDULE	33	foreign_key	Default cooling setpoint schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_RH_MIN_SCHEDULE	34	foreign_key	Default minimum relative humidity schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_RH_MAX_SCHEDULE	35	foreign_key	Default maximum relative humidity schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	AC_T_MIN_SCHEDULE	36	foreign_key	Default HVAC minimum temperature schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	AC_T_MAX_SCHEDULE	37	foreign_key	Default HVAC maximum temperature schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_MIN_LUMINANCE	38		Default minimum illuminance setting.	Lighting control conversion is not implemented yet.
+ROOM_TYPE_DATA	REMARK	39		Free-text remark.	Not used by converters.
+ROOM_TYPE_DATA	EXT_PROPERTY	40		Extended property reference.	Extended properties are not decoded yet.
 OUTSIDE	OUTSIDE_ID	1	primary_key		
 OUTSIDE	NAME	2			
 OUTSIDE	X	3			
