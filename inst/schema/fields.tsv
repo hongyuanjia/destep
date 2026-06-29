@@ -1,595 +1,595 @@
 table	field	ordinal	role	semantics	notes
-BUILDING	BUILDING_ID	1	primary_key	DeST building identifier.	
-BUILDING	NAME	2		Building name, normalized by destep_update_name() before conversion.	
-BUILDING	VISIBLE	3			
-BUILDING	CURRENT_STOREY	4			
-BUILDING	EXT_PROPERTY	5			
-ENVIRONMENT	ENVIRONMENT_ID	1	primary_key		
-ENVIRONMENT	NAME	2			
-ENVIRONMENT	SOUTH_DIRECTION	3			
-ENVIRONMENT	DATA_SOURCE	4			
-ENVIRONMENT	CITY_ID	5			
-ENVIRONMENT	CITY_NAME	6			
-ENVIRONMENT	PROVINCE	7			
-ENVIRONMENT	COUNTRY	8			
-ENVIRONMENT	LATITUDE	9		Site latitude in degrees.	
-ENVIRONMENT	LONGITUDE	10		Site longitude in degrees.	
-ENVIRONMENT	ELEVATION	11		Site elevation, mapped to EnergyPlus Site:Location.	
-ENVIRONMENT	AIR_PRESSURE	12			
-ENVIRONMENT	PROPERTY	13			
-ENVIRONMENT	GROUND_REFLECT_COEF	14			
-ENVIRONMENT	X	15			
-ENVIRONMENT	Y	16			
-ENVIRONMENT	Z	17			
-ENVIRONMENT	EXT_PROPERTY	18			
-SYS_CITY	CITY_ID	1	primary_key		
-SYS_CITY	COUNTRY	2			
-SYS_CITY	CCOUNTRY	3			
-SYS_CITY	PROVINCE	4			
-SYS_CITY	CPROVINCE	5			
-SYS_CITY	NAME	6			
-SYS_CITY	CNAME	7			
-SYS_CITY	LONGITUDE	8			
-SYS_CITY	LATITUDE	9			
-SYS_CITY	ELEVATION	10			
-SYS_CITY	WEATHER_TYPE	11			
-SYS_CITY	CLIMATE_ID	12			
-SYS_CITY	GROUND_ID	13			
-SYS_CITY	NOTE	14			
-STOREY	ID	1	primary_key		
-STOREY	NAME	2			
-STOREY	OF_STOREY_GROUP	3			
-STOREY	OF_BUILDING	4			
-STOREY	NO	5			
-STOREY	MULTIPLE	6		Storey multiplier, mapped to ZoneGroup zone_list_multiplier.	
-STOREY	HEIGHT	7		Storey height, used as Zone ceiling_height.	
-STOREY	VISIBLE	8			
-STOREY	EXT_PROPERTY	9			
-ROOM	ID	1	primary_key		
-ROOM	OF_ROOM_GROUP	2			
-ROOM	NAME	3			
-ROOM	OF_STOREY	4	foreign_key	Foreign key to STOREY.ID.	
-ROOM	TYPE	5	foreign_key	Foreign key to ROOM_TYPE_DATA.ID for room type/template defaults.	Observed in CoA_Chongqin_2015.
-ROOM	SPACE_TYPE	6			
-ROOM	AREA	7		Zone floor area.	
-ROOM	VOLUME	8		Zone air volume.	
-ROOM	MIN_FRESH_FLOW_NUM	9			
-ROOM	SET_AIR_FLOWNUM_MIN	10			
-ROOM	SET_AIR_FLOWNUM_MAX	11			
-ROOM	SET_TERMINAL_MAX	12			
-ROOM	SET_FCU_MAX_COOL	13			
-ROOM	SET_FCU_MAX_HEAT	14			
-ROOM	FURNITURE_COEF	15			
-ROOM	POSITIVE_PRESSURE	16			
-ROOM	USER_HVAC_HEAT_GAIN	17			
-ROOM	RADIATOR_FLOW_SCHEDULE	18			
-ROOM	RADIATOR_AREA	19			
-ROOM	RADIATOR_K_A	20			
-ROOM	RADIATOR_K_B	21			
-ROOM	RADIATOR_DIST_MODE	22			
-ROOM	OF_HEATING_PIPE	23			
-ROOM	OF_HEATING_PIPE_NO	24			
-ROOM	X	25			
-ROOM	Y	26			
-ROOM	Z	27			
-ROOM	EXT_PROPERTY	28			
-ROOM_GROUP	ROOM_GROUP_ID	1	primary_key		
-ROOM_GROUP	NAME	2			
-ROOM_GROUP	OF_BUILDING	3			
-ROOM_GROUP	OF_AC_SYS	4			
-ROOM_GROUP	IS_AC_ROOM	5			
-ROOM_GROUP	AC_SCHEDULE_ID	6			
-ROOM_GROUP	SET_T_MIN_SCHEDULE	7			
-ROOM_GROUP	SET_T_MAX_SCHEDULE	8			
-ROOM_GROUP	SET_RH_MIN_SCHEDULE	9			
-ROOM_GROUP	SET_RH_MAX_SCHEDULE	10			
-ROOM_GROUP	AC_T_MIN_SCHEDULE	11			
-ROOM_GROUP	AC_T_MAX_SCHEDULE	12			
-ROOM_GROUP	DO_STIFFEN	13			
-ROOM_GROUP	STIFFEN_EXPECT	14			
-ROOM_GROUP	DO_ZIP_SIMULAR_LANDA	15			
-ROOM_GROUP	ZIP_TOLERANCE	16			
-ROOM_GROUP	HVAC_GAIN_ID	17			
-ROOM_GROUP	VIEW_AIR_VOLUME	18			
-ROOM_GROUP	VIEW_TERMINAL_LOAD	19			
-ROOM_GROUP	VIEW_TEMPERATURE	20			
-ROOM_GROUP	VIEW_DAMP	21			
-ROOM_GROUP	VIEW_BASE_TEMPERATURE	22			
-ROOM_GROUP	EXT_PROPERTY	23			
-ROOM_TYPE_DATA	ID	1	primary_key	Room type/template identifier.	Referenced by ROOM.TYPE.
-ROOM_TYPE_DATA	NAME	2		Room type/template name.	Fixture values are room type names.
-ROOM_TYPE_DATA	FURNITURE_COEF	3		Default furniture coefficient for rooms of this type.	May overlap ROOM.FURNITURE_COEF.
-ROOM_TYPE_DATA	O_SCHEDULE	4	foreign_key	Occupant schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_MAXNUMBER	5		Occupant maximum people count or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_MINNUMBER	6		Occupant minimum people count or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_HEAT_PER_PERSON	7		Occupant sensible heat per person template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_DAMP_PER_PERSON	8		Occupant humidity generation template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_MIN_REQUIRE_FRESH_AIR	9		Occupant minimum outdoor air requirement template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_PER_AREA	10		Occupant per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_A	11		Occupant empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_B	12		Occupant empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	O_DIST_MODE	13	foreign_key	Occupant heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_SCHEDULE	14	foreign_key	Lighting schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_MAXPOWER	15		Lighting maximum power or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_MINPOWER	16		Lighting minimum power or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_HEAT_RATE	17		Lighting heat-rate/fraction template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_PER_AREA	18		Lighting per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_A	19		Lighting empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_B	20		Lighting empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	L_DIST_MODE	21	foreign_key	Lighting heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_SCHEDULE	22	foreign_key	Equipment schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_MAXPOWER	23		Equipment maximum power or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_MINPOWER	24		Equipment minimum power or density template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_MAX_HUM	25		Equipment maximum humidity contribution template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_MIN_HUM	26		Equipment minimum humidity contribution template.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_PER_AREA	27		Equipment per-area flag or density mode.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_A	28		Equipment empirical coefficient A.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_B	29		Equipment empirical coefficient B.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	E_DIST_MODE	30	foreign_key	Equipment heat distribution mode, likely DIST_MODE.DIST_MODE_ID.	Use as fallback until explicit gain precedence is confirmed.
-ROOM_TYPE_DATA	AC_SCHEDULE_ID	31	foreign_key	Default HVAC availability schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	SET_T_MIN_SCHEDULE	32	foreign_key	Default heating setpoint schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	SET_T_MAX_SCHEDULE	33	foreign_key	Default cooling setpoint schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	SET_RH_MIN_SCHEDULE	34	foreign_key	Default minimum relative humidity schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	SET_RH_MAX_SCHEDULE	35	foreign_key	Default maximum relative humidity schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	AC_T_MIN_SCHEDULE	36	foreign_key	Default HVAC minimum temperature schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	AC_T_MAX_SCHEDULE	37	foreign_key	Default HVAC maximum temperature schedule, likely SCHEDULE_YEAR.SCHEDULE_ID.	Thermostat/HVAC conversion is not implemented yet.
-ROOM_TYPE_DATA	SET_MIN_LUMINANCE	38		Default minimum illuminance setting.	Lighting control conversion is not implemented yet.
-ROOM_TYPE_DATA	REMARK	39		Free-text remark.	Not used by converters.
-ROOM_TYPE_DATA	EXT_PROPERTY	40		Extended property reference.	Extended properties are not decoded yet.
-ROOM_RELATION	ID	1	primary_key	ID	Access Description from CoA_Chongqin_2015.
-ROOM_RELATION	NAME	2		名称	Access Description from CoA_Chongqin_2015; fixture values are ".".
-ROOM_RELATION	OF_BUILDING	3	foreign_key	所属建筑的ID	Access Description from CoA_Chongqin_2015; fixture values reference BUILDING.BUILDING_ID.
-ROOM_RELATION	ROOM_ID	4	foreign_key	本房间的ID	Access Description from CoA_Chongqin_2015; fixture values reference ROOM.ID.
-ROOM_RELATION	RELA_ROOM_ID	5	foreign_key	相邻房间的ID(可以为室外）	Access Description from CoA_Chongqin_2015; fixture values reference OUTSIDE.OUTSIDE_ID.
-ROOM_RELATION	VENT_SCHEDULE_ID	6	foreign_key	换气次数对应的Schedule_id	Access Description from CoA_Chongqin_2015; fixture values reference SCHEDULE_YEAR.SCHEDULE_ID.
-ROOM_RELATION	VENT_SET_MAX	7		房间与外界通风最大能力	Access Description from CoA_Chongqin_2015; unit still needs confirmation before conversion.
-ROOM_RELATION	VENT_TYPE	8		通风定义的含义：0:换气次数；1:附加换气次数范围	Access Description from CoA_Chongqin_2015; fixture uses only type 1.
-ROOM_RELATION	START_POINT_ID	9	foreign_key	START	Access Description from CoA_Chongqin_2015; fixture values reference POINT.POINT_ID.
-ROOM_RELATION	END_POINT_ID	10	foreign_key	END	Access Description from CoA_Chongqin_2015; fixture values reference POINT.POINT_ID.
-ROOM_RELATION	EXT_PROPERTY	11		扩展属性(扩展属性编号,对应EXT_PROPERTY表)	Access Description from CoA_Chongqin_2015; extended properties are not decoded yet.
-OUTSIDE	OUTSIDE_ID	1	primary_key		
-OUTSIDE	NAME	2			
-OUTSIDE	X	3			
-OUTSIDE	Y	4			
-OUTSIDE	Z	5			
-OUTSIDE	EXT_PROPERTY	6			
-GROUND	GROUND_ID	1	primary_key		
-GROUND	NAME	2			
-GROUND	X	3			
-GROUND	Y	4			
-GROUND	Z	5			
-GROUND	EXT_PROPERTY	6			
-SURFACE	SURFACE_ID	1	primary_key		
-SURFACE	NAME	2			
-SURFACE	AREA	3			
-SURFACE	AZIMUTH	4			
-SURFACE	TILT	5			
-SURFACE	OF_ROOM	6	foreign_key	Foreign key to ROOM.ID for zone assignment.	
-SURFACE	TYPE	7		DeST surface type; used with MAIN_ENCLOSURE.KIND for floor/ceiling/wall classification.	
-SURFACE	SURFACESTATE	8			
-SURFACE	GEOMETRY	9	foreign_key	Foreign key to GEOMETRY.GEOMETRY_ID.	
-SURFACE	VENTILATION_COEF	10			
-SURFACE	BLACKNESS	11			
-SURFACE	ABSORB_COEF	12			
-SURFACE	CONVECT_T_ID	13			
-SURFACE	ABSORB_GAIN_ID	14			
-SURFACE	INDEX_IN_A_THIS_ROOM	15			
-SURFACE	INDEX_IN_A_OPP_ROOM	16			
-SURFACE	SKY_RADIA_COEF	17			
-SURFACE	OF_SHADING	18			
-SURFACE	EXT_PROPERTY	19			
-MAIN_ENCLOSURE	ID	1	primary_key		
-MAIN_ENCLOSURE	NAME	2			
-MAIN_ENCLOSURE	SIDE1	3	foreign_key	Foreign key to one SURFACE.SURFACE_ID.	
-MAIN_ENCLOSURE	SIDE2	4	foreign_key	Foreign key to adjacent SURFACE.SURFACE_ID, outside marker, or ground marker.	
-MAIN_ENCLOSURE	MIDDLE_PLANE	5			
-MAIN_ENCLOSURE	KIND	6		Envelope kind; selects wall, roof, floor, or related construction table.	
-MAIN_ENCLOSURE	CONSTRUCTION	7		Construction identifier interpreted according to KIND.	
-MAIN_ENCLOSURE	USER_DEF_DLL	8			
-MAIN_ENCLOSURE	CAL_NUM_SHARES	9			
-MAIN_ENCLOSURE	FOURIER_NUM	10			
-MAIN_ENCLOSURE	OF_STOREY	11			
-MAIN_ENCLOSURE	EXT_PROPERTY	12			
-PLANE	PLANE_ID	1	primary_key		
-PLANE	NAME	2			
-PLANE	GEOMETRY	3			
-PLANE	BASE_LINE_START_POINT	4			
-PLANE	BASE_LINE_END_POINT	5			
-GEOMETRY	GEOMETRY_ID	1	primary_key		
-GEOMETRY	NAME	2			
-GEOMETRY	BOUNDARY_LOOP_ID	3			
-LOOP_POINT	LOOP_ID	1			
-LOOP_POINT	POINT_NO	2		Zero-based point order within LOOP_ID.	
-LOOP_POINT	POINT	3	foreign_key	Foreign key to POINT.POINT_ID.	
-LOOP_POINT	OF_GEOMETRY	4			
-POINT	POINT_ID	1	primary_key		
-POINT	NAME	2			
-POINT	X	3			
-POINT	Y	4			
-POINT	Z	5			
-DEFAULT_SETTING	TABLE_NAME	1			
-DEFAULT_SETTING	FIELD_NAME	2			
-DEFAULT_SETTING	STRING	3			
-DEFAULT_SETTING	LONG	4			
-DEFAULT_SETTING	DOUBLE	5			
-DEFAULT_SETTING	FLOAT	6			
-DEFAULT_SETTING	SHORT	7			
-DEFAULT_SETTING	TYPE	8			
-DEFAULT_SETTING	KIND	9			
-DEFAULT_SETTING	COMMENT	10			
-SCHEDULE_YEAR	SCHEDULE_ID	1	primary_key		
-SCHEDULE_YEAR	TYPE	2			
-SCHEDULE_YEAR	NAME	3			
-SCHEDULE_YEAR	DATA	4			
-SYS_MATERIAL	MATERIAL_ID	1	primary_key		
-SYS_MATERIAL	COLOR	2			
-SYS_MATERIAL	GROUP_ID	3			
-SYS_MATERIAL	NAME	4			
-SYS_MATERIAL	CNAME	5			
-SYS_MATERIAL	CONDUCTIVITY	6			
-SYS_MATERIAL	DENSITY	7			
-SYS_MATERIAL	SPECIFIC_HEAT	8			
-SYS_MATERIAL	S	9			
-SYS_MATERIAL	STEAM	10			
-SYS_MATERIAL	PATTERN	11			
-SYS_MATERIAL	ERASEFLAG	12			
-SYS_MATERIAL	FLAG	13			
-SYS_MATERIAL	ANOTATION	14			
-SYS_OUTWALL	STRUCT_ID	1	primary_key		
-SYS_OUTWALL	GROUP_ID	2			
-SYS_OUTWALL	NAME	3			
-SYS_OUTWALL	CNAME	4			
-SYS_OUTWALL	RESI	5			
-SYS_OUTWALL	D	6			
-SYS_OUTWALL	SPFLAG	7			
-SYS_OUTWALL	FLAG	8			
-SYS_OUTWALL	ERASEFLAG	9			
-SYS_OUTWALL	ANOTATION	10			
-SYS_OUTWALL_MATERIAL	STRUCT_ID	1			
-SYS_OUTWALL_MATERIAL	LAYER_NO	2			
-SYS_OUTWALL_MATERIAL	MATERIAL_ID	3			
-SYS_OUTWALL_MATERIAL	LENGTH	4			
-SYS_OUTWALL_MATERIAL	ANOTATION	5			
-SYS_INWALL	STRUCT_ID	1	primary_key		
-SYS_INWALL	GROUP_ID	2			
-SYS_INWALL	NAME	3			
-SYS_INWALL	CNAME	4			
-SYS_INWALL	RESI	5			
-SYS_INWALL	D	6			
-SYS_INWALL	SPFLAG	7			
-SYS_INWALL	FLAG	8			
-SYS_INWALL	ERASEFLAG	9			
-SYS_INWALL	ANOTATION	10			
-SYS_INWALL_MATERIAL	STRUCT_ID	1			
-SYS_INWALL_MATERIAL	LAYER_NO	2			
-SYS_INWALL_MATERIAL	MATERIAL_ID	3			
-SYS_INWALL_MATERIAL	LENGTH	4			
-SYS_INWALL_MATERIAL	ANOTATION	5			
-SYS_ROOF	STRUCT_ID	1	primary_key		
-SYS_ROOF	GROUP_ID	2			
-SYS_ROOF	NAME	3			
-SYS_ROOF	CNAME	4			
-SYS_ROOF	RESI	5			
-SYS_ROOF	D	6			
-SYS_ROOF	SPFLAG	7			
-SYS_ROOF	FLAG	8			
-SYS_ROOF	ERASEFLAG	9			
-SYS_ROOF	ANOTATION	10			
-SYS_ROOF_MATERIAL	STRUCT_ID	1			
-SYS_ROOF_MATERIAL	LAYER_NO	2			
-SYS_ROOF_MATERIAL	MATERIAL_ID	3			
-SYS_ROOF_MATERIAL	LENGTH	4			
-SYS_ROOF_MATERIAL	ANOTATION	5			
-SYS_GROUNDFLOOR	STRUCT_ID	1	primary_key		
-SYS_GROUNDFLOOR	GROUP_ID	2			
-SYS_GROUNDFLOOR	NAME	3			
-SYS_GROUNDFLOOR	CNAME	4			
-SYS_GROUNDFLOOR	RESI	5			
-SYS_GROUNDFLOOR	D	6			
-SYS_GROUNDFLOOR	SPFLAG	7			
-SYS_GROUNDFLOOR	FLAG	8			
-SYS_GROUNDFLOOR	ERASEFLAG	9			
-SYS_GROUNDFLOOR	ANOTATION	10			
-SYS_GROUNDFLOOR_MATERIAL	STRUCT_ID	1			
-SYS_GROUNDFLOOR_MATERIAL	LAYER_NO	2			
-SYS_GROUNDFLOOR_MATERIAL	MATERIAL_ID	3			
-SYS_GROUNDFLOOR_MATERIAL	LENGTH	4			
-SYS_GROUNDFLOOR_MATERIAL	ANOTATION	5			
-SYS_MIDDLEFLOOR	STRUCT_ID	1	primary_key		
-SYS_MIDDLEFLOOR	GROUP_ID	2			
-SYS_MIDDLEFLOOR	NAME	3			
-SYS_MIDDLEFLOOR	CNAME	4			
-SYS_MIDDLEFLOOR	RESI	5			
-SYS_MIDDLEFLOOR	D	6			
-SYS_MIDDLEFLOOR	SPFLAG	7			
-SYS_MIDDLEFLOOR	FLAG	8			
-SYS_MIDDLEFLOOR	ERASEFLAG	9			
-SYS_MIDDLEFLOOR	ANOTATION	10			
-SYS_MIDDLEFLOOR_MATERIAL	STRUCT_ID	1			
-SYS_MIDDLEFLOOR_MATERIAL	LAYER_NO	2			
-SYS_MIDDLEFLOOR_MATERIAL	MATERIAL_ID	3			
-SYS_MIDDLEFLOOR_MATERIAL	LENGTH	4			
-SYS_MIDDLEFLOOR_MATERIAL	ANOTATION	5			
-SYS_AIRFLOOR	STRUCT_ID	1	primary_key		
-SYS_AIRFLOOR	GROUP_ID	2			
-SYS_AIRFLOOR	NAME	3			
-SYS_AIRFLOOR	CNAME	4			
-SYS_AIRFLOOR	RESI	5			
-SYS_AIRFLOOR	D	6			
-SYS_AIRFLOOR	SPFLAG	7			
-SYS_AIRFLOOR	FLAG	8			
-SYS_AIRFLOOR	ERASEFLAG	9			
-SYS_AIRFLOOR	ANOTATION	10			
-SYS_AIRFLOOR_MATERIAL	STRUCT_ID	1			
-SYS_AIRFLOOR_MATERIAL	LAYER_NO	2			
-SYS_AIRFLOOR_MATERIAL	MATERIAL_ID	3			
-SYS_AIRFLOOR_MATERIAL	LENGTH	4			
-SYS_AIRFLOOR_MATERIAL	ANOTATION	5			
-SYS_WINDOW	WINDOW_ID	1	primary_key		
-SYS_WINDOW	GROUP_ID	2			
-SYS_WINDOW	NAME	3			
-SYS_WINDOW	CNAME	4			
-SYS_WINDOW	HEAT_RESISTENCE	5			
-SYS_WINDOW	GLASS_NET_RATIO	6			
-SYS_WINDOW	REFLECT_CO	7			
-SYS_WINDOW	FLAG	8			
-SYS_WINDOW	SPFLAG	9			
-SYS_WINDOW	ERASEFLAG	10			
-SYS_WINDOW	ANOTATION	11			
-SYS_WINDOW_MATERIAL	WINDOW_ID	1			
-SYS_WINDOW_MATERIAL	LAYER_NO	2			
-SYS_WINDOW_MATERIAL	MATERIAL_ID	3			
-SYS_WINDOW_MATERIAL	LENGTH	4			
-SYS_WINDOW_MATERIAL	ANOTATION	5			
-SYS_APP_MATERIAL	APP_MATERIAL_ID	1	primary_key		
-SYS_APP_MATERIAL	COLOR	2			
-SYS_APP_MATERIAL	GROUP_ID	3			
-SYS_APP_MATERIAL	NAME	4			
-SYS_APP_MATERIAL	CNAME	5			
-SYS_APP_MATERIAL	CONDUCTIVITY	6			
-SYS_APP_MATERIAL	DENSITY	7			
-SYS_APP_MATERIAL	SPECIFIC_HEAT	8			
-SYS_APP_MATERIAL	S	9			
-SYS_APP_MATERIAL	STEAM	10			
-SYS_APP_MATERIAL	EX_COEF	11			
-SYS_APP_MATERIAL	RF_COEF	12			
-SYS_APP_MATERIAL	EMISSIVITY	13			
-SYS_APP_MATERIAL	THICK	14			
-SYS_APP_MATERIAL	PATTERN	15			
-SYS_APP_MATERIAL	ERASEFLAG	16			
-SYS_APP_MATERIAL	FLAG	17			
-SYS_APP_MATERIAL	ANOTATION	18			
-SYS_DOOR	DOOR_ID	1	primary_key		
-SYS_DOOR	GROUP_ID	2			
-SYS_DOOR	NAME	3			
-SYS_DOOR	CNAME	4			
-SYS_DOOR	CONDUCT_CO	5			
-SYS_DOOR	MATERIAL_ID	6			
-SYS_DOOR	GAP_LENGTH	7			
-SYS_DOOR	GLASS_RAT	8			
-SYS_DOOR	APP_ID	9			
-SYS_DOOR	APP_FLAG	10			
-SYS_DOOR	FLAG	11			
-SYS_DOOR	ERASEFLAG	12			
-SYS_DOOR	ANOTATION	13			
-WINDOW	ID	1	primary_key		
-WINDOW	NAME	2			
-WINDOW	SIDE1	3			
-WINDOW	SIDE2	4			
-WINDOW	MIDDLE_PLANE	5	foreign_key	Foreign key to PLANE.PLANE_ID for window vertices.	
-WINDOW	OF_ENCLOSURE	6	foreign_key	Foreign key to MAIN_ENCLOSURE.ID for parent surface lookup.	
-WINDOW	WINDOW_CONSTRUCTION	7	foreign_key	Foreign key to SYS_WINDOW.WINDOW_ID; zero can be resolved through DEFAULT_SETTING.	
-WINDOW	SHADING	8			
-WINDOW	SHADINGID	9			
-WINDOW	CURTAIN	10			
-WINDOW	CUR_REF_SCHEDULE	11			
-WINDOW	SCHEDULE	12			
-WINDOW	USER_DEF_DLL	13			
-WINDOW	SUN_TRANS_DIST_MODE	14			
-WINDOW	OF_STOREY	15			
-WINDOW	TYPE	16			
-WINDOW	K	17			
-WINDOW	SC	18			
-WINDOW	EXT_PROPERTY	19			
-WINDOW_TYPE_DATA	ID	1	primary_key		
-WINDOW_TYPE_DATA	NAME	2			
-WINDOW_TYPE_DATA	LAYER_NUM	3			
-WINDOW_TYPE_DATA	K	4			
-WINDOW_TYPE_DATA	SC	5			
-WINDOW_TYPE_DATA	ENERGY_TRANS_RATIO	6			
-WINDOW_TYPE_DATA	ENERGY_REFLECT_RATIO	7			
-WINDOW_TYPE_DATA	LIGHT_TRANS_RATIO	8			
-WINDOW_TYPE_DATA	LIGHT_REFLECT_RATIO	9			
-WINDOW_TYPE_DATA	REMARK	10			
-WINDOW_TYPE_DATA	EXT_PROPERTY	11			
-DOOR	ID	1	primary_key		
-DOOR	NAME	2			
-DOOR	SIDE1	3			
-DOOR	SIDE2	4			
-DOOR	MIDDLE_PLANE	5			
-DOOR	OF_ENCLOSURE	6			
-DOOR	DOOR_CONSTRUCTION	7			
-DOOR	SCHEDULE	8			
-DOOR	USER_DEF_DLL	9			
-DOOR	EXT_PROPERTY	10			
-SHADING	ID	1	primary_key		
-SHADING	NAME	2			
-SHADING	TYPE	3			
-SHADING	TAO	4			
-SHADING	ROU	5			
-SHADING	LIB_SHADING_ID	6			
-SHADING	MATERIAL	7			
-SHADING	OF_BUILDING	8			
-SHADING	EXT_PROPERTY	9			
-SYS_SHADING	SHIELD_ID	1	primary_key		
-SYS_SHADING	GROUP_ID	2			
-SYS_SHADING	NAME	3			
-SYS_SHADING	CNAME	4			
-SYS_SHADING	A	5			
-SYS_SHADING	B	6			
-SYS_SHADING	C	7			
-SYS_SHADING	D	8			
-SYS_SHADING	E	9			
-SYS_SHADING	F	10			
-SYS_SHADING	G	11			
-SYS_SHADING	H1	12			
-SYS_SHADING	H2	13			
-SYS_SHADING	ANOTATION	14			
-LIB_SHADING	ID	1	primary_key		
-LIB_SHADING	NAME	2			
-LIB_SHADING	B0	3			
-LIB_SHADING	B1	4			
-LIB_SHADING	B2	5			
-LIB_SHADING	DEG	6			
-LIB_SHADING	DIST	7			
-LIB_SHADING	W	8			
-LIB_SHADING	N	9			
-LIB_SHADING	HF	10			
-LIB_SHADING	HL	11			
-LIB_SHADING	WL	12			
-LIB_SHADING	DEGL	13			
-LIB_SHADING	HR	14			
-LIB_SHADING	WR	15			
-LIB_SHADING	DEGR	16			
-LIB_SHADING	PRICE	17			
-LIB_SHADING	IMAGE	18			
-LIB_SHADING	GROUP	19			
-LIB_SHADING	NOTE	20			
-LIB_SHADING	EXT_PROPERTY	21			
-DIST_MODE	DIST_MODE_ID	1	primary_key		
-DIST_MODE	DIST_AIR	2		Air fraction; current converters use 1 - DIST_AIR as EnergyPlus fraction_radiant.	
-DIST_MODE	DIST_ROOF	3			
-DIST_MODE	DIST_FLOOR	4			
-DIST_MODE	DIST_AROUND	5			
-DIST_MODE	NAME	6			
-OCCUPANT_GAINS	GAIN_ID	1	primary_key		
-OCCUPANT_GAINS	NAME	2			
-OCCUPANT_GAINS	OF_ROOM	3			
-OCCUPANT_GAINS	SCHEDULE	4			
-OCCUPANT_GAINS	USER_DEFINED	5			
-OCCUPANT_GAINS	MAXNUMBER	6		Maximum people count or density, depending on PER_AREA.	
-OCCUPANT_GAINS	MINNUMBER	7		Minimum people count or density used in min + schedule * (max - min).	
-OCCUPANT_GAINS	HEAT_PER_PERSON	8			
-OCCUPANT_GAINS	DAMP_PER_PERSON	9		Humidity generation rate used to infer latent contribution.	
-OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10		Minimum outdoor air requirement; not converted yet.	
-OCCUPANT_GAINS	PER_AREA	11			
-OCCUPANT_GAINS	A	12			
-OCCUPANT_GAINS	B	13			
-OCCUPANT_GAINS	DIST_MODE	14			
-OCCUPANT_GAINS	OF_STOREY	15			
-OCCUPANT_GAINS	X	16			
-OCCUPANT_GAINS	Y	17			
-OCCUPANT_GAINS	Z	18			
-LIGHT_GAINS	GAIN_ID	1	primary_key		
-LIGHT_GAINS	NAME	2			
-LIGHT_GAINS	OF_ROOM	3			
-LIGHT_GAINS	SCHEDULE	4			
-LIGHT_GAINS	MAXPOWER	5		Maximum lighting level or density, depending on PER_AREA.	
-LIGHT_GAINS	MINPOWER	6		Minimum lighting level or density used in min + schedule * (max - min).	
-LIGHT_GAINS	HEAT_RATE	7		Fraction replaceable mapped to Lights fraction_replaceable.	
-LIGHT_GAINS	PER_AREA	8			
-LIGHT_GAINS	A	9			
-LIGHT_GAINS	B	10			
-LIGHT_GAINS	DIST_MODE	11			
-LIGHT_GAINS	OF_STOREY	12			
-LIGHT_GAINS	X	13			
-LIGHT_GAINS	Y	14			
-LIGHT_GAINS	Z	15			
-EQUIPMENT_GAINS	GAIN_ID	1	primary_key		
-EQUIPMENT_GAINS	NAME	2			
-EQUIPMENT_GAINS	OF_ROOM	3			
-EQUIPMENT_GAINS	SCHEDULE	4			
-EQUIPMENT_GAINS	MAXPOWER	5		Maximum equipment level or density, depending on PER_AREA.	
-EQUIPMENT_GAINS	MINPOWER	6		Minimum equipment level or density used in min + schedule * (max - min).	
-EQUIPMENT_GAINS	MAX_HUM	7		Equipment humidity contribution; not converted yet.	
-EQUIPMENT_GAINS	MIN_HUM	8			
-EQUIPMENT_GAINS	PER_AREA	9			
-EQUIPMENT_GAINS	A	10			
-EQUIPMENT_GAINS	B	11			
-EQUIPMENT_GAINS	DIST_MODE	12			
-EQUIPMENT_GAINS	OF_STOREY	13			
-EQUIPMENT_GAINS	X	14			
-EQUIPMENT_GAINS	Y	15			
-EQUIPMENT_GAINS	Z	16			
-CLIMATE_DATA	ID	1	primary_key		
-CLIMATE_DATA	HOUR	2			
-CLIMATE_DATA	DRY_BULB_T	3			
-CLIMATE_DATA	DAMP	4			
-CLIMATE_DATA	HORI_TOTAL_RAD	5			
-CLIMATE_DATA	HORI_SCATTER_RAD	6			
-CLIMATE_DATA	T_GROUND	7			
-CLIMATE_DATA	T_SKY	8			
-CLIMATE_DATA	WS	9			
-CLIMATE_DATA	WD	10			
-CLIMATE_DATA	B	11			
-GROUND_DATA	ID	1	primary_key		
-GROUND_DATA	HOUR	2			
-GROUND_DATA	T	3			
-AC_SYS	AC_SYS_ID	1	primary_key		
-AC_SYS	NAME	2			
-AC_SYS	OF_STOREY	3			
-AC_SYS	OF_BUILDING	4			
-AC_SYS	SUPPLY_T_MIN	5			
-AC_SYS	SUPPLY_T_MAX	6			
-AC_SYS	WATER_TYPE	7			
-AC_SYS	AC_SYS_TYPE	8			
-AC_SYS	FRESH_AIR_TYPE	9			
-AC_SYS	MIN_FRESH_AIR_RATIO	10			
-AC_SYS	MAX_FRESH_AIR_RATIO	11			
-AC_SYS	MIN_FRESH_AIR_VOLUME	12			
-AC_SYS	MAX_FRESH_AIR_VOLUME	13			
-AC_SYS	SUPPLY_STATE_FLAG	14			
-AC_SYS	USER_DEF_SUPPLY_T	15			
-AC_SYS	USER_DEF_SUPPLY_D	16			
-AC_SYS	FRESH_AIR_OUTSIDE	17			
-AC_SYS	VIEW_COOL_LOAD	18			
-AC_SYS	VIEW_HEAT_LOAD	19			
-AC_SYS	VIEW_HUMI_LOAD	20			
-AC_SYS	VIEW_FLOW	21			
-AC_SYS	VIEW_FRESH_AIR_RATIO	22			
-AC_SYS	X	23			
-AC_SYS	Y	24			
-AC_SYS	Z	25			
-AC_SYS	EXT_PROPERTY	26			
-AHU	AHU_ID	1	primary_key		
-AHU	NAME	2			
-AHU	OF_AC_SYS	3			
-AHU	TYPE	4			
-AHU	COOLING_COIL	5			
-AHU	COIL_TYPE	6			
-AHU	COIL_NUM	7			
-AHU	SPRAYER	8			
-AHU	HEATER	9			
-AHU	HUMIDIFIER	10			
-AHU	REHEAT_TYPE	11			
-AHU	HEAT_RECOVER	12			
-AHU	MIN_T_EX_COEF	13			
-AHU	MAX_T_EX_COEF	14			
-AHU	MIN_D_EX_COEF	15			
-AHU	MAX_D_EX_COEF	16			
-AHU	SECOND_AIR	17			
-AHU	MIN_SECOND_AIR_RATIO	18			
-AHU	MAX_SECOND_AIR_RATIO	19			
-AHU	FAN	20			
-AHU	AHURES	21			
-AHU	EXT_PROPERTY	22			
-VRV_SOURCE	ID	1	primary_key		
-VRV_SOURCE	NAME	2			
-VRV_SOURCE	LIB_ID	3			
-VRV_SOURCE	X	4			
-VRV_SOURCE	Y	5			
-VRV_SOURCE	Z	6			
-VRV_SOURCE	EXT_PROPERTY	7			
-VRV_TERMINAL	ID	1	primary_key		
-VRV_TERMINAL	NAME	2			
-VRV_TERMINAL	LIB_ID	3			
-VRV_TERMINAL	OF_ROOM_GROUP	4			
-VRV_TERMINAL	OF_SYS	5			
-VRV_TERMINAL	OF_SYS_NO	6			
-VRV_TERMINAL	X	7			
-VRV_TERMINAL	Y	8			
-VRV_TERMINAL	Z	9			
-VRV_TERMINAL	CX	10			
-VRV_TERMINAL	CY	11			
-VRV_TERMINAL	CZ	12			
-VRV_TERMINAL	EXT_PROPERTY	13			
+BUILDING	BUILDING_ID	1	primary_key	ID	""
+BUILDING	NAME	2	""	Name.	""
+BUILDING	VISIBLE	3	""	Whether this building is visible.	""
+BUILDING	CURRENT_STOREY	4	""	Identifier of the currently active storey.	""
+BUILDING	EXT_PROPERTY	5	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+ENVIRONMENT	ENVIRONMENT_ID	1	primary_key	Identifier.	""
+ENVIRONMENT	NAME	2	""	Name.	""
+ENVIRONMENT	SOUTH_DIRECTION	3	""	Angle in degrees between south direction and the X axis in the drawing.	""
+ENVIRONMENT	DATA_SOURCE	4	""	Weather data source flag: bits 0-3 store source, where 0 is built-in, 1 is the DeST weather database, 2 is a public weather data set, 3 is user input, and 4-15 are other data sources; bits 4-7 store type, where 0 is typical year, 1 is extreme-high enthalpy year, 2 is extreme-low radiation year, 3 is extreme-high radiation year, 4 is extreme-low temperature year, and 5 is extreme-high temperature year.	""
+ENVIRONMENT	CITY_ID	5	""	Weather station ID; Beijing is 54511.	""
+ENVIRONMENT	CITY_NAME	6	""	City name.	""
+ENVIRONMENT	PROVINCE	7	""	Province.	""
+ENVIRONMENT	COUNTRY	8	""	Country.	""
+ENVIRONMENT	LATITUDE	9	""	Latitude: north latitude 0 to 90, south latitude 0 to -90.	""
+ENVIRONMENT	LONGITUDE	10	""	Longitude: east longitude 0 to 180, west longitude 0 to -180.	""
+ENVIRONMENT	ELEVATION	11	""	Elevation in m.	""
+ENVIRONMENT	AIR_PRESSURE	12	""	Annual typical atmospheric pressure in Pa.	""
+ENVIRONMENT	PROPERTY	13	""	Station property bit field: bits 0-15 store time-zone longitude from 0 to 36000 with two decimals, east longitude 0-18000 and west longitude 18000-36000; bit 16 marks local solar time; bit 17 marks missing wind speed/direction; bit 18 marks missing ground surface temperature; bit 19 marks missing sky equivalent temperature; bit 20 marks missing hourly atmospheric pressure.	""
+ENVIRONMENT	GROUND_REFLECT_COEF	14	""	Ground reflectance.	""
+ENVIRONMENT	X	15	""	X coordinate of the DPECompass north-arrow location in the drawing.	""
+ENVIRONMENT	Y	16	""	Y coordinate of the DPECompass north-arrow location in the drawing.	""
+ENVIRONMENT	Z	17	""	Z coordinate of the DPECompass north-arrow location in the drawing.	""
+ENVIRONMENT	EXT_PROPERTY	18	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+SYS_CITY	CITY_ID	1	primary_key	City identifier.	""
+SYS_CITY	COUNTRY	2	""	Country, English name.	""
+SYS_CITY	CCOUNTRY	3	""	Country, Chinese name.	""
+SYS_CITY	PROVINCE	4	""	Province, English name.	""
+SYS_CITY	CPROVINCE	5	""	Province, Chinese name.	""
+SYS_CITY	NAME	6	""	City, English name.	""
+SYS_CITY	CNAME	7	""	City, Chinese name.	""
+SYS_CITY	LONGITUDE	8	""	Longitude.	""
+SYS_CITY	LATITUDE	9	""	Latitude.	""
+SYS_CITY	ELEVATION	10	""	Elevation.	""
+SYS_CITY	WEATHER_TYPE	11	""	Climate type.	""
+SYS_CITY	CLIMATE_ID	12	""	Identifier corresponding to SYS_CLIMATE_DATA.	""
+SYS_CITY	GROUND_ID	13	""	Identifier corresponding to SYS_GROUND_DATA.	""
+SYS_CITY	NOTE	14	""	Description.	""
+STOREY	ID	1	primary_key	Primary index.	""
+STOREY	NAME	2	""	Name.	""
+STOREY	OF_STOREY_GROUP	3	""	Owning storey group.	""
+STOREY	OF_BUILDING	4	""	Owning building.	""
+STOREY	NO	5	""	Storey number; 0 is the first floor and -1 is the first basement level.	""
+STOREY	MULTIPLE	6	""	Number of represented floors for a typical storey; storeys with MULTIPLE > 1 are typical storeys.	""
+STOREY	HEIGHT	7	""	Storey height in m.	""
+STOREY	VISIBLE	8	""	Whether the storey is visible.	""
+STOREY	EXT_PROPERTY	9	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+ROOM	ID	1	primary_key	Identifier.	""
+ROOM	OF_ROOM_GROUP	2	""	Owning room group.	""
+ROOM	NAME	3	""	Name.	""
+ROOM	OF_STOREY	4	foreign_key	Storey.	""
+ROOM	TYPE	5	foreign_key	Room type used as a reference for occupant loads, corresponding to ROOM_TYPE_DATA.	Observed in CoA_Chongqin_2015.
+ROOM	SPACE_TYPE	6	""	Space type flag: 0 ordinary room; 1 atrium; 2 balcony; 3 light well; 4 stairwell; and so on.	""
+ROOM	AREA	7	""	Area in m2.	""
+ROOM	VOLUME	8	""	Volume in m3.	""
+ROOM	MIN_FRESH_FLOW_NUM	9	""	Minimum outdoor-air flow rate, in m3/hr.	""
+ROOM	SET_AIR_FLOWNUM_MIN	10	""	Minimum air changes per hour.	""
+ROOM	SET_AIR_FLOWNUM_MAX	11	""	Maximum air changes per hour.	""
+ROOM	SET_TERMINAL_MAX	12	""	Maximum terminal reheat, with a minimum of 0.	""
+ROOM	SET_FCU_MAX_COOL	13	""	Maximum coil cooling capacity in W/m2.	""
+ROOM	SET_FCU_MAX_HEAT	14	""	Maximum coil heating capacity in W/m2.	""
+ROOM	FURNITURE_COEF	15	""	Furniture coefficient; the combined coefficient for multiple rooms is the volume-weighted average of each room coefficient.	""
+ROOM	POSITIVE_PRESSURE	16	""	Required residual pressure at the air outlet in Pa.	""
+ROOM	USER_HVAC_HEAT_GAIN	17	""	User-defined additional HVAC heat gain, corresponding to a user-defined DLL_ID in USER_DEF_DLL.	""
+ROOM	RADIATOR_FLOW_SCHEDULE	18	""	Annual radiator flow schedule in m3/h.	""
+ROOM	RADIATOR_AREA	19	""	Radiator area in m2.	""
+ROOM	RADIATOR_K_A	20	""	Radiator heat-transfer coefficient correction factor A in K = A*dT^B.	""
+ROOM	RADIATOR_K_B	21	""	Radiator heat-transfer coefficient correction factor B in K = A*dT^B.	""
+ROOM	RADIATOR_DIST_MODE	22	""	Radiator heat distribution mode, corresponding to DIST_MODE.	""
+ROOM	OF_HEATING_PIPE	23	""	Owning heating-system riser identifier, corresponding to HEATING_PIPE.	""
+ROOM	OF_HEATING_PIPE_NO	24	""	Zero-based index within the owning heating-system riser.	""
+ROOM	X	25	""	X	""
+ROOM	Y	26	""	Y	""
+ROOM	Z	27	""	Z	""
+ROOM	EXT_PROPERTY	28	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+ROOM_GROUP	ROOM_GROUP_ID	1	primary_key	Identifier.	""
+ROOM_GROUP	NAME	2	""	Name.	""
+ROOM_GROUP	OF_BUILDING	3	""	Owning building identifier, related to BUILDING.BUILDING_ID.	""
+ROOM_GROUP	OF_AC_SYS	4	""	Owning air-conditioning system ID; 0 means it does not belong to any system.	""
+ROOM_GROUP	IS_AC_ROOM	5	""	Nonzero means this is an air-conditioned room.	""
+ROOM_GROUP	AC_SCHEDULE_ID	6	""	Air-conditioning on/off schedule ID.	""
+ROOM_GROUP	SET_T_MIN_SCHEDULE	7	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+ROOM_GROUP	SET_T_MAX_SCHEDULE	8	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+ROOM_GROUP	SET_RH_MIN_SCHEDULE	9	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+ROOM_GROUP	SET_RH_MAX_SCHEDULE	10	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+ROOM_GROUP	AC_T_MIN_SCHEDULE	11	""	Air-conditioning activation temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems.	""
+ROOM_GROUP	AC_T_MAX_SCHEDULE	12	""	Air-conditioning activation temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems.	""
+ROOM_GROUP	DO_STIFFEN	13	""	Whether to apply Stiffen rigidification when calculating landa and fai; rigidification can improve numerical stability.	""
+ROOM_GROUP	STIFFEN_EXPECT	14	""	Expected value used for Stiffen rigidification.	""
+ROOM_GROUP	DO_ZIP_SIMULAR_LANDA	15	""	Whether to zip similar landa values after calculating landa and Fai to improve calculation speed.	""
+ROOM_GROUP	ZIP_TOLERANCE	16	""	Tolerance used when zipping landa values; landa values differing by no more than ZIP_TOLERANCE are considered identical.	""
+ROOM_GROUP	HVAC_GAIN_ID	17	""	HVAC heat-gain ID; this value must also be globally unique.	""
+ROOM_GROUP	VIEW_AIR_VOLUME	18	""	Result-browser option indicating whether to display this curve.	""
+ROOM_GROUP	VIEW_TERMINAL_LOAD	19	""	Result-browser option indicating whether to display this curve.	""
+ROOM_GROUP	VIEW_TEMPERATURE	20	""	Result-browser option indicating whether to display this curve.	""
+ROOM_GROUP	VIEW_DAMP	21	""	Result-browser option indicating whether to display this curve.	""
+ROOM_GROUP	VIEW_BASE_TEMPERATURE	22	""	Result-browser option indicating whether to display this curve.	""
+ROOM_GROUP	EXT_PROPERTY	23	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+ROOM_TYPE_DATA	ID	1	primary_key	Identifier.	Referenced by ROOM.TYPE.
+ROOM_TYPE_DATA	NAME	2	""	Room type name.	Fixture values are room type names.
+ROOM_TYPE_DATA	FURNITURE_COEF	3	""	Furniture coefficient; the combined coefficient for multiple rooms is the volume-weighted average of each room coefficient.	May overlap ROOM.FURNITURE_COEF.
+ROOM_TYPE_DATA	O_SCHEDULE	4	foreign_key	Occupant schedule.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MAXNUMBER	5	""	Maximum number of people, as people or people per square meter.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MINNUMBER	6	""	Minimum number of people, as people or people per square meter.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_HEAT_PER_PERSON	7	""	Heat gain per person in W.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_DAMP_PER_PERSON	8	""	Moisture generation per person in kg/hr.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_MIN_REQUIRE_FRESH_AIR	9	""	Minimum outdoor-air flow required per person in m3/h.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_PER_AREA	10	""	Calculation basis flag: 0 total value; 1 per-area index; 2 functional calculation using the A + B*F formula.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_A	11	""	A	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_B	12	""	B	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	O_DIST_MODE	13	foreign_key	Occupant heat-gain distribution mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_SCHEDULE	14	foreign_key	Lighting schedule.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_MAXPOWER	15	""	Maximum nameplate power, in W or W/m2.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_MINPOWER	16	""	Minimum nameplate power, in W or W/m2.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_HEAT_RATE	17	""	Heat-to-electricity ratio.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_PER_AREA	18	""	Calculation basis flag: 0 total value; 1 per-area index; 2 functional calculation using the A + B*F formula.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_A	19	""	A	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_B	20	""	B	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	L_DIST_MODE	21	foreign_key	Lighting heat-gain distribution mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_SCHEDULE	22	foreign_key	Equipment schedule.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MAXPOWER	23	""	Maximum heat-gain power, in W or W/m2.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MINPOWER	24	""	Minimum heat-gain power, in W or W/m2.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MAX_HUM	25	""	Maximum equipment moisture generation, in kg/hr or kg/(hr.m2).	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_MIN_HUM	26	""	Minimum equipment moisture generation, in kg/hr or kg/(hr.m2).	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_PER_AREA	27	""	Calculation basis flag: 0 total value; 1 per-area index; 2 functional calculation using the A + B*F formula.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_A	28	""	A	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_B	29	""	B	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	E_DIST_MODE	30	foreign_key	Equipment heat-gain distribution mode.	Use as fallback until explicit gain precedence is confirmed.
+ROOM_TYPE_DATA	AC_SCHEDULE_ID	31	foreign_key	Air-conditioning on/off schedule ID.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_T_MIN_SCHEDULE	32	foreign_key	Room temperature setpoint schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID; lower air-conditioning setpoint temperature.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_T_MAX_SCHEDULE	33	foreign_key	Room temperature setpoint schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID; upper air-conditioning setpoint temperature.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_RH_MIN_SCHEDULE	34	foreign_key	Room humidity setpoint schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID; lower air-conditioning humidity setpoint.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_RH_MAX_SCHEDULE	35	foreign_key	Room humidity setpoint schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID; upper air-conditioning humidity setpoint.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	AC_T_MIN_SCHEDULE	36	foreign_key	Air-conditioning activation temperature schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems; lower tolerance temperature.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	AC_T_MAX_SCHEDULE	37	foreign_key	Air-conditioning activation temperature schedule ID corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems; upper tolerance temperature.	Thermostat/HVAC conversion is not implemented yet.
+ROOM_TYPE_DATA	SET_MIN_LUMINANCE	38	""	Room minimum illuminance setting in lx.	Lighting control conversion is not implemented yet.
+ROOM_TYPE_DATA	REMARK	39	""	Description.	Not used by converters.
+ROOM_TYPE_DATA	EXT_PROPERTY	40	""	Extended property reference, corresponding to EXT_PROPERTY.	Extended properties are not decoded yet.
+ROOM_RELATION	ID	1	primary_key	ID	""
+ROOM_RELATION	NAME	2	""	Name.	fixture values are literal dot strings.
+ROOM_RELATION	OF_BUILDING	3	foreign_key	Owning building ID.	fixture values reference BUILDING.BUILDING_ID.
+ROOM_RELATION	ROOM_ID	4	foreign_key	Current room ID.	fixture values reference ROOM.ID.
+ROOM_RELATION	RELA_ROOM_ID	5	foreign_key	Adjacent room ID; can be outside.	fixture values reference OUTSIDE.OUTSIDE_ID.
+ROOM_RELATION	VENT_SCHEDULE_ID	6	foreign_key	Schedule ID corresponding to air changes.	fixture values reference SCHEDULE_YEAR.SCHEDULE_ID.
+ROOM_RELATION	VENT_SET_MAX	7	""	Maximum ventilation capacity between the room and outdoors.	unit still needs confirmation before conversion.
+ROOM_RELATION	VENT_TYPE	8	""	Ventilation definition code: 0 air changes; 1 additional air-change range.	fixture uses only type 1.
+ROOM_RELATION	START_POINT_ID	9	foreign_key	START	fixture values reference POINT.POINT_ID.
+ROOM_RELATION	END_POINT_ID	10	foreign_key	END	fixture values reference POINT.POINT_ID.
+ROOM_RELATION	EXT_PROPERTY	11	""	Extended property reference, corresponding to EXT_PROPERTY.	extended properties are not decoded yet.
+OUTSIDE	OUTSIDE_ID	1	primary_key	ID	""
+OUTSIDE	NAME	2	""	Name.	""
+OUTSIDE	X	3	""	X coordinate of the room marker representing this Outside in the drawing, if present.	""
+OUTSIDE	Y	4	""	Y coordinate of the room marker representing this Outside in the drawing, if present.	""
+OUTSIDE	Z	5	""	Z coordinate of the room marker representing this Outside in the drawing, if present.	""
+OUTSIDE	EXT_PROPERTY	6	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+GROUND	GROUND_ID	1	primary_key	Identifier.	""
+GROUND	NAME	2	""	Name.	""
+GROUND	X	3	""	X coordinate of the room marker representing this Ground in the drawing, if present.	""
+GROUND	Y	4	""	Y coordinate of the room marker representing this Ground in the drawing, if present.	""
+GROUND	Z	5	""	Z coordinate of the room marker representing this Ground in the drawing, if present.	""
+GROUND	EXT_PROPERTY	6	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+SURFACE	SURFACE_ID	1	primary_key	Identifier.	""
+SURFACE	NAME	2	""	Name.	""
+SURFACE	AREA	3	""	Area in m2.	""
+SURFACE	AZIMUTH	4	""	Relative azimuth in degrees: clockwise angle relative to the south-direction angle in ENVIRONMENT, in [0, 360); 999 indicates ground or ceiling.	""
+SURFACE	TILT	5	""	Tilt angle in degrees relative to the horizontal plane; vertical surfaces are 90 degrees, and protrusion side surfaces are greater than 90 degrees.	""
+SURFACE	OF_ROOM	6	foreign_key	Owning room; can reference a ROOM record, an OUTSIDE boundary, or a GROUND boundary.	""
+SURFACE	TYPE	7	""	Surface state code: 0 ordinary surface; 1 exterior surface; 2 ground-contact surface; 3 shading surface; 4 upward-facing horizontal interior surface; 5 downward-facing horizontal interior surface; 6 atrium-facing vertical interior surface to be calculated; 7 skylight exterior surface facing outdoors away from the atrium and not calculated; 8 atrium-facing upward horizontal interior surface to be calculated; 9 atrium-facing downward horizontal interior surface to be calculated or virtual component surface.	""
+SURFACE	SURFACESTATE	8	""	Surface state code, reserved.	""
+SURFACE	GEOMETRY	9	foreign_key	Geometry identifier corresponding to GEOMETRY.GEOMETRY_ID.	""
+SURFACE	VENTILATION_COEF	10	""	Convective heat-transfer coefficient.	""
+SURFACE	BLACKNESS	11	""	Surface blackness.	""
+SURFACE	ABSORB_COEF	12	""	Surface absorptance coefficient.	""
+SURFACE	CONVECT_T_ID	13	""	Outside temperature in OUTSIDE or ground temperature in GROUND; 0 means absent.	""
+SURFACE	ABSORB_GAIN_ID	14	""	ABSORB_GAIN_ID	""
+SURFACE	INDEX_IN_A_THIS_ROOM	15	""	Index of this surface node in the heat-transfer equation A matrix of the room owning the surface.	""
+SURFACE	INDEX_IN_A_OPP_ROOM	16	""	Index of this surface node in the heat-transfer equation A matrix of the room owning the opposite surface in the same enclosure.	""
+SURFACE	SKY_RADIA_COEF	17	""	Coefficient that gives heat transfer when multiplied by area and the temperature difference between sky and surface.	""
+SURFACE	OF_SHADING	18	""	For shading surfaces only; identifies the owning shading object and references the SHADING table.	""
+SURFACE	EXT_PROPERTY	19	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+MAIN_ENCLOSURE	ID	1	primary_key	ID	""
+MAIN_ENCLOSURE	NAME	2	""	Name.	""
+MAIN_ENCLOSURE	SIDE1	3	foreign_key	First plane: the plane on the left when facing the directed line segment in the drawing; for floors, this is the upper plane.	""
+MAIN_ENCLOSURE	SIDE2	4	foreign_key	Second plane: the plane on the right when facing the directed line segment in the drawing; for floors, this is the lower plane.	""
+MAIN_ENCLOSURE	MIDDLE_PLANE	5	""	Middle plane.	""
+MAIN_ENCLOSURE	KIND	6	""	Construction kind: 1 exterior wall; 2 interior wall; 3 roof; 4 ground/intermediate floor; 5 floor/ceiling, counted as floor if both; 6 exposed floor.	""
+MAIN_ENCLOSURE	CONSTRUCTION	7	""	Component ID; depending on the type, it corresponds to IDs in one of six system-library tables; 0 uses the default value.	""
+MAIN_ENCLOSURE	USER_DEF_DLL	8	""	User-defined DLL_ID corresponding to USER_DEF_DLL.	""
+MAIN_ENCLOSURE	CAL_NUM_SHARES	9	""	Number of subdivisions used for this enclosure during calculation.	""
+MAIN_ENCLOSURE	FOURIER_NUM	10	""	Criterion for the number of wall subdivisions.	""
+MAIN_ENCLOSURE	OF_STOREY	11	""	Storey containing the wall.	""
+MAIN_ENCLOSURE	EXT_PROPERTY	12	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+PLANE	PLANE_ID	1	primary_key	ID	""
+PLANE	NAME	2	""	Name.	""
+PLANE	GEOMETRY	3	""	Geometry identifier corresponding to GEOMETRY.GEOMETRY_ID.	""
+PLANE	BASE_LINE_START_POINT	4	""	Baseline start point used for room division, corresponding to POINT.ID.	""
+PLANE	BASE_LINE_END_POINT	5	""	Baseline endpoint used for room division, corresponding to POINT.ID.	""
+GEOMETRY	GEOMETRY_ID	1	primary_key	ID	""
+GEOMETRY	NAME	2	""	Name.	""
+GEOMETRY	BOUNDARY_LOOP_ID	3	""	ID of the outermost loop point.	""
+LOOP_POINT	LOOP_ID	1	""	Flag.	""
+LOOP_POINT	POINT_NO	2	""	Point sequence number; the first and second points are the start and end of the geometry baseline shown in the plan drawing.	""
+LOOP_POINT	POINT	3	foreign_key	Point ID.	""
+LOOP_POINT	OF_GEOMETRY	4	""	Owning geometry ID.	""
+POINT	POINT_ID	1	primary_key	ID	""
+POINT	NAME	2	""	Name.	""
+POINT	X	3	""	X coordinate in m.	""
+POINT	Y	4	""	Y coordinate in m.	""
+POINT	Z	5	""	Z coordinate in m.	""
+DEFAULT_SETTING	TABLE_NAME	1	""	Table name.	""
+DEFAULT_SETTING	FIELD_NAME	2	""	Field name.	""
+DEFAULT_SETTING	STRING	3	""	Value stored here when the value type is string.	""
+DEFAULT_SETTING	LONG	4	""	Value stored here when the value type is LONG.	""
+DEFAULT_SETTING	DOUBLE	5	""	Value stored here when the value type is DOUBLE.	""
+DEFAULT_SETTING	FLOAT	6	""	Value stored here when the value type is FLOAT.	""
+DEFAULT_SETTING	SHORT	7	""	Value stored here when the value type is INT.	""
+DEFAULT_SETTING	TYPE	8	""	Default value type code: 1 string; 2 long; 3 double; 4 float; 5 short; 6 type; other values are invalid.	""
+DEFAULT_SETTING	KIND	9	""	Type code: in MAIN_ENCLOSURE, distinguishes construction types 1 exterior wall, 2 interior wall, 3 roof, 4 ground/intermediate floor, and 5 floor/ceiling counted as floor if both; in SURFACE, distinguishes convective heat-transfer coefficient types 0 vertical exterior surface, 1 vertical interior surface, 2 upward-facing horizontal surface, and 3 downward-facing horizontal surface.	""
+DEFAULT_SETTING	COMMENT	10	""	Remark.	""
+SCHEDULE_YEAR	SCHEDULE_ID	1	primary_key	Identifier.	""
+SCHEDULE_YEAR	TYPE	2	""	Schedule type code: 1 ratio; 2 on/off; 3 integer; 4 float; 5 double; DATA is stored as double in all cases.	""
+SCHEDULE_YEAR	NAME	3	""	Name.	""
+SCHEDULE_YEAR	DATA	4	""	Data.	""
+SYS_MATERIAL	MATERIAL_ID	1	primary_key	MATERIAL_ID	""
+SYS_MATERIAL	COLOR	2	""	COLOR	""
+SYS_MATERIAL	GROUP_ID	3	""	GROUP_ID	""
+SYS_MATERIAL	NAME	4	""	NAME	""
+SYS_MATERIAL	CNAME	5	""	CNAME	""
+SYS_MATERIAL	CONDUCTIVITY	6	""	Thermal conductivity in W/m.K.	""
+SYS_MATERIAL	DENSITY	7	""	Density in kg/m3.	""
+SYS_MATERIAL	SPECIFIC_HEAT	8	""	Specific heat at constant pressure in J/kg.K.	""
+SYS_MATERIAL	S	9	""	Heat storage coefficient in W/m2.K.	""
+SYS_MATERIAL	STEAM	10	""	Vapor permeability in g/(m.h.mmHg).	""
+SYS_MATERIAL	PATTERN	11	""	PATTERN	""
+SYS_MATERIAL	ERASEFLAG	12	""	ERASEFLAG	""
+SYS_MATERIAL	FLAG	13	""	FLAG	""
+SYS_MATERIAL	ANOTATION	14	""	ANOTATION	""
+SYS_OUTWALL	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_OUTWALL	GROUP_ID	2	""	GROUP_ID	""
+SYS_OUTWALL	NAME	3	""	NAME	""
+SYS_OUTWALL	CNAME	4	""	CNAME	""
+SYS_OUTWALL	RESI	5	""	Thermal resistance in m2.K/W.	""
+SYS_OUTWALL	D	6	""	Thermal inertia index.	""
+SYS_OUTWALL	SPFLAG	7	""	SPFLAG	""
+SYS_OUTWALL	FLAG	8	""	FLAG	""
+SYS_OUTWALL	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_OUTWALL	ANOTATION	10	""	ANOTATION	""
+SYS_OUTWALL_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_OUTWALL_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_OUTWALL_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_OUTWALL_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_OUTWALL_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_INWALL	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_INWALL	GROUP_ID	2	""	GROUP_ID	""
+SYS_INWALL	NAME	3	""	NAME	""
+SYS_INWALL	CNAME	4	""	CNAME	""
+SYS_INWALL	RESI	5	""	RESI	""
+SYS_INWALL	D	6	""	D	""
+SYS_INWALL	SPFLAG	7	""	SPFLAG	""
+SYS_INWALL	FLAG	8	""	FLAG	""
+SYS_INWALL	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_INWALL	ANOTATION	10	""	ANOTATION	""
+SYS_INWALL_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_INWALL_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_INWALL_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_INWALL_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_INWALL_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_ROOF	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_ROOF	GROUP_ID	2	""	GROUP_ID	""
+SYS_ROOF	NAME	3	""	NAME	""
+SYS_ROOF	CNAME	4	""	CNAME	""
+SYS_ROOF	RESI	5	""	RESI	""
+SYS_ROOF	D	6	""	D	""
+SYS_ROOF	SPFLAG	7	""	SPFLAG	""
+SYS_ROOF	FLAG	8	""	FLAG	""
+SYS_ROOF	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_ROOF	ANOTATION	10	""	ANOTATION	""
+SYS_ROOF_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_ROOF_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_ROOF_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_ROOF_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_ROOF_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_GROUNDFLOOR	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_GROUNDFLOOR	GROUP_ID	2	""	GROUP_ID	""
+SYS_GROUNDFLOOR	NAME	3	""	NAME	""
+SYS_GROUNDFLOOR	CNAME	4	""	CNAME	""
+SYS_GROUNDFLOOR	RESI	5	""	RESI	""
+SYS_GROUNDFLOOR	D	6	""	D	""
+SYS_GROUNDFLOOR	SPFLAG	7	""	SPFLAG	""
+SYS_GROUNDFLOOR	FLAG	8	""	FLAG	""
+SYS_GROUNDFLOOR	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_GROUNDFLOOR	ANOTATION	10	""	ANOTATION	""
+SYS_GROUNDFLOOR_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_GROUNDFLOOR_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_GROUNDFLOOR_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_GROUNDFLOOR_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_GROUNDFLOOR_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_MIDDLEFLOOR	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_MIDDLEFLOOR	GROUP_ID	2	""	GROUP_ID	""
+SYS_MIDDLEFLOOR	NAME	3	""	NAME	""
+SYS_MIDDLEFLOOR	CNAME	4	""	CNAME	""
+SYS_MIDDLEFLOOR	RESI	5	""	RESI	""
+SYS_MIDDLEFLOOR	D	6	""	D	""
+SYS_MIDDLEFLOOR	SPFLAG	7	""	SPFLAG	""
+SYS_MIDDLEFLOOR	FLAG	8	""	FLAG	""
+SYS_MIDDLEFLOOR	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_MIDDLEFLOOR	ANOTATION	10	""	ANOTATION	""
+SYS_MIDDLEFLOOR_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_MIDDLEFLOOR_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_MIDDLEFLOOR_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_MIDDLEFLOOR_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_MIDDLEFLOOR_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_AIRFLOOR	STRUCT_ID	1	primary_key	STRUCT_ID	""
+SYS_AIRFLOOR	GROUP_ID	2	""	GROUP_ID	""
+SYS_AIRFLOOR	NAME	3	""	NAME	""
+SYS_AIRFLOOR	CNAME	4	""	CNAME	""
+SYS_AIRFLOOR	RESI	5	""	RESI	""
+SYS_AIRFLOOR	D	6	""	D	""
+SYS_AIRFLOOR	SPFLAG	7	""	SPFLAG	""
+SYS_AIRFLOOR	FLAG	8	""	FLAG	""
+SYS_AIRFLOOR	ERASEFLAG	9	""	ERASEFLAG	""
+SYS_AIRFLOOR	ANOTATION	10	""	ANOTATION	""
+SYS_AIRFLOOR_MATERIAL	STRUCT_ID	1	""	STRUCT_ID	""
+SYS_AIRFLOOR_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_AIRFLOOR_MATERIAL	MATERIAL_ID	3	""	MATERIAL_ID	""
+SYS_AIRFLOOR_MATERIAL	LENGTH	4	""	LENGTH	""
+SYS_AIRFLOOR_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_WINDOW	WINDOW_ID	1	primary_key	WINDOW_ID	""
+SYS_WINDOW	GROUP_ID	2	""	GROUP_ID	""
+SYS_WINDOW	NAME	3	""	NAME	""
+SYS_WINDOW	CNAME	4	""	CNAME	""
+SYS_WINDOW	HEAT_RESISTENCE	5	""	HEAT_RESISTENCE	""
+SYS_WINDOW	GLASS_NET_RATIO	6	""	GLASS_NET_RATIO	""
+SYS_WINDOW	REFLECT_CO	7	""	REFLECT_CO	""
+SYS_WINDOW	FLAG	8	""	FLAG	""
+SYS_WINDOW	SPFLAG	9	""	SPFLAG	""
+SYS_WINDOW	ERASEFLAG	10	""	ERASEFLAG	""
+SYS_WINDOW	ANOTATION	11	""	ANOTATION	""
+SYS_WINDOW_MATERIAL	WINDOW_ID	1	""	WINDOW_ID	""
+SYS_WINDOW_MATERIAL	LAYER_NO	2	""	LAYER_NO	""
+SYS_WINDOW_MATERIAL	MATERIAL_ID	3	""	A value of 0 indicates air.	""
+SYS_WINDOW_MATERIAL	LENGTH	4	""	Air layer thickness; redundant and unused when the material is air.	""
+SYS_WINDOW_MATERIAL	ANOTATION	5	""	ANOTATION	""
+SYS_APP_MATERIAL	APP_MATERIAL_ID	1	primary_key	Material identifier.	""
+SYS_APP_MATERIAL	COLOR	2	""	Color flag.	""
+SYS_APP_MATERIAL	GROUP_ID	3	""	Type.	""
+SYS_APP_MATERIAL	NAME	4	""	Material English name.	""
+SYS_APP_MATERIAL	CNAME	5	""	Material Chinese name.	""
+SYS_APP_MATERIAL	CONDUCTIVITY	6	""	Thermal conductivity in W/m.K.	""
+SYS_APP_MATERIAL	DENSITY	7	""	Density in kg/m3.	""
+SYS_APP_MATERIAL	SPECIFIC_HEAT	8	""	Specific heat at constant pressure in J/kg.K.	""
+SYS_APP_MATERIAL	S	9	""	Heat storage coefficient in W/m2.K.	""
+SYS_APP_MATERIAL	STEAM	10	""	Vapor permeability in g/(m.h.mmHg).	""
+SYS_APP_MATERIAL	EX_COEF	11	""	Extinction coefficient.	""
+SYS_APP_MATERIAL	RF_COEF	12	""	Refractive index.	""
+SYS_APP_MATERIAL	EMISSIVITY	13	""	Emissivity.	""
+SYS_APP_MATERIAL	THICK	14	""	Thickness in mm.	""
+SYS_APP_MATERIAL	PATTERN	15	""	Legend.	""
+SYS_APP_MATERIAL	ERASEFLAG	16	""	Deletion flag.	""
+SYS_APP_MATERIAL	FLAG	17	""	Flag.	""
+SYS_APP_MATERIAL	ANOTATION	18	""	Remark.	""
+SYS_DOOR	DOOR_ID	1	primary_key	Primary index and door number.	""
+SYS_DOOR	GROUP_ID	2	""	Type.	""
+SYS_DOOR	NAME	3	""	English name.	""
+SYS_DOOR	CNAME	4	""	Chinese name.	""
+SYS_DOOR	CONDUCT_CO	5	""	Thermal conductivity.	""
+SYS_DOOR	MATERIAL_ID	6	""	Door-body material ID in the material table.	""
+SYS_DOOR	GAP_LENGTH	7	""	Gap length.	""
+SYS_DOOR	GLASS_RAT	8	""	Transparent ratio.	""
+SYS_DOOR	APP_ID	9	""	Transparent material ID in the transparent material table.	""
+SYS_DOOR	APP_FLAG	10	""	Transparency flag.	""
+SYS_DOOR	FLAG	11	""	Reference flag.	""
+SYS_DOOR	ERASEFLAG	12	""	Deletion flag.	""
+SYS_DOOR	ANOTATION	13	""	Annotation.	""
+WINDOW	ID	1	primary_key	ID, also the drawing handle.	""
+WINDOW	NAME	2	""	Name.	""
+WINDOW	SIDE1	3	""	First plane: the referenced surface on the left when facing the directed line segment in the drawing.	""
+WINDOW	SIDE2	4	""	Second plane: the plane on the right when facing the directed line segment in the drawing.	""
+WINDOW	MIDDLE_PLANE	5	foreign_key	Middle plane.	""
+WINDOW	OF_ENCLOSURE	6	foreign_key	Identifier of the owning wall.	""
+WINDOW	WINDOW_CONSTRUCTION	7	foreign_key	Window construction identifier corresponding to SYS_WINDOW.WINDOW_ID in the system library; 0 uses the default value.	""
+WINDOW	SHADING	8	""	Legacy window shading component identifier, corresponding to SYS_SHADING.ID; 0 means no shading.	""
+WINDOW	SHADINGID	9	""	Window shading identifier corresponding to SHADING.ID; 0 means no exterior shading. Added in version 2.6 to avoid conflicts with the legacy shading definition mode.	""
+WINDOW	CURTAIN	10	""	Curtain identifier corresponding to SYS_CURTAIN.CURTAIN_ID in the system library; 0 uses the default value.	""
+WINDOW	CUR_REF_SCHEDULE	11	""	Curtain reflectance schedule identifier.	""
+WINDOW	SCHEDULE	12	""	Opening schedule identifier, reserved.	""
+WINDOW	USER_DEF_DLL	13	""	User-defined DLL_ID corresponding to USER_DEF_DLL.	""
+WINDOW	SUN_TRANS_DIST_MODE	14	""	Distribution coefficient for transmitted solar heat gain.	""
+WINDOW	OF_STOREY	15	""	Identifier of the owning storey; for floors or ceilings, this refers to the storey containing the ceiling.	""
+WINDOW	TYPE	16	""	Type.	""
+WINDOW	K	17	""	Bay-window area correction factor.	""
+WINDOW	SC	18	""	Diffuse-radiation shading coefficient of exterior shading.	""
+WINDOW	EXT_PROPERTY	19	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+WINDOW_TYPE_DATA	ID	1	primary_key	Identifier.	""
+WINDOW_TYPE_DATA	NAME	2	""	Window type name.	""
+WINDOW_TYPE_DATA	LAYER_NUM	3	""	Number of transparent material layers in the window.	""
+WINDOW_TYPE_DATA	K	4	""	K value.	""
+WINDOW_TYPE_DATA	SC	5	""	SC value.	""
+WINDOW_TYPE_DATA	ENERGY_TRANS_RATIO	6	""	Solar transmittance.	""
+WINDOW_TYPE_DATA	ENERGY_REFLECT_RATIO	7	""	Solar reflectance.	""
+WINDOW_TYPE_DATA	LIGHT_TRANS_RATIO	8	""	Visible-light transmittance.	""
+WINDOW_TYPE_DATA	LIGHT_REFLECT_RATIO	9	""	Visible-light reflectance.	""
+WINDOW_TYPE_DATA	REMARK	10	""	Remark.	""
+WINDOW_TYPE_DATA	EXT_PROPERTY	11	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+DOOR	ID	1	primary_key	ID, also the drawing handle.	""
+DOOR	NAME	2	""	Name.	""
+DOOR	SIDE1	3	""	First plane: the plane on the left when facing the directed line segment in the drawing.	""
+DOOR	SIDE2	4	""	Second plane: the plane on the right when facing the directed line segment in the drawing.	""
+DOOR	MIDDLE_PLANE	5	""	Middle plane ID.	""
+DOOR	OF_ENCLOSURE	6	""	Identifier of the owning wall.	""
+DOOR	DOOR_CONSTRUCTION	7	""	DOOR_ID reference in the system-library DOOR table; 0 uses the default value.	""
+DOOR	SCHEDULE	8	""	Opening schedule identifier, reserved.	""
+DOOR	USER_DEF_DLL	9	""	Calculation DLL file name for a user-defined door, not a full path; located under the USER directory in the installation directory.	""
+DOOR	EXT_PROPERTY	10	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+SHADING	ID	1	primary_key	Identifier.	""
+SHADING	NAME	2	""	Name.	""
+SHADING	TYPE	3	""	Shading type.	""
+SHADING	TAO	4	""	Shading panel material transmittance.	""
+SHADING	ROU	5	""	Shading panel material reflectance.	""
+SHADING	LIB_SHADING_ID	6	""	Structured shading identifier; 0 means this is not a structured shading definition.	""
+SHADING	MATERIAL	7	""	Shading panel material identifier pointing to SYS_APP_MATERIAL, where thickness, transparency, and related properties can be defined.	""
+SHADING	OF_BUILDING	8	""	Owning building; used when there is no owning-storey concept.	""
+SHADING	EXT_PROPERTY	9	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+SYS_SHADING	SHIELD_ID	1	primary_key	SHIELD_ID	""
+SYS_SHADING	GROUP_ID	2	""	GROUP_ID	""
+SYS_SHADING	NAME	3	""	NAME	""
+SYS_SHADING	CNAME	4	""	CNAME	""
+SYS_SHADING	A	5	""	Geometry parameter: WIDTH.	""
+SYS_SHADING	B	6	""	Geometry parameter: LEFT WIDTH.	""
+SYS_SHADING	C	7	""	Geometry parameter: RIGHT WIDTH.	""
+SYS_SHADING	D	8	""	Geometry parameter: HEIGHT.	""
+SYS_SHADING	E	9	""	Geometry parameter: DIFFERENCE.	""
+SYS_SHADING	F	10	""	Geometry parameter: LEFT DIFFERENCE.	""
+SYS_SHADING	G	11	""	Geometry parameter: RIGHT DIFFERENCE.	""
+SYS_SHADING	H1	12	""	Geometry parameter: LEFT HEIGHT.	""
+SYS_SHADING	H2	13	""	Geometry parameter: RIGHT HEIGHT.	""
+SYS_SHADING	ANOTATION	14	""	ANOTATION	""
+LIB_SHADING	ID	1	primary_key	Identifier.	""
+LIB_SHADING	NAME	2	""	Name.	""
+LIB_SHADING	B0	3	""	Distance in m from the first shading blade to the window top, or to the left frame for vertical louvers.	""
+LIB_SHADING	B1	4	""	Distance in m from one end of the shading panel to the left side of the window, or to the top for vertical louvers.	""
+LIB_SHADING	B2	5	""	Distance in m from the other end of the shading panel to the right side of the window, or to the bottom for vertical louvers.	""
+LIB_SHADING	DEG	6	""	Shading panel tilt angle in degrees: 0 means vertical; downward or rightward angles are positive.	""
+LIB_SHADING	DIST	7	""	Shading panel spacing in m.	""
+LIB_SHADING	W	8	""	Shading panel projection width in m.	""
+LIB_SHADING	N	9	""	Number of louver blades.	""
+LIB_SHADING	HF	10	""	Non-louver shading: overhang height in m.	""
+LIB_SHADING	HL	11	""	Non-louver shading: left side panel height in m.	""
+LIB_SHADING	WL	12	""	Non-louver shading: left side panel width in m.	""
+LIB_SHADING	DEGL	13	""	Non-louver shading: left side panel angle in degrees; 0 means vertical, and downward or rightward angles are positive.	""
+LIB_SHADING	HR	14	""	Non-louver shading: right side panel height in m.	""
+LIB_SHADING	WR	15	""	Non-louver shading: right side panel width in m.	""
+LIB_SHADING	DEGR	16	""	Non-louver shading: left side panel angle in degrees; 0 means vertical, and downward or rightward angles are positive.	""
+LIB_SHADING	PRICE	17	""	Market reference price.	""
+LIB_SHADING	IMAGE	18	""	Image.	""
+LIB_SHADING	GROUP	19	""	Structured shading shape category: 0 ordinary shading; 1 horizontal louver; 2 vertical louver.	""
+LIB_SHADING	NOTE	20	""	Description.	""
+LIB_SHADING	EXT_PROPERTY	21	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+DIST_MODE	DIST_MODE_ID	1	primary_key	ID	""
+DIST_MODE	DIST_AIR	2	""	Fraction distributed to indoor air.	""
+DIST_MODE	DIST_ROOF	3	""	Fraction distributed to the roof.	""
+DIST_MODE	DIST_FLOOR	4	""	Fraction distributed to the floor.	""
+DIST_MODE	DIST_AROUND	5	""	Fraction distributed to surrounding facades.	""
+DIST_MODE	NAME	6	""	Name.	""
+OCCUPANT_GAINS	GAIN_ID	1	primary_key	Identifier.	""
+OCCUPANT_GAINS	NAME	2	""	Name.	""
+OCCUPANT_GAINS	OF_ROOM	3	""	Owning room.	""
+OCCUPANT_GAINS	SCHEDULE	4	""	Schedule.	""
+OCCUPANT_GAINS	USER_DEFINED	5	""	Whether user-defined.	""
+OCCUPANT_GAINS	MAXNUMBER	6	""	Maximum number of people, as people or people per square meter.	""
+OCCUPANT_GAINS	MINNUMBER	7	""	Minimum number of people, as people or people per square meter.	""
+OCCUPANT_GAINS	HEAT_PER_PERSON	8	""	Heat gain per person in W.	""
+OCCUPANT_GAINS	DAMP_PER_PERSON	9	""	Moisture generation per person in kg/hr.	""
+OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	""	Minimum outdoor-air flow required per person in m3/h.	""
+OCCUPANT_GAINS	PER_AREA	11	""	Whether the value is per square meter.	""
+OCCUPANT_GAINS	A	12	""	A	""
+OCCUPANT_GAINS	B	13	""	B	""
+OCCUPANT_GAINS	DIST_MODE	14	""	Distribution mode.	""
+OCCUPANT_GAINS	OF_STOREY	15	""	Owning storey ID.	""
+OCCUPANT_GAINS	X	16	""	X coordinate of the occupant heat-gain object in the drawing.	""
+OCCUPANT_GAINS	Y	17	""	Y coordinate of the occupant heat-gain object in the drawing.	""
+OCCUPANT_GAINS	Z	18	""	Z coordinate of the occupant heat-gain object in the drawing.	""
+LIGHT_GAINS	GAIN_ID	1	primary_key	Identifier.	""
+LIGHT_GAINS	NAME	2	""	Name.	""
+LIGHT_GAINS	OF_ROOM	3	""	Owning room.	""
+LIGHT_GAINS	SCHEDULE	4	""	Schedule.	""
+LIGHT_GAINS	MAXPOWER	5	""	Maximum nameplate power, in W or W/m2.	""
+LIGHT_GAINS	MINPOWER	6	""	Minimum nameplate power, in W or W/m2.	""
+LIGHT_GAINS	HEAT_RATE	7	""	Heat-to-electricity ratio.	""
+LIGHT_GAINS	PER_AREA	8	""	Whether the value is per square meter.	""
+LIGHT_GAINS	A	9	""	A	""
+LIGHT_GAINS	B	10	""	B	""
+LIGHT_GAINS	DIST_MODE	11	""	Distribution mode.	""
+LIGHT_GAINS	OF_STOREY	12	""	Owning storey ID.	""
+LIGHT_GAINS	X	13	""	X coordinate of the lighting heat-gain object in the drawing.	""
+LIGHT_GAINS	Y	14	""	Y coordinate of the lighting heat-gain object in the drawing.	""
+LIGHT_GAINS	Z	15	""	Z coordinate of the lighting heat-gain object in the drawing.	""
+EQUIPMENT_GAINS	GAIN_ID	1	primary_key	Identifier.	""
+EQUIPMENT_GAINS	NAME	2	""	Name.	""
+EQUIPMENT_GAINS	OF_ROOM	3	""	Owning room.	""
+EQUIPMENT_GAINS	SCHEDULE	4	""	Schedule.	""
+EQUIPMENT_GAINS	MAXPOWER	5	""	Maximum heat-gain power, in W or W/m2.	""
+EQUIPMENT_GAINS	MINPOWER	6	""	Minimum heat-gain power, in W or W/m2.	""
+EQUIPMENT_GAINS	MAX_HUM	7	""	Maximum equipment moisture generation, in kg/hr or kg/(hr.m2).	""
+EQUIPMENT_GAINS	MIN_HUM	8	""	Minimum equipment moisture generation, in kg/hr or kg/(hr.m2).	""
+EQUIPMENT_GAINS	PER_AREA	9	""	Whether the value is per square meter.	""
+EQUIPMENT_GAINS	A	10	""	A	""
+EQUIPMENT_GAINS	B	11	""	B	""
+EQUIPMENT_GAINS	DIST_MODE	12	""	Distribution mode.	""
+EQUIPMENT_GAINS	OF_STOREY	13	""	Owning storey ID.	""
+EQUIPMENT_GAINS	X	14	""	X coordinate of the equipment heat-gain object in the drawing.	""
+EQUIPMENT_GAINS	Y	15	""	Y coordinate of the equipment heat-gain object in the drawing.	""
+EQUIPMENT_GAINS	Z	16	""	Z coordinate of the equipment heat-gain object in the drawing.	""
+CLIMATE_DATA	ID	1	primary_key	ID	""
+CLIMATE_DATA	HOUR	2	""	Hour index from 0 to 8759.	""
+CLIMATE_DATA	DRY_BULB_T	3	""	Dry-bulb temperature in degrees C.	""
+CLIMATE_DATA	DAMP	4	""	Humidity ratio, in g/kg dry air.	""
+CLIMATE_DATA	HORI_TOTAL_RAD	5	""	Global horizontal radiation in W/m2.	""
+CLIMATE_DATA	HORI_SCATTER_RAD	6	""	Diffuse horizontal radiation in W/m2.	""
+CLIMATE_DATA	T_GROUND	7	""	Ground surface temperature in degrees C.	""
+CLIMATE_DATA	T_SKY	8	""	Effective sky temperature in K.	""
+CLIMATE_DATA	WS	9	""	Wind speed in m/s.	""
+CLIMATE_DATA	WD	10	""	Wind direction code: 0 C, 1 N, 2 NNE, 3 NE, 4 ENE, 5 E, ..., 9 S, ..., 13 W, ..., 16 NNW.	""
+CLIMATE_DATA	B	11	""	Atmospheric pressure in Pa.	""
+GROUND_DATA	ID	1	primary_key	ID	""
+GROUND_DATA	HOUR	2	""	Hour index from 0 to 8759.	""
+GROUND_DATA	T	3	""	User-defined hourly ground temperature in degrees C.	""
+AC_SYS	AC_SYS_ID	1	primary_key	ID	""
+AC_SYS	NAME	2	""	Name.	""
+AC_SYS	OF_STOREY	3	""	Owning storey.	""
+AC_SYS	OF_BUILDING	4	""	Owning building, used by the result browser.	""
+AC_SYS	SUPPLY_T_MIN	5	""	Minimum supply-air temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+AC_SYS	SUPPLY_T_MAX	6	""	Maximum supply-air temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+AC_SYS	WATER_TYPE	7	""	Water loop type: 0 none; 1 hot water only, two-pipe; 2 chilled water only, two-pipe; 3 hot and chilled water, four-pipe; 4 two-pipe changeover.	""
+AC_SYS	AC_SYS_TYPE	8	""	Air-conditioning system type: 0 constant-air-volume all-air system; 1 variable-air-volume all-air system; 2 fan coil unit; 3 unitary air conditioner; 4 dry fan coil unit; 5 dedicated dehumidifying outdoor-air unit; 6 variable refrigerant flow system.	""
+AC_SYS	FRESH_AIR_TYPE	9	""	Outdoor-air control type: 0 fixed outdoor-air ratio using the minimum ratio; 1 limited by an outdoor-air ratio range; 2 fixed outdoor-air flow using the minimum flow; 3 limited by an outdoor-air flow range.	""
+AC_SYS	MIN_FRESH_AIR_RATIO	10	""	Minimum outdoor-air ratio.	""
+AC_SYS	MAX_FRESH_AIR_RATIO	11	""	Maximum outdoor-air ratio.	""
+AC_SYS	MIN_FRESH_AIR_VOLUME	12	""	Minimum outdoor-air flow rate.	""
+AC_SYS	MAX_FRESH_AIR_VOLUME	13	""	Maximum outdoor-air flow rate.	""
+AC_SYS	SUPPLY_STATE_FLAG	14	""	Variable supply-air state flag: 0 decided by DeST; 1 user-defined.	""
+AC_SYS	USER_DEF_SUPPLY_T	15	""	User-defined hourly supply-air temperature, corresponding to a SCHEDULE_YEAR schedule.	""
+AC_SYS	USER_DEF_SUPPLY_D	16	""	User-defined hourly supply-air humidity ratio, corresponding to a SCHEDULE_YEAR schedule.	""
+AC_SYS	FRESH_AIR_OUTSIDE	17	""	Outdoor-air source, corresponding to one record in the OUTSIDE table.	""
+AC_SYS	VIEW_COOL_LOAD	18	""	Result-browser option indicating whether to display this curve.	""
+AC_SYS	VIEW_HEAT_LOAD	19	""	Result-browser option indicating whether to display this curve.	""
+AC_SYS	VIEW_HUMI_LOAD	20	""	Result-browser option indicating whether to display this curve.	""
+AC_SYS	VIEW_FLOW	21	""	Result-browser option indicating whether to display this curve.	""
+AC_SYS	VIEW_FRESH_AIR_RATIO	22	""	Result-browser option indicating whether to display this curve.	""
+AC_SYS	X	23	""	X coordinate of the DNAHU insertion point in the drawing.	""
+AC_SYS	Y	24	""	Y coordinate of the DNAHU insertion point in the drawing.	""
+AC_SYS	Z	25	""	Z coordinate of the DNAHU insertion point in the drawing.	""
+AC_SYS	EXT_PROPERTY	26	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+AHU	AHU_ID	1	primary_key	ID	""
+AHU	NAME	2	""	Name.	""
+AHU	OF_AC_SYS	3	""	Owning system ID.	""
+AHU	TYPE	4	""	Type, to be determined.	""
+AHU	COOLING_COIL	5	""	Equipment reference: 0 means absent; nonzero means present; positive values are selected equipment IDs from the equipment database; negative values mean the equipment has not been selected.	""
+AHU	COIL_TYPE	6	""	Cooling coil type: 0 ordinary cooling coil; 1 cooling coil with bypass.	""
+AHU	COIL_NUM	7	""	Number of parallel coil rows.	""
+AHU	SPRAYER	8	""	Sprayer reference, mutually exclusive with COOLING_COIL in the same AHU: 0 means absent; nonzero means present; positive values are selected equipment IDs from the equipment database; negative values mean the equipment has not been selected.	""
+AHU	HEATER	9	""	Equipment reference: 0 means absent; nonzero means present; positive values are selected equipment IDs from the equipment database; negative values mean the equipment has not been selected.	""
+AHU	HUMIDIFIER	10	""	Humidifier type: 0 no device; 1 steam humidification; 2 electric humidification; 3 spray humidification.	""
+AHU	REHEAT_TYPE	11	""	Reheat permission/type: 0 no device; 1 electric heating; 2 hot-water coil.	""
+AHU	HEAT_RECOVER	12	""	Equipment reference: 0 means absent; nonzero means present; positive values are selected equipment IDs from the equipment database; negative values mean the equipment has not been selected.	""
+AHU	MIN_T_EX_COEF	13	""	Minimum sensible heat-exchange coefficient.	""
+AHU	MAX_T_EX_COEF	14	""	Maximum sensible heat-exchange coefficient.	""
+AHU	MIN_D_EX_COEF	15	""	Minimum moisture-exchange coefficient.	""
+AHU	MAX_D_EX_COEF	16	""	Maximum moisture-exchange coefficient.	""
+AHU	SECOND_AIR	17	""	Whether secondary return air is present.	""
+AHU	MIN_SECOND_AIR_RATIO	18	""	Minimum secondary return-air ratio.	""
+AHU	MAX_SECOND_AIR_RATIO	19	""	Maximum secondary return-air ratio.	""
+AHU	FAN	20	""	Equipment identifier in the equipment database.	""
+AHU	AHURES	21	""	Identifier of the air-handling-unit resistance model, corresponding to DUCTNET.	""
+AHU	EXT_PROPERTY	22	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+VRV_SOURCE	ID	1	primary_key	Identifier.	""
+VRV_SOURCE	NAME	2	""	Name.	""
+VRV_SOURCE	LIB_ID	3	""	Outdoor-unit type identifier.	""
+VRV_SOURCE	X	4	""	Outdoor-unit location.	""
+VRV_SOURCE	Y	5	""	Outdoor-unit location.	""
+VRV_SOURCE	Z	6	""	Outdoor-unit location.	""
+VRV_SOURCE	EXT_PROPERTY	7	""	Extended property reference, corresponding to EXT_PROPERTY.	""
+VRV_TERMINAL	ID	1	primary_key	Identifier.	""
+VRV_TERMINAL	NAME	2	""	Name.	""
+VRV_TERMINAL	LIB_ID	3	""	Indoor-unit type identifier.	""
+VRV_TERMINAL	OF_ROOM_GROUP	4	""	Owning room-group identifier.	""
+VRV_TERMINAL	OF_SYS	5	""	Owning outdoor-unit identifier.	""
+VRV_TERMINAL	OF_SYS_NO	6	""	Sequence number within the owning object.	""
+VRV_TERMINAL	X	7	""	Indoor-unit location.	""
+VRV_TERMINAL	Y	8	""	Indoor-unit location.	""
+VRV_TERMINAL	Z	9	""	Indoor-unit location.	""
+VRV_TERMINAL	CX	10	""	Main-pipe connection point location.	""
+VRV_TERMINAL	CY	11	""	Main-pipe connection point location.	""
+VRV_TERMINAL	CZ	12	""	Main-pipe connection point location.	""
+VRV_TERMINAL	EXT_PROPERTY	13	""	Extended property reference, corresponding to EXT_PROPERTY.	""

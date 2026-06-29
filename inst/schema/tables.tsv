@@ -1,52 +1,52 @@
 table	category	status	primary_key	converter	used_by	energyplus_classes	future_energyplus_classes	candidate_energyplus_classes	semantics	notes
-BUILDING	model	converted	BUILDING_ID	destep_conv_building		Building			Top-level DeST building record.	
-ENVIRONMENT	site	converted	ENVIRONMENT_ID	destep_conv_location		Site:Location			Site/location metadata for the DeST model.	
-SYS_CITY	site	observed	CITY_ID						DeST city/weather library metadata referenced by ENVIRONMENT.	Likely bridge from site metadata to CLIMATE_DATA and GROUND_DATA.
-STOREY	geometry	supporting	ID		destep_conv_zone	ZoneList; ZoneGroup			Building storey records used to group rooms and provide storey height/multiplier.	
-ROOM	geometry	converted	ID	destep_conv_zone		Zone; ZoneList; ZoneGroup			Thermal room/zone record.	
-ROOM_GROUP	load_and_hvac	observed	ROOM_GROUP_ID						Room group, room type, HVAC schedule, and setpoint grouping metadata.	Candidate source for thermostat/setpoint and HVAC grouping conversion.
-ROOM_TYPE_DATA	load_and_hvac	observed	ID				People; Lights; ElectricEquipment; ThermostatSetpoint:DualSetpoint	DesignSpecification:OutdoorAir	Room-type default/template data referenced by ROOM.TYPE, including internal gains, schedules, minimum luminance, and HVAC setpoint schedules.	Current models may also materialize per-room OCCUPANT_GAINS/LIGHT_GAINS/EQUIPMENT_GAINS rows; use this table as fallback/template only until precedence is confirmed.
-ROOM_RELATION	load_and_hvac	observed	ID					ZoneVentilation:DesignFlowRate; ZoneMixing	Room ventilation relation table described by Access field comments as linking a room to an adjacent room or outside boundary with schedule and capacity metadata.	Access field comments define VENT_TYPE as 0 = air changes and 1 = additional air-change range. CoA_Chongqin_2015 links rooms to OUTSIDE through schedule 4643; VENT_SET_MAX unit still needs confirmation before conversion.
-OUTSIDE	geometry	supporting	OUTSIDE_ID						Synthetic external boundary marker used by surface naming and boundary handling.	
-GROUND	geometry	supporting	GROUND_ID						Synthetic ground boundary marker used by surface naming and boundary handling.	
-SURFACE	geometry	converted	SURFACE_ID	destep_conv_surface		BuildingSurface:Detailed			DeST room surface record; geometry is referenced through GEOMETRY.	
-MAIN_ENCLOSURE	envelope	converted	ID	destep_conv_surface		BuildingSurface:Detailed			Envelope relationship table linking paired DeST surfaces, construction kind, and middle plane.	
-PLANE	geometry	supporting	PLANE_ID						Plane-to-geometry bridge for surfaces, enclosures, windows, and doors.	
-GEOMETRY	geometry	supporting	GEOMETRY_ID						Geometry record pointing to a boundary loop.	
-LOOP_POINT	geometry	supporting							Ordered point membership for a DeST geometry loop.	
-POINT	geometry	supporting	POINT_ID						3D Cartesian point used by geometry loops.	
-DEFAULT_SETTING	defaults	supporting							Default values for model tables and fields when object-level values are zero or omitted.	Currently used by window conversion to resolve WINDOW_CONSTRUCTION = 0.
-SCHEDULE_YEAR	schedules	converted	SCHEDULE_ID	destep_conv_schedule		ScheduleTypeLimits; Schedule:Day:Interval; Schedule:Week:Compact; Schedule:Year			Year-long DeST schedule; DATA stores 8760 hourly double values in a raw vector.	
-SYS_MATERIAL	construction	converted	MATERIAL_ID	destep_conv_const		Material			Opaque material library table.	
-SYS_OUTWALL	construction	converted	STRUCT_ID	destep_conv_const		Construction			External wall construction library.	
-SYS_OUTWALL_MATERIAL	construction	supporting							Layer stack for SYS_OUTWALL constructions.	
-SYS_INWALL	construction	converted	STRUCT_ID	destep_conv_const		Construction			Internal wall construction library.	
-SYS_INWALL_MATERIAL	construction	supporting							Layer stack for SYS_INWALL constructions.	
-SYS_ROOF	construction	converted	STRUCT_ID	destep_conv_const		Construction			Roof construction library.	
-SYS_ROOF_MATERIAL	construction	supporting							Layer stack for SYS_ROOF constructions.	
-SYS_GROUNDFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Ground floor construction library.	
-SYS_GROUNDFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_GROUNDFLOOR constructions.	
-SYS_MIDDLEFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Intermediate floor/ceiling construction library.	
-SYS_MIDDLEFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_MIDDLEFLOOR constructions.	
-SYS_AIRFLOOR	construction	converted	STRUCT_ID	destep_conv_const		Construction			Air floor construction library.	
-SYS_AIRFLOOR_MATERIAL	construction	supporting							Layer stack for SYS_AIRFLOOR constructions.	
-SYS_WINDOW	construction	converted	WINDOW_ID	destep_conv_const		Construction			Window construction library.	Optical properties are not one-to-one with EnergyPlus; current converter uses a fallback glazing.
-SYS_WINDOW_MATERIAL	construction	supporting							Layer stack for SYS_WINDOW constructions.	
-SYS_APP_MATERIAL	construction	supporting	APP_MATERIAL_ID						Glass/application material library used by windows and glazed doors.	
-SYS_DOOR	construction	planned	DOOR_ID					Door; GlazedDoor; Construction	Door construction library, including optional glazing metadata.	
-WINDOW	fenestration	converted	ID	destep_conv_window		FenestrationSurface:Detailed			Window instance table linked to MAIN_ENCLOSURE and window construction libraries.	Shading, curtain, and detailed type handling are not converted yet.
-WINDOW_TYPE_DATA	fenestration	observed	ID						Per-window type performance data such as K and SC.	Candidate source for future glazing optical-property reconciliation.
-DOOR	fenestration	planned	ID					Door; GlazedDoor	Door instance table analogous to WINDOW, linked to MAIN_ENCLOSURE and SYS_DOOR.	
-SHADING	shading	deferred	ID						Project shading instance table.	The current fixture has no shading instances; postpone until a model with shading is available.
-SYS_SHADING	shading	observed	SHIELD_ID						System shading library table.	
-LIB_SHADING	shading	observed	ID						User/library shading parameter table.	
-DIST_MODE	loads	supporting	DIST_MODE_ID						Distribution mode fractions for radiant, convective, and related heat-gain partitions.	
-OCCUPANT_GAINS	loads	converted	GAIN_ID	destep_conv_people		People	DesignSpecification:OutdoorAir		Occupant internal gains and fresh-air requirement inputs.	
-LIGHT_GAINS	loads	converted	GAIN_ID	destep_conv_lights		Lights			Lighting internal gains.	
-EQUIPMENT_GAINS	loads	converted	GAIN_ID	destep_conv_electric_equipment		ElectricEquipment			Electric equipment internal gains.	
-CLIMATE_DATA	weather	deferred	ID						Hourly weather-like data embedded in the DeST model.	Likely future source for EPW generation or weather validation.
-GROUND_DATA	weather	deferred	ID						Hourly ground temperature data embedded in the DeST model.	Likely future source for Site:GroundTemperature objects or EPW support.
-AC_SYS	hvac	deferred	AC_SYS_ID						Air-conditioning system definition table.	
-AHU	hvac	deferred	AHU_ID						Air-handling unit table.	
-VRV_SOURCE	hvac	deferred	ID						VRV outdoor/source equipment table.	
-VRV_TERMINAL	hvac	deferred	ID						VRV terminal equipment table.	
+BUILDING	model	converted	BUILDING_ID	destep_conv_building	""	Building	""	""	Building record with name, visibility, active storey, and extended property reference fields.	""
+ENVIRONMENT	site	converted	ENVIRONMENT_ID	destep_conv_location	""	Site:Location	""	""	Project environment record with orientation, weather source, city/station metadata, location, pressure, and drawing-position fields.	""
+SYS_CITY	site	observed	CITY_ID	""	""	""	""	""	City and weather-station library table with country, province, city, coordinates, climate, ground-temperature, and note fields.	Likely bridge from site metadata to CLIMATE_DATA and GROUND_DATA.
+STOREY	geometry	supporting	ID	""	destep_conv_zone	ZoneList; ZoneGroup	""	""	Storey record with building ownership, storey number, representative multiplier, height, visibility, and extended property fields.	""
+ROOM	geometry	converted	ID	destep_conv_zone	""	Zone; ZoneList; ZoneGroup	""	""	Room record with group, storey, room type, area, volume, outdoor-air, terminal, fan-coil, radiator, pressure, drawing-position, and extended property fields.	""
+ROOM_GROUP	load_and_hvac	observed	ROOM_GROUP_ID	""	""	""	""	""	Room-group record with building, air-conditioning system, schedule, setpoint, stiffness, result-view, and HVAC heat-gain fields.	Candidate source for thermostat/setpoint and HVAC grouping conversion.
+ROOM_TYPE_DATA	load_and_hvac	observed	ID	""	""	""	People; Lights; ElectricEquipment; ThermostatSetpoint:DualSetpoint	DesignSpecification:OutdoorAir	Room-type template record with occupant, lighting, equipment, HVAC schedule, setpoint, humidity, tolerance, illuminance, remark, and extended property fields.	Current models may also materialize per-room OCCUPANT_GAINS/LIGHT_GAINS/EQUIPMENT_GAINS rows; use this table as fallback/template only until precedence is confirmed.
+ROOM_RELATION	load_and_hvac	observed	ID	""	""	""	""	ZoneVentilation:DesignFlowRate; ZoneMixing	Room ventilation relation record whose field comments link a room to an adjacent room or outside boundary with schedule, capacity, type, point, and extended property fields.	Access field comments define VENT_TYPE as 0 = air changes and 1 = additional air-change range. CoA_Chongqin_2015 links rooms to OUTSIDE through schedule 4643; VENT_SET_MAX unit still needs confirmation before conversion.
+OUTSIDE	geometry	supporting	OUTSIDE_ID	""	""	""	""	""	Outside boundary marker with name, drawing-position, and extended property fields.	""
+GROUND	geometry	supporting	GROUND_ID	""	""	""	""	""	Ground boundary marker with name, drawing-position, and extended property fields.	""
+SURFACE	geometry	converted	SURFACE_ID	destep_conv_surface	""	BuildingSurface:Detailed	""	""	Surface record with area, azimuth, tilt, owning room, surface type and state, geometry, coefficients, matrix indices, shading, and extended property fields.	""
+MAIN_ENCLOSURE	envelope	converted	ID	destep_conv_surface	""	BuildingSurface:Detailed	""	""	Main enclosure relation record with paired side surfaces, middle plane, construction kind, construction reference, calculation subdivision, storey, and extended property fields.	""
+PLANE	geometry	supporting	PLANE_ID	""	""	""	""	""	Plane record linking a geometry to baseline start and end points.	""
+GEOMETRY	geometry	supporting	GEOMETRY_ID	""	""	""	""	""	Geometry record linking a geometry identifier to its boundary loop.	""
+LOOP_POINT	geometry	supporting	""	""	""	""	""	""	Loop point membership record with loop ID, point order, point reference, and owning geometry fields.	""
+POINT	geometry	supporting	POINT_ID	""	""	""	""	""	Point record with point ID, name, and X/Y/Z coordinate fields.	""
+DEFAULT_SETTING	defaults	supporting	""	""	""	""	""	""	Default-setting record with table and field names, typed default values, type code, kind, and comment fields.	Currently used by window conversion to resolve WINDOW_CONSTRUCTION = 0.
+SCHEDULE_YEAR	schedules	converted	SCHEDULE_ID	destep_conv_schedule	""	ScheduleTypeLimits; Schedule:Day:Interval; Schedule:Week:Compact; Schedule:Year	""	""	Annual schedule record with schedule type, name, and 8760-hour data fields.	""
+SYS_MATERIAL	construction	converted	MATERIAL_ID	destep_conv_const	""	Material	""	""	Opaque material library record with color, group, English and Chinese names, thermal properties, vapor permeability, pattern, deletion, flag, and annotation fields.	""
+SYS_OUTWALL	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Exterior wall construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_OUTWALL_MATERIAL	construction	supporting	""	""	""	""	""	""	Exterior wall construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_INWALL	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Interior wall construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_INWALL_MATERIAL	construction	supporting	""	""	""	""	""	""	Interior wall construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_ROOF	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Roof construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_ROOF_MATERIAL	construction	supporting	""	""	""	""	""	""	Roof construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_GROUNDFLOOR	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Ground floor construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_GROUNDFLOOR_MATERIAL	construction	supporting	""	""	""	""	""	""	Ground floor construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_MIDDLEFLOOR	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Intermediate floor construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_MIDDLEFLOOR_MATERIAL	construction	supporting	""	""	""	""	""	""	Intermediate floor construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_AIRFLOOR	construction	converted	STRUCT_ID	destep_conv_const	""	Construction	""	""	Air floor construction library record with group, English and Chinese names, resistance, inertia, special flag, flag, deletion, and annotation fields.	""
+SYS_AIRFLOOR_MATERIAL	construction	supporting	""	""	""	""	""	""	Air floor construction layer record with construction ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_WINDOW	construction	converted	WINDOW_ID	destep_conv_const	""	Construction	""	""	Window construction library record with group, English and Chinese names, heat resistance, glass net ratio, reflectance coefficient, flags, deletion, and annotation fields.	Optical properties are not one-to-one with EnergyPlus; current converter uses a fallback glazing.
+SYS_WINDOW_MATERIAL	construction	supporting	""	""	""	""	""	""	Window construction layer record with window ID, layer number, material ID, layer thickness or length, and annotation fields.	""
+SYS_APP_MATERIAL	construction	supporting	APP_MATERIAL_ID	""	""	""	""	""	Transparent/application material library record with color, group, names, thermal properties, optical coefficients, emissivity, thickness, pattern, deletion, flag, and annotation fields.	""
+SYS_DOOR	construction	planned	DOOR_ID	""	""	""	""	Door; GlazedDoor; Construction	Door construction library record with conductance, material, gap length, glass ratio, transparent material reference, flags, deletion, and annotation fields.	""
+WINDOW	fenestration	converted	ID	destep_conv_window	""	FenestrationSurface:Detailed	""	""	Window instance record with side surfaces, middle plane, enclosure, construction, shading, curtain, schedule, solar heat-gain distribution, storey, type, K, SC, and extended property fields.	Shading, curtain, and detailed type handling are not converted yet.
+WINDOW_TYPE_DATA	fenestration	observed	ID	""	""	""	""	""	Window-type data record with name, layer count, K, SC, energy and light optical ratios, remark, and extended property fields.	Candidate source for future glazing optical-property reconciliation.
+DOOR	fenestration	planned	ID	""	""	""	""	Door; GlazedDoor	Door instance record with side surfaces, middle plane, enclosure, construction, schedule, user-defined DLL, and extended property fields.	""
+SHADING	shading	deferred	ID	""	""	""	""	""	Shading instance record with type, optical properties, library shading reference, material, building ownership, and extended property fields.	The current fixture has no shading instances; postpone until a model with shading is available.
+SYS_SHADING	shading	observed	SHIELD_ID	""	""	""	""	""	System shading library record with shield ID, group, English and Chinese names, geometric parameters, and annotation fields.	""
+LIB_SHADING	shading	observed	ID	""	""	""	""	""	User/library shading parameter record with type geometry, panel spacing, projection, side panel, price, image, group, note, and extended property fields.	""
+DIST_MODE	loads	supporting	DIST_MODE_ID	""	""	""	""	""	Heat-gain distribution mode record with air, roof, floor, surrounding-surface fractions, and name fields.	""
+OCCUPANT_GAINS	loads	converted	GAIN_ID	destep_conv_people	""	People	DesignSpecification:OutdoorAir	""	Occupant gain record with room, schedule, user-defined flag, maximum/minimum people, heat and moisture per person, outdoor-air requirement, calculation basis, distribution mode, storey, and drawing-position fields.	""
+LIGHT_GAINS	loads	converted	GAIN_ID	destep_conv_lights	""	Lights	""	""	Lighting gain record with room, schedule, maximum/minimum nameplate power, heat/electric ratio, calculation basis, distribution mode, storey, and drawing-position fields.	""
+EQUIPMENT_GAINS	loads	converted	GAIN_ID	destep_conv_electric_equipment	""	ElectricEquipment	""	""	Equipment gain record with room, schedule, maximum/minimum heat-gain power, maximum/minimum moisture generation, calculation basis, distribution mode, storey, and drawing-position fields.	""
+CLIMATE_DATA	weather	deferred	ID	""	""	""	""	""	Hourly climate data record with hour, dry-bulb temperature, humidity ratio, horizontal radiation, ground temperature, sky temperature, wind speed, wind direction, and coefficient fields.	Likely future source for EPW generation or weather validation.
+GROUND_DATA	weather	deferred	ID	""	""	""	""	""	Hourly ground-temperature data record with hour and temperature fields.	Likely future source for Site:GroundTemperature objects or EPW support.
+AC_SYS	hvac	deferred	AC_SYS_ID	""	""	""	""	""	Air-conditioning system record with building and storey ownership, supply-temperature schedules, water and system type codes, outdoor-air controls, user-defined supply state, result-view, drawing-position, and extended property fields.	""
+AHU	hvac	deferred	AHU_ID	""	""	""	""	""	Air-handling unit record with owning system, type, coil, sprayer, heater, humidifier, reheat, heat recovery, exchange coefficient, secondary return air, fan, resistance model, and extended property fields.	""
+VRV_SOURCE	hvac	deferred	ID	""	""	""	""	""	VRV outdoor/source equipment record with name, library type reference, drawing-position, and extended property fields.	""
+VRV_TERMINAL	hvac	deferred	ID	""	""	""	""	""	VRV indoor terminal record with name, library type reference, room group, owning system, position, main-pipe connection point, and extended property fields.	""
