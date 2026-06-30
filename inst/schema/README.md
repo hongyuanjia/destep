@@ -52,10 +52,11 @@ files instead of leaving that knowledge only in converter comments.
 - Keep `fields_cn.tsv` as the extracted Chinese source text. Keep `fields.tsv`
   in English, translated or summarized from the Chinese source text.
 - Regenerate `fields_cn.tsv` with
-  `Rscript tools/extract-access-field-descriptions.R path/to/model.accdb`.
-- Refresh English field semantics with
-  `Rscript tools/translate-access-field-descriptions.R` after reviewing any
-  new Chinese descriptions.
+  `Rscript tools/extract-cn.R path/to/model.accdb`.
+- Keep reviewed Chinese-to-English field-description terms in
+  `tools/field-terms.tsv`.
+- Refresh English field semantics with `Rscript tools/sync-fields.R` after
+  reviewing any new Chinese descriptions.
 - Put fixture observations and inferred mappings in `notes`, and mark
   uncertainty instead of promoting guesses to `semantics`.
 - Add row counts only to `observations.tsv`, and only for real fixtures that
