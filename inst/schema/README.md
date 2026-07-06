@@ -3,16 +3,19 @@
 This directory records observed DeST database tables, inferred semantics, and
 current EnergyPlus conversion coverage.
 
-The catalog is split into three tab-separated files:
+The catalog is split into four tab-separated files:
 
 - `tables.tsv`: one row per DeST table, including category, conversion status,
   EnergyPlus mapping, and table-level notes.
 - `fields.tsv`: one row per DeST field, including its table, original order,
-  role, and field-level semantics.
+  role, and English field-level semantics.
+- `fields_cn.tsv`: one row per Access field description extracted from a real
+  source model. This is the source-of-truth asset for field semantics when a
+  DeST developer comment is available.
 - `observations.tsv`: one row per source model and table, currently used for
   fixture-specific row counts and notes.
 
-Both files are plain text and read with base R, so the catalog adds no package
+These files are plain text and read with base R, so the catalog adds no package
 dependency. The normalized layout is intentional: reviewing and updating one
 table or field should produce a small line-based diff, not a large nested list
 change.
@@ -22,6 +25,9 @@ files instead of leaving that knowledge only in converter comments.
 
 ## Catalog updates
 
+- Access field descriptions were extracted to `fields_cn.tsv` in PR #13, and
+  `fields.tsv` was refreshed so English field semantics are derived from those
+  source comments.
 - `ROOM_RELATION` was cataloged in PR #12 as the observed room ventilation or
   air-exchange relation table, using Access field descriptions for field
   semantics.
@@ -43,6 +49,14 @@ files instead of leaving that knowledge only in converter comments.
   database.
 - Treat Access field `Description` comments as the primary source for field
   semantics when they are available.
+- Keep `fields_cn.tsv` as the extracted Chinese source text. Keep `fields.tsv`
+  in English, translated or summarized from the Chinese source text.
+- Regenerate `fields_cn.tsv` with
+  `Rscript tools/extract-cn.R path/to/model.accdb`.
+- Keep reviewed Chinese-to-English field-description terms in
+  `tools/field-terms.tsv`.
+- Refresh English field semantics with `Rscript tools/sync-fields.R` after
+  reviewing any new Chinese descriptions.
 - Put fixture observations and inferred mappings in `notes`, and mark
   uncertainty instead of promoting guesses to `semantics`.
 - Add row counts only to `observations.tsv`, and only for real fixtures that

@@ -1,0 +1,1458 @@
+source_model	table	field	ordinal	description_cn
+CoA_Chongqin_2015	AC_SYS	AC_SYS_ID	1	ID
+CoA_Chongqin_2015	AC_SYS	NAME	2	名字
+CoA_Chongqin_2015	AC_SYS	OF_STOREY	3	所属楼层
+CoA_Chongqin_2015	AC_SYS	OF_BUILDING	4	所属建筑(方便结果浏览程序)
+CoA_Chongqin_2015	AC_SYS	SUPPLY_T_MIN	5	最小送风温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	AC_SYS	SUPPLY_T_MAX	6	最大送风温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	AC_SYS	WATER_TYPE	7	0无水管，1 只有热水（两管制），2 只有冷水（两管制），3 冷热水（四管制）， 4 两管制（冷热切换）
+CoA_Chongqin_2015	AC_SYS	AC_SYS_TYPE	8	0 全空气定风量， 1 全空气变风量，2 风机盘管，3 独立空调,4 干式风机盘管,5 独立除湿新风机组,6 变制冷剂流量空调系统
+CoA_Chongqin_2015	AC_SYS	FRESH_AIR_TYPE	9	0 定新风比（用最小新风比），1：以新风比范围限制新风 2：定新风量(此时用最小新风量），3：以新风量范围定限制新风
+CoA_Chongqin_2015	AC_SYS	MIN_FRESH_AIR_RATIO	10	最小新风比
+CoA_Chongqin_2015	AC_SYS	MAX_FRESH_AIR_RATIO	11	最大新风比
+CoA_Chongqin_2015	AC_SYS	MIN_FRESH_AIR_VOLUME	12	最小新风量
+CoA_Chongqin_2015	AC_SYS	MAX_FRESH_AIR_VOLUME	13	最大新风量
+CoA_Chongqin_2015	AC_SYS	SUPPLY_STATE_FLAG	14	变送风状态标志.0: dest Decide; 1:user defined
+CoA_Chongqin_2015	AC_SYS	USER_DEF_SUPPLY_T	15	用户自定义的逐时的送风温度，对应SCHEDULE_YEAR表中一个SCHEDULE
+CoA_Chongqin_2015	AC_SYS	USER_DEF_SUPPLY_D	16	用户自定义的逐时的送风含湿量，对应SCHEDULE_YEAR表中一个SCHEDULE
+CoA_Chongqin_2015	AC_SYS	FRESH_AIR_OUTSIDE	17	对应OUSIDE表中的一条记录，新风来源
+CoA_Chongqin_2015	AC_SYS	VIEW_COOL_LOAD	18	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	AC_SYS	VIEW_HEAT_LOAD	19	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	AC_SYS	VIEW_HUMI_LOAD	20	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	AC_SYS	VIEW_FLOW	21	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	AC_SYS	VIEW_FRESH_AIR_RATIO	22	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	AC_SYS	X	23	图中DNAHU插入点的X坐标
+CoA_Chongqin_2015	AC_SYS	Y	24	图中DNAHU插入点的Y坐标
+CoA_Chongqin_2015	AC_SYS	Z	25	图中DNAHU插入点的Z坐标
+CoA_Chongqin_2015	AC_SYS	EXT_PROPERTY	26	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	AHU	AHU_ID	1	ID
+CoA_Chongqin_2015	AHU	NAME	2	名字
+CoA_Chongqin_2015	AHU	OF_AC_SYS	3	所属系统的ID
+CoA_Chongqin_2015	AHU	TYPE	4	类型（待定)
+CoA_Chongqin_2015	AHU	COOLING_COIL	5	为0表示没有这个设备，不为0时表示有这一设备，为正时则为从设备数据库中选择的设备的ID，为负时表示这一设备未被选择。
+CoA_Chongqin_2015	AHU	COIL_TYPE	6	0：一般表冷盘管，1：带旁通的表冷盘管
+CoA_Chongqin_2015	AHU	COIL_NUM	7	盘管并排排数
+CoA_Chongqin_2015	AHU	SPRAYER	8	和COOLING_COIL不能同时存在于同一个AHU中。为0表示没有这个设备，不为0时表示有这一设备，为正时则为从设备数据库中选择的设备的ID，为负时表示这一设备未被选择。
+CoA_Chongqin_2015	AHU	HEATER	9	为0表示没有这个设备，不为0时表示有这一设备，为正时则为从设备数据库中选择的设备的ID，为负时表示这一设备未被选择。
+CoA_Chongqin_2015	AHU	HUMIDIFIER	10	为0表示没有这个设备，1－蒸气加湿，2－电加湿，3－喷水加湿
+CoA_Chongqin_2015	AHU	REHEAT_TYPE	11	是否允许再热,0－没有设备，1－电加热，2－热水盘管
+CoA_Chongqin_2015	AHU	HEAT_RECOVER	12	为0表示没有这个设备，不为0时表示有这一设备，为正时则为从设备数据库中选择的设备的ID，为负时表示这一设备未被选择。
+CoA_Chongqin_2015	AHU	MIN_T_EX_COEF	13	最小显热交换系数
+CoA_Chongqin_2015	AHU	MAX_T_EX_COEF	14	最大显热交换系数
+CoA_Chongqin_2015	AHU	MIN_D_EX_COEF	15	最小换湿系数
+CoA_Chongqin_2015	AHU	MAX_D_EX_COEF	16	最大换湿系数
+CoA_Chongqin_2015	AHU	SECOND_AIR	17	有否二次回风
+CoA_Chongqin_2015	AHU	MIN_SECOND_AIR_RATIO	18	最小二次回风比
+CoA_Chongqin_2015	AHU	MAX_SECOND_AIR_RATIO	19	最大二次回风比
+CoA_Chongqin_2015	AHU	FAN	20	对应设备数据库中设备的ID
+CoA_Chongqin_2015	AHU	AHURES	21	对应空调箱阻力模型(DUCTNET)的ID
+CoA_Chongqin_2015	AHU	EXT_PROPERTY	22	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	ID	1	ID
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	OF_ROOM	2	所属房间的ID
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	OF_DUCT_TERMINAL	3	“所属”的DUCT_TERMINAL的ID，如果不属于任何TERMINAL，则必须有风道与之相联
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	NAME	4	名字
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	POS_X	5	在图上的位置的X坐标
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	POS_Y	6	在图上的位置的Y坐标
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	POS_Z	7	在图上的位置的Z坐标
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	NEED_RESIS_COEF	8	所需要的局部阻力系数
+CoA_Chongqin_2015	AIR_SUPPLY_PORT	RESIS_COEF	9	局部阻力系数
+CoA_Chongqin_2015	BOILER	BOILER_ID	1	热源ID
+CoA_Chongqin_2015	BOILER	NAME	2	热源
+CoA_Chongqin_2015	BOILER	LIB_BOILER_ID	3	设备编号
+CoA_Chongqin_2015	BOILER	PRIME_PUMP	4	一次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	BOILER	SECOND_PUMP	5	二次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	BOILER	HEATSOURCE_PUMP	6	热源泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	BOILER	HEATEXCHANGER	7	换热器的ID(一个热源对应一台换热器的情况)
+CoA_Chongqin_2015	BOILER	PRIORITY	8	使用优先级(还需要考虑具体用法)
+CoA_Chongqin_2015	BOILER	BLANK_1	9	预留
+CoA_Chongqin_2015	BOILER	BLANK_2	10	预留
+CoA_Chongqin_2015	BOILER	EXT_PROPERTY	11	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	BUILDING	BUILDING_ID	1	ID
+CoA_Chongqin_2015	BUILDING	NAME	2	名字
+CoA_Chongqin_2015	BUILDING	VISIBLE	3	该建筑是否可见
+CoA_Chongqin_2015	BUILDING	CURRENT_STOREY	4	当前操作楼层的ID
+CoA_Chongqin_2015	BUILDING	EXT_PROPERTY	5	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	CHILLER_PUMP	PUMP_ID	1	ID
+CoA_Chongqin_2015	CHILLER_PUMP	PRODUCT_ID	2	产品ID，对应设备数据库中的产品ID，没有选之前为0
+CoA_Chongqin_2015	CHILLER_PUMP	OF_CHILLER	3	所属的CHILLER的ID
+CoA_Chongqin_2015	CLIMATE_DATA	ID	1	ID
+CoA_Chongqin_2015	CLIMATE_DATA	HOUR	2	0~8759小时
+CoA_Chongqin_2015	CLIMATE_DATA	DRY_BULB_T	3	干球温度(℃)
+CoA_Chongqin_2015	CLIMATE_DATA	DAMP	4	含湿量(g/kg.dra)
+CoA_Chongqin_2015	CLIMATE_DATA	HORI_TOTAL_RAD	5	水平面总辐射(W/m^2)
+CoA_Chongqin_2015	CLIMATE_DATA	HORI_SCATTER_RAD	6	水平面散射辐射(W/m^2)
+CoA_Chongqin_2015	CLIMATE_DATA	T_GROUND	7	地表温度(℃)
+CoA_Chongqin_2015	CLIMATE_DATA	T_SKY	8	天空有效温度(K)
+CoA_Chongqin_2015	CLIMATE_DATA	WS	9	风速(m/s)
+CoA_Chongqin_2015	CLIMATE_DATA	WD	10	风向:0-C,1-N,2-NNE,3-NE,4-ENE,5-E...9-S...13-W...16-NNW
+CoA_Chongqin_2015	CLIMATE_DATA	B	11	大气压力(Pa)
+CoA_Chongqin_2015	COOLING_TOWER	TOWER_ID	1	ID
+CoA_Chongqin_2015	COOLING_TOWER	OF_CPS	2	所属的CPS的ID
+CoA_Chongqin_2015	COOLING_TOWER	PRODUCT_ID	3	产品ID，对应设备数据库中的产品ID，没有选之前为0
+CoA_Chongqin_2015	COOLING_TOWER_PUMP	PUMP_ID	1	ID
+CoA_Chongqin_2015	COOLING_TOWER_PUMP	PRODUCT_ID	2	产品ID，对应设备数据库中的产品ID，没有选之前为0
+CoA_Chongqin_2015	COOLING_TOWER_PUMP	OF_TOWER	3	所属的COOLING TOWER的ID
+CoA_Chongqin_2015	COOLINGTOWER	COOLINGTOWER_ID	1	冷却塔ID
+CoA_Chongqin_2015	COOLINGTOWER	NAME	2	名称
+CoA_Chongqin_2015	COOLINGTOWER	LIB_COOLINGTOWER_ID	3	冷却塔库编号
+CoA_Chongqin_2015	COOLINGTOWER	COOLING_PUMP	4	冷却泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	COOLINGTOWER	REFILL_PUMP	5	补水泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	COOLINGTOWER	ATTRIBUTE_TO	6	一机对一塔情况下的对应冷机设备号
+CoA_Chongqin_2015	COOLINGTOWER	PRIORITY	7	使用优先级(还需要考虑具体用法)
+CoA_Chongqin_2015	COOLINGTOWER	BLANK_1	8	预留
+CoA_Chongqin_2015	COOLINGTOWER	BLANK_2	9	预留
+CoA_Chongqin_2015	COOLINGTOWER	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	DEFAULT_COEF	DEFAULT_COEF_ID	1	缺省经验系数的ID
+CoA_Chongqin_2015	DEFAULT_COEF	COEF_NAME	2	名称
+CoA_Chongqin_2015	DEFAULT_COEF	VALUE	3	值
+CoA_Chongqin_2015	DEFAULT_COEF	COMMENT	4	说明
+CoA_Chongqin_2015	DEFAULT_COEF	NOTE_FILE	5	说明文件的文件名
+CoA_Chongqin_2015	DEFAULT_SETTING	TABLE_NAME	1	表名
+CoA_Chongqin_2015	DEFAULT_SETTING	FIELD_NAME	2	字段名
+CoA_Chongqin_2015	DEFAULT_SETTING	STRING	3	如果值为字符串，则此处有值
+CoA_Chongqin_2015	DEFAULT_SETTING	LONG	4	如果值为LONG，则此处有值
+CoA_Chongqin_2015	DEFAULT_SETTING	DOUBLE	5	如果值为DOUBLE，则此处有值
+CoA_Chongqin_2015	DEFAULT_SETTING	FLOAT	6	如果值为FLOAT，则此处有值
+CoA_Chongqin_2015	DEFAULT_SETTING	SHORT	7	如果值为INT，则此处有值
+CoA_Chongqin_2015	DEFAULT_SETTING	TYPE	8	1:string 2:long 3:double 4:float 5:short 6:type 其余值错
+CoA_Chongqin_2015	DEFAULT_SETTING	KIND	9	类型(用于main_enclosure表时,用于区分开五种类型:1：外墙 2： 内墙 3：屋顶 4： 楼地 5：地板/天花板（如果既是地板又是天花板，算作地板）,用于surface表时,区分四种不同表面的对流换热系数:0-垂直外表面 1-垂直内表面 2-水平向上表面 3-水平向下表面)
+CoA_Chongqin_2015	DEFAULT_SETTING	COMMENT	10	备注
+CoA_Chongqin_2015	DIST_MODE	DIST_MODE_ID	1	ID
+CoA_Chongqin_2015	DIST_MODE	DIST_AIR	2	分配到室内空气的部分
+CoA_Chongqin_2015	DIST_MODE	DIST_ROOF	3	分配到屋顶的部分
+CoA_Chongqin_2015	DIST_MODE	DIST_FLOOR	4	分配到地板的部分
+CoA_Chongqin_2015	DIST_MODE	DIST_AROUND	5	分配到周围立面的部分
+CoA_Chongqin_2015	DIST_MODE	NAME	6	名称
+CoA_Chongqin_2015	DN_AHU	ID	1	标志ID
+CoA_Chongqin_2015	DN_AHU	FLOW_RATE	2	风量
+CoA_Chongqin_2015	DN_AHU	POINT_ID	3	所在的点的ID
+CoA_Chongqin_2015	DN_DUCT	ID	1	标志ID
+CoA_Chongqin_2015	DN_DUCT	OF_BUILDING	2	所属的建筑
+CoA_Chongqin_2015	DN_DUCT	START_POINT_ID	3	起点ID
+CoA_Chongqin_2015	DN_DUCT	END_POINT_ID	4	终点ID
+CoA_Chongqin_2015	DN_DUCT	IS_GIVEN_DIMENSION	5	风管尺寸是否给定
+CoA_Chongqin_2015	DN_DUCT	WIDTH	6	风管宽(m)
+CoA_Chongqin_2015	DN_DUCT	HIGH	7	风管高(m)
+CoA_Chongqin_2015	DN_DUCT	IS_GIVEN_S	8	风管S是否给定
+CoA_Chongqin_2015	DN_DUCT	S	9	风管S值
+CoA_Chongqin_2015	DN_DUCT	FLOW_RATE	10	管中风量(m^3/h)
+CoA_Chongqin_2015	DN_DUCT	COLOR	11	水管颜色(1~255)
+CoA_Chongqin_2015	DN_DUCT	LINE_TYPE	12	水管线型(0~3)
+CoA_Chongqin_2015	DN_FK	ID	1	标志ID
+CoA_Chongqin_2015	DN_FK	FLOW_TYPE	2	风量类型:0 计算结果输入 1 用户输入
+CoA_Chongqin_2015	DN_FK	FLOW_RATE	3	风量(当风量类型为1时有效)
+CoA_Chongqin_2015	DN_FK	TYPE	4	风口类型: 0 送风口 1 回风口 2 新风口
+CoA_Chongqin_2015	DN_FK	AREA	5	出风口处面积
+CoA_Chongqin_2015	DN_FK	KSAI	6	局阻系数
+CoA_Chongqin_2015	DN_FK	ROOM_ID	7	所在的房间的ID
+CoA_Chongqin_2015	DN_FK	POINT_ID	8	所在的点的ID
+CoA_Chongqin_2015	DN_JOINT	ID	1	标志ID
+CoA_Chongqin_2015	DN_JOINT	TYPE	2	风道构件的类型: 0 渐变管 1 合流三通 2 分流三通 3 裤衩三通 4 弯头
+CoA_Chongqin_2015	DN_JOINT	ANGLE1	3	对于分流三通,弯头,则是XITA的值 对于渐扩和渐缩管为ALFA的值 其它类型则是XITA1的值
+CoA_Chongqin_2015	DN_JOINT	ANGLE2	4	对于分流三通,弯头,渐扩和渐缩无用 其它类型则是XITA2的值
+CoA_Chongqin_2015	DN_JOINT	POINT_ID	5	所在的点的ID
+CoA_Chongqin_2015	DN_POINT	ID	1	标志ID
+CoA_Chongqin_2015	DN_POINT	X	2	点的X坐标
+CoA_Chongqin_2015	DN_POINT	Y	3	点的Y坐标
+CoA_Chongqin_2015	DN_POINT	Z	4	点的Y坐标
+CoA_Chongqin_2015	DN_POINT	STOREY_ID	5	所在的层的ID
+CoA_Chongqin_2015	DN_POINT	P	6	节点的压力(Pa)
+CoA_Chongqin_2015	DN_POINT	CONST_PRESSURE	7	是否定压点
+CoA_Chongqin_2015	DPE_STATUS	OPTION_ID	1	ID
+CoA_Chongqin_2015	DPE_STATUS	KEYWORD	2	关键词
+CoA_Chongqin_2015	DPE_STATUS	EXPLAIN	3	注释
+CoA_Chongqin_2015	DPE_STATUS	TYPE	4	1: BOOL 型， 2： 整型， 3：实型， 4：字符串
+CoA_Chongqin_2015	DPE_STATUS	OPTION_STRING	5	用sscanf 读这个串可以可到对应值
+CoA_Chongqin_2015	DUCT	ID	1	ID
+CoA_Chongqin_2015	DUCT	NAME	2	名字
+CoA_Chongqin_2015	DUCT	OF_AC_SYS	3	所属的空调系统
+CoA_Chongqin_2015	DUCT	WIDTH	4	米
+CoA_Chongqin_2015	DUCT	HEIGHT	5	米
+CoA_Chongqin_2015	DUCT	START	6	对应相接对象的ID，可以是DUCT_JOINT、DUCT_TERMINAL、AHU和AIR_SUPPLY_PORT
+CoA_Chongqin_2015	DUCT	END	7	对应相接对象的ID，可以是DUCT_JOINT、DUCT_TERMINAL和AIR_SUPPLY_PORT
+CoA_Chongqin_2015	DUCT_JOINT	ID	1	ID
+CoA_Chongqin_2015	DUCT_JOINT	TYPE	2	类型
+CoA_Chongqin_2015	DUCT_JOINT	NAME	3	名字
+CoA_Chongqin_2015	DUCT_JOINT	POS_X	4	在图上的位置的X坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_JOINT	POS_Y	5	在图上的位置的Y坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_JOINT	POS_Z	6	在图上的位置的Z坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_TERMINAL	ID	1	ID
+CoA_Chongqin_2015	DUCT_TERMINAL	NAME	2	名字
+CoA_Chongqin_2015	DUCT_TERMINAL	POS_X	3	在图上的位置的X坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_TERMINAL	POS_Y	4	在图上的位置的Y坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_TERMINAL	POS_Z	5	在图上的位置的Z坐标（这个位置指与其相联的管风管中线相交的位置）
+CoA_Chongqin_2015	DUCT_TERMINAL	RESIS_COEF	6	当量局部阻力系数，这个系数代表了其下分枝的支路
+CoA_Chongqin_2015	DUCTNET	ID	1	ID
+CoA_Chongqin_2015	DUCTNET	NAME	2	名称
+CoA_Chongqin_2015	DUCTNET	AHUType	3	空调箱连接形式。1、双风机。2、单风机（全新风）。3、单风机＋排风机。4、双风机＋新风机。5、单风机＋新风机。6、单风机＋新风机＋排风机
+CoA_Chongqin_2015	DUCTNET	RunMode	4	控制方式。1、变风量变静压控制。2、变风量定静压控制。3、定风量系统
+CoA_Chongqin_2015	DUCTNET	Constant_P_Point_value	5	定压点静压值－Pa
+CoA_Chongqin_2015	DUCTNET	Filter_P	6	过滤器额定阻力 Pa
+CoA_Chongqin_2015	DUCTNET	Filter_G	7	过滤器额定流量 m3/h
+CoA_Chongqin_2015	DUCTNET	Coil_P	8	表冷器额定阻力 Pa
+CoA_Chongqin_2015	DUCTNET	Coil_G	9	表冷器额定流量 m3/h
+CoA_Chongqin_2015	DUCTNET	Reheater_P	10	再热器额定阻力 Pa
+CoA_Chongqin_2015	DUCTNET	Reheater_G	11	再热器额定流量 m3/h
+CoA_Chongqin_2015	DUCTNET	SprayRoom_P	12	喷淋室额定阻力 Pa
+CoA_Chongqin_2015	DUCTNET	SprayRoom_G	13	喷淋室额定流量 m3/h
+CoA_Chongqin_2015	DUCTNET	RecoverHeat_P	14	热回收器额定阻力 Pa
+CoA_Chongqin_2015	DUCTNET	RecoverHeat_G	15	热回收器额定流量 m3/h
+CoA_Chongqin_2015	DUCTNET	S_Muffler_Ksai	16	送风网静压箱消声器阻力系数
+CoA_Chongqin_2015	DUCTNET	S_Muffler_Number	17	送风网静压箱消声器个数
+CoA_Chongqin_2015	DUCTNET	S_Elbow_Ksai	18	送风网弯头阻力系数
+CoA_Chongqin_2015	DUCTNET	S_Elbow_Number	19	送风网弯头个数
+CoA_Chongqin_2015	DUCTNET	R_Muffler_Ksai	20	回风网静压箱消声器阻力系数
+CoA_Chongqin_2015	DUCTNET	R_Muffler_Number	21	回风网静压箱消声器个数
+CoA_Chongqin_2015	DUCTNET	R_Elbow_Ksai	22	回风网弯头阻力系数
+CoA_Chongqin_2015	DUCTNET	R_Elbow_Number	23	回风网弯头个数
+CoA_Chongqin_2015	DUCTNET	F_Muffler_Ksai	24	新风网静压箱消声器阻力系数
+CoA_Chongqin_2015	DUCTNET	F_Muffler_Number	25	新风网静压箱消声器个数
+CoA_Chongqin_2015	DUCTNET	F_Elbow_Ksai	26	新风网弯头阻力系数
+CoA_Chongqin_2015	DUCTNET	F_Elbow_Number	27	新风网弯头个数
+CoA_Chongqin_2015	DUCTNET	E_Muffler_Ksai	28	排风网静压箱消声器阻力系数
+CoA_Chongqin_2015	DUCTNET	E_Muffler_Number	29	排风网静压箱消声器个数
+CoA_Chongqin_2015	DUCTNET	E_Elbow_Ksai	30	排风网弯头阻力系数
+CoA_Chongqin_2015	DUCTNET	E_Elbow_Number	31	排风网弯头个数
+CoA_Chongqin_2015	DUCTNET	S_FAN	32	送风机，0，为理想风机（程序自动选择），1为自定义，采用目前输入参数做法。其他为选择设备库风机
+CoA_Chongqin_2015	DUCTNET	R_FAN	33	回风机，0,为理想风机（程序自动选择），1为自定义，采用目前输入参数做法。其他为选择设备库风机
+CoA_Chongqin_2015	DUCTNET	F_FAN	34	新风机，0,为理想风机（程序自动选择），1为自定义，采用目前输入参数做法。其他为选择设备库风机
+CoA_Chongqin_2015	DUCTNET	E_FAN	35	排风机，0,为理想风机（程序自动选择），1为自定义，采用目前输入参数做法。其他为选择设备库风机
+CoA_Chongqin_2015	DUCTNET	Fresh_Duct_H	36	新风管高度(mm)
+CoA_Chongqin_2015	DUCTNET	Fresh_Duct_W	37	新风管宽度(mm)
+CoA_Chongqin_2015	DUCTNET	Fresh_Duct_L	38	新风管长度(mm)
+CoA_Chongqin_2015	DUCTNET	Exhaust_Duct_H	39	排风管高度(mm)
+CoA_Chongqin_2015	DUCTNET	Exhaust_Duct_W	40	排风管宽度(mm)
+CoA_Chongqin_2015	DUCTNET	Exhaust_Duct_L	41	排风管长度(mm)
+CoA_Chongqin_2015	DUCTNET	EXT_PROPERTY	42	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	EQUIPMENT_GAINS	GAIN_ID	1	编号
+CoA_Chongqin_2015	EQUIPMENT_GAINS	NAME	2	名称
+CoA_Chongqin_2015	EQUIPMENT_GAINS	OF_ROOM	3	所在房间
+CoA_Chongqin_2015	EQUIPMENT_GAINS	SCHEDULE	4	作息模式
+CoA_Chongqin_2015	EQUIPMENT_GAINS	MAXPOWER	5	最大产热功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	EQUIPMENT_GAINS	MINPOWER	6	最小产热功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	EQUIPMENT_GAINS	MAX_HUM	7	最大设备散湿（kg/hr 或 Kg/(Hr.m^2)）
+CoA_Chongqin_2015	EQUIPMENT_GAINS	MIN_HUM	8	最小设备散湿（kg/hr 或 Kg/(Hr.m^2)）
+CoA_Chongqin_2015	EQUIPMENT_GAINS	PER_AREA	9	是否按每平米计
+CoA_Chongqin_2015	EQUIPMENT_GAINS	A	10	A
+CoA_Chongqin_2015	EQUIPMENT_GAINS	B	11	B
+CoA_Chongqin_2015	EQUIPMENT_GAINS	DIST_MODE	12	分配模式
+CoA_Chongqin_2015	EQUIPMENT_GAINS	OF_STOREY	13	所属楼层的ID
+CoA_Chongqin_2015	EQUIPMENT_GAINS	X	14	图中设备得热放置位置的X坐标
+CoA_Chongqin_2015	EQUIPMENT_GAINS	Y	15	图中设备得热放置位置的Y坐标
+CoA_Chongqin_2015	EQUIPMENT_GAINS	Z	16	图中设备得热放置位置的Z坐标
+CoA_Chongqin_2015	EQUIPMENT_TEMP	ID	1	ID
+CoA_Chongqin_2015	EQUIPMENT_TEMP	OF_ROOM	2	所属房间
+CoA_Chongqin_2015	EQUIPMENT_TEMP	EQUIPMENT_TYPE	3	设备类型
+CoA_Chongqin_2015	EQUIPMENT_TEMP	NAME	4	设备名称
+CoA_Chongqin_2015	EXT_PROPERTY	PROPERTY_ID	1	动态属性ID
+CoA_Chongqin_2015	EXT_PROPERTY	NEXT_PROPERTY	2	指向属性链表的下一个属性
+CoA_Chongqin_2015	EXT_PROPERTY	NAME	3	动态属性的名称
+CoA_Chongqin_2015	EXT_PROPERTY	TYPE	4	数据类型(0-长整型, 1-双精度浮点型, 2-字符串, 3-二进制)
+CoA_Chongqin_2015	EXT_PROPERTY	DATA_LONG	5	长整型数据
+CoA_Chongqin_2015	EXT_PROPERTY	DATA_DOUBLE	6	双精度数据
+CoA_Chongqin_2015	EXT_PROPERTY	DATA_STRING	7	字符串数据
+CoA_Chongqin_2015	EXT_PROPERTY	DATA_BIN	8	二进制数据
+CoA_Chongqin_2015	FAN	ID	1	ID
+CoA_Chongqin_2015	FAN	FLOWRATE	2	额定风量（m^3/h）
+CoA_Chongqin_2015	FAN	PRESSURE	3	额定扬程(Pa)
+CoA_Chongqin_2015	FAN	EFFICIENCY	4	额定效率
+CoA_Chongqin_2015	FAN	CURVE_PF	5	流量扬程曲线ID
+CoA_Chongqin_2015	FAN	CURVE_EF	6	流量效率曲线ID
+CoA_Chongqin_2015	FAN	EXT_PROPERTY	7	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	FAN_COIL	ID	1	ID
+CoA_Chongqin_2015	FAN_COIL	NAME	2	名称
+CoA_Chongqin_2015	FAN_COIL	OF_ROOM	3	所属房间
+CoA_Chongqin_2015	FAN_COIL	POS_X	4	在图上的位置的X坐标
+CoA_Chongqin_2015	FAN_COIL	POS_Y	5	在图上的位置的Y坐标
+CoA_Chongqin_2015	FAN_COIL	POS_Z	6	在图上的位置的Z坐标
+CoA_Chongqin_2015	GAIN_REFER	ID	1	ID
+CoA_Chongqin_2015	GAIN_REFER	GAIN_ID	2	如果是外温，则是OUTSIDE表中对应的记录的ID，如果地温，对应GROUD表中记录的ID，表面对应SURFACE表
+CoA_Chongqin_2015	GAIN_REFER	TYPE	3	1: 外温， 2：地温， 3： HVAC，4：人员，5：灯光，6：设备，7：表面吸收，8：太阳透过窗户，9：房间温度
+CoA_Chongqin_2015	GAIN_REFER	OF_ROOM_GROUP	4	所属的房间组
+CoA_Chongqin_2015	GAIN_REFER	ROOOM_INDEX	5	在每个房间中的下标，即对应B矩阵中的列下标，FAI中的列下标
+CoA_Chongqin_2015	GAIN_REFER	INDEX	6	在整个建筑所有热扰数组中的下标
+CoA_Chongqin_2015	GROUND	GROUND_ID	1	编号
+CoA_Chongqin_2015	GROUND	NAME	2	名称
+CoA_Chongqin_2015	GROUND	X	3	图中表示该Ground的房间标志（如果有的话）的X坐标
+CoA_Chongqin_2015	GROUND	Y	4	图中表示该Ground的房间标志（如果有的话）的Y坐标
+CoA_Chongqin_2015	GROUND	Z	5	图中表示该Ground的房间标志（如果有的话）的Z坐标
+CoA_Chongqin_2015	GROUND	EXT_PROPERTY	6	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	GROUND_DATA	ID	1	ID
+CoA_Chongqin_2015	GROUND_DATA	HOUR	2	0~8759小时
+CoA_Chongqin_2015	GROUND_DATA	T	3	自定义大地的逐时地温℃
+CoA_Chongqin_2015	HACNET_BRANCH	BRANCH_ID	1	""
+CoA_Chongqin_2015	HACNET_BRANCH	NAME	2	""
+CoA_Chongqin_2015	HACNET_BRANCH	TYPE	3	0: PIPE 1: DUCT，无效，BRANCH就是水管
+CoA_Chongqin_2015	HACNET_BRANCH	OF_SUBNET	4	""
+CoA_Chongqin_2015	HACNET_BRANCH	START_NODE	5	开始节点的NODE的ID
+CoA_Chongqin_2015	HACNET_BRANCH	END_NODE	6	结束节点的NODE的ID
+CoA_Chongqin_2015	HACNET_BRANCH	S	7	""
+CoA_Chongqin_2015	HACNET_BRANCH	LENGTH	8	长度
+CoA_Chongqin_2015	HACNET_BRANCH	DIAMETER	9	管径
+CoA_Chongqin_2015	HACNET_BRANCH	ROUGHNESS	10	粗糙度
+CoA_Chongqin_2015	HACNET_BRANCH	FLOW	11	流量
+CoA_Chongqin_2015	HACNET_BRANCH	YCZLINPUTDIRECT	12	沿程阻力是否直接输入标志
+CoA_Chongqin_2015	HACNET_BRANCH	YCZLXISHU	13	ζ沿程阻力系数
+CoA_Chongqin_2015	HACNET_BRANCH	JZSTYLE	14	局部阻力方式输入方式
+CoA_Chongqin_2015	HACNET_BRANCH	JZTODYNHEAD	15	沿程阻力相当于动压头的倍数
+CoA_Chongqin_2015	HACNET_BRANCH	JZTOYC	16	局部阻力相当于沿程阻力的倍数
+CoA_Chongqin_2015	HACNET_BRANCH	bFontShow	17	是否显示流量和支路号
+CoA_Chongqin_2015	HACNET_BRANCH_POINT	POINT_ID	1	保存Branch中的点
+CoA_Chongqin_2015	HACNET_BRANCH_POINT	OF_BRANCH	2	""
+CoA_Chongqin_2015	HACNET_BRANCH_POINT	OF_BRANCHLINE	3	""
+CoA_Chongqin_2015	HACNET_BRANCH_POINT	x	4	""
+CoA_Chongqin_2015	HACNET_BRANCH_POINT	y	5	""
+CoA_Chongqin_2015	HACNET_LANDAFAI	ID	1	""
+CoA_Chongqin_2015	HACNET_LANDAFAI	TERMINAL_ID	2	""
+CoA_Chongqin_2015	HACNET_LANDAFAI	Index	3	""
+CoA_Chongqin_2015	HACNET_LANDAFAI	landa	4	""
+CoA_Chongqin_2015	HACNET_LANDAFAI	fai	5	""
+CoA_Chongqin_2015	HACNET_NODE	NODE_ID	1	""
+CoA_Chongqin_2015	HACNET_NODE	NAME	2	""
+CoA_Chongqin_2015	HACNET_NODE	X	3	节点x坐标(m)
+CoA_Chongqin_2015	HACNET_NODE	Y	4	节点y坐标(m)
+CoA_Chongqin_2015	HACNET_NODE	Z	5	节点高度(m)
+CoA_Chongqin_2015	HACNET_NODE	LOSEFLOW	6	漏水量
+CoA_Chongqin_2015	HACNET_NODE	PRESSURE	7	节点压力
+CoA_Chongqin_2015	HACNET_NODE	TEMPRATURE	8	温度
+CoA_Chongqin_2015	HACNET_NODE	OF_SUBNET	9	""
+CoA_Chongqin_2015	HACNET_NODE	BIG_USER	10	节点类型0--普通1--子网2--热源
+CoA_Chongqin_2015	HACNET_NODE	STATIC_POINT	11	是否为静压点
+CoA_Chongqin_2015	HACNET_NODE	bFontShow	12	是否显示压力和节点号
+CoA_Chongqin_2015	HACNET_OPTION	POINT_ID	1	保存Branch中的点
+CoA_Chongqin_2015	HACNET_OPTION	OF_BRANCH	2	""
+CoA_Chongqin_2015	HACNET_OPTION	OF_BRANCHLINE	3	""
+CoA_Chongqin_2015	HACNET_OPTION	x	4	""
+CoA_Chongqin_2015	HACNET_OPTION	y	5	""
+CoA_Chongqin_2015	HACNET_PUMP	PUMP_ID	1	""
+CoA_Chongqin_2015	HACNET_PUMP	PRODUCT_ID	2	""
+CoA_Chongqin_2015	HACNET_PUMP	PROVIDE_ID	3	""
+CoA_Chongqin_2015	HACNET_PUMP	NAME	4	""
+CoA_Chongqin_2015	HACNET_PUMP	OF_WATER_SYS	5	1-HACNET
+CoA_Chongqin_2015	HACNET_PUMP	OF_SUBNET	6	""
+CoA_Chongqin_2015	HACNET_PUMP	OF_BRANCH	7	""
+CoA_Chongqin_2015	HACNET_PUMP	OF_BRANCHLINE	8	所属的BRANCH中的直线号
+CoA_Chongqin_2015	HACNET_PUMP	RATIOINBRANCHLINE	9	直线中的位置
+CoA_Chongqin_2015	HACNET_PUMP	COUNTODTITLE	10	并联台数
+CoA_Chongqin_2015	HACNET_PUMP	REALSPEED	11	实际转速
+CoA_Chongqin_2015	HACNET_PUMP	STANDSPEED	12	标准转速
+CoA_Chongqin_2015	HACNET_PUMP	a	13	""
+CoA_Chongqin_2015	HACNET_PUMP	b	14	""
+CoA_Chongqin_2015	HACNET_PUMP	c	15	""
+CoA_Chongqin_2015	HACNET_PUMP	d	16	""
+CoA_Chongqin_2015	HACNET_PUMP	bMain	17	是否为主循环泵
+CoA_Chongqin_2015	HACNET_PUMP	dblFlow	18	流量
+CoA_Chongqin_2015	HACNET_SUBNET	SUBNET_ID	1	""
+CoA_Chongqin_2015	HACNET_SUBNET	NAME	2	""
+CoA_Chongqin_2015	HACNET_SUBNET	BIG_USER	3	""
+CoA_Chongqin_2015	HACNET_SUBNET	OF_WATER_SYS	4	""
+CoA_Chongqin_2015	HACNET_SUBNET	START_NODE	5	""
+CoA_Chongqin_2015	HACNET_SUBNET	dblZoomRatio	6	显示比例
+CoA_Chongqin_2015	HACNET_SUBNET	szViewX	7	画布X方向大小
+CoA_Chongqin_2015	HACNET_SUBNET	szViewY	8	画布Y方向大小
+CoA_Chongqin_2015	HACNET_SUBNET	nPrintSx	9	打印比例
+CoA_Chongqin_2015	HACNET_SUBNET	scale	10	屏幕和实际尺寸比例
+CoA_Chongqin_2015	HACNET_SUBNET	BACKCOLOR	11	背景色
+CoA_Chongqin_2015	HACNET_SUBNET	BKUSEBMP	12	背景是否采用位图文件
+CoA_Chongqin_2015	HACNET_SUBNET	BMPFILE	13	背景文件名
+CoA_Chongqin_2015	HACNET_TERMINAL	TERMINAL_ID	1	""
+CoA_Chongqin_2015	HACNET_TERMINAL	NAME	2	""
+CoA_Chongqin_2015	HACNET_TERMINAL	TYPE	3	0:暖气片 1：热源
+CoA_Chongqin_2015	HACNET_TERMINAL	OF_BRANCH	4	""
+CoA_Chongqin_2015	HACNET_TERMINAL	OF_SUBNET	5	""
+CoA_Chongqin_2015	HACNET_TERMINAL	OF_BRANCHLINE	6	所属的BRANCH中的直线号
+CoA_Chongqin_2015	HACNET_TERMINAL	RATIOINBRANCHLINE	7	直线中的位置
+CoA_Chongqin_2015	HACNET_TERMINAL	S	8	""
+CoA_Chongqin_2015	HACNET_TERMINAL	OF_ROOM	9	""
+CoA_Chongqin_2015	HACNET_TERMINAL	DESIGN_FLOW	10	设计流量
+CoA_Chongqin_2015	HACNET_TERMINAL	DESIGN_PRESSUREDROP	11	设计压降
+CoA_Chongqin_2015	HACNET_TERMINAL	dblSteadyHeatCalFactor	12	供热一次网平米流量指标
+CoA_Chongqin_2015	HACNET_TERMINAL	dblQToArea	13	供热热量指标（单位：W/m2*H）
+CoA_Chongqin_2015	HACNET_TERMINAL	dblHeatArea	14	每平米供热面积的换热器换热面积
+CoA_Chongqin_2015	HACNET_TERMINAL	bDirect	15	是否是间联换热站
+CoA_Chongqin_2015	HACNET_TERMINAL	dblStationHeatArea	16	间联换热站每平米供热面积的换热器换热面积
+CoA_Chongqin_2015	HACNET_TERMINAL	dblSecondAveFlow	17	供热二次网平米流量指标
+CoA_Chongqin_2015	HACNET_VALVE	VALVE_ID	1	""
+CoA_Chongqin_2015	HACNET_VALVE	PRODUCT_ID	2	产品ID，对应设备数据库中的产品ID
+CoA_Chongqin_2015	HACNET_VALVE	NAME	3	""
+CoA_Chongqin_2015	HACNET_VALVE	OF_BRANCH	4	所属的BRANCH
+CoA_Chongqin_2015	HACNET_VALVE	OF_SUBNET	5	所属的SUBNET
+CoA_Chongqin_2015	HACNET_VALVE	OF_BRANCHLINE	6	所属的BRANCH中的直线号
+CoA_Chongqin_2015	HACNET_VALVE	RATIOINBRANCHLINE	7	直线中的位置
+CoA_Chongqin_2015	HACNET_VALVE	ZULIOFOPENVALVE	8	开阀阻力
+CoA_Chongqin_2015	HACNET_VALVE	JZXISHU	9	局阻系数
+CoA_Chongqin_2015	HACNET_VALVE	OPENWIDE	10	开度
+CoA_Chongqin_2015	HACNET_WPGNODE	WPGNODE_ID	1	""
+CoA_Chongqin_2015	HACNET_WPGNODE	WPGNAME	2	""
+CoA_Chongqin_2015	HACNET_WPGNODE	OF_SUBNET	3	""
+CoA_Chongqin_2015	HACNET_WPGNODE	INDEXINNODES	4	""
+CoA_Chongqin_2015	HACNET_WPGNODE	PRESSURE	5	""
+CoA_Chongqin_2015	HEATEXCHANGER	HEATEXCHANGER_ID	1	换热器ID
+CoA_Chongqin_2015	HEATEXCHANGER	NAME	2	换热器名称
+CoA_Chongqin_2015	HEATEXCHANGER	LIB_HEATEXCHANGER_ID	3	换热器的编号
+CoA_Chongqin_2015	HEATEXCHANGER	PRIME_PUMP	4	一次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	HEATEXCHANGER	SECOND_PUMP	5	二次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	HEATEXCHANGER	ATTRIBUTE_TO	6	一锅炉对一换热器情况下的对应锅炉设备号
+CoA_Chongqin_2015	HEATEXCHANGER	PRIORITY	7	使用优先级(还需要考虑具体用法)
+CoA_Chongqin_2015	HEATEXCHANGER	BLANK_1	8	预留
+CoA_Chongqin_2015	HEATEXCHANGER	BLANK_2	9	预留
+CoA_Chongqin_2015	HEATEXCHANGER	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	HEATING_PIPE	HEATING_PIPE_ID	1	立管编号
+CoA_Chongqin_2015	HEATING_PIPE	NAME	2	名称
+CoA_Chongqin_2015	HEATING_PIPE	OF_HEATING_SYSTEM	3	所属供热系统
+CoA_Chongqin_2015	HEATING_PIPE	FLOW_SCHEDULE	4	立管流量全年变化作息设定(m^3/h)
+CoA_Chongqin_2015	HEATING_PIPE	EXT_PROPERTY	5	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	HEATING_SYSTEM	HEATING_SYSTEM_ID	1	供热系统编号
+CoA_Chongqin_2015	HEATING_SYSTEM	NAME	2	供热系统名称
+CoA_Chongqin_2015	HEATING_SYSTEM	TYPE	3	供热系统形式: 0-单管顺流, 1-单管旁通
+CoA_Chongqin_2015	HEATING_SYSTEM	SUPPLY_T_SCHEDULE	4	供水温度全年变化作息设定(℃)
+CoA_Chongqin_2015	HEATING_SYSTEM	RADIATOR_AREA_MODE	5	散热器面积确定方式,0-根据房间负荷自动选择,1-用户自定义
+CoA_Chongqin_2015	HEATING_SYSTEM	EXT_PROPERTY	6	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ID_REGISTER	ID	1	编号
+CoA_Chongqin_2015	ID_REGISTER	DATETIME	2	分配时间
+CoA_Chongqin_2015	ID_REGISTER	ALLOCATOR	3	分配工具
+CoA_Chongqin_2015	ID_REGISTER	OWNER_OBJECT	4	使用对象
+CoA_Chongqin_2015	ID_REGISTER	OWNER_TABLE	5	对象所在数据表
+CoA_Chongqin_2015	ID_REGISTER	USE_STATE	6	是否使用中
+CoA_Chongqin_2015	LIB_CHILLER	LIB_CHILLER_ID	1	设备的ID
+CoA_Chongqin_2015	LIB_CHILLER	NAME	2	冷机型号名称
+CoA_Chongqin_2015	LIB_CHILLER	TYPE	3	冷机的类型： 0 活塞式 1 螺杆式 2离心式, 4 直燃机，5风冷机组, 6水冷机组
+CoA_Chongqin_2015	LIB_CHILLER	CAPACITY	4	设备额定供冷（热）能力,kW
+CoA_Chongqin_2015	LIB_CHILLER	FLOWRATE_COLD	5	冷机的额定冷冻水流量,m3/h
+CoA_Chongqin_2015	LIB_CHILLER	FLOWRATE_COOL	6	冷机的额定冷却水流量,m3/h
+CoA_Chongqin_2015	LIB_CHILLER	PRESSURE_LOSS_COLD	7	冷机冷冻水侧压降,kPa
+CoA_Chongqin_2015	LIB_CHILLER	PRESSURE_LOSS_COOL	8	冷机冷却水侧压降,kPa
+CoA_Chongqin_2015	LIB_CHILLER	COP	9	冷机额定的COP
+CoA_Chongqin_2015	LIB_CHILLER	COP_CURVE	10	冷机COP曲线,对应LIB_CURVE表中的LIB_CURVE_ID
+CoA_Chongqin_2015	LIB_CHILLER	FUEL_TYPE	11	热源燃料类型：0 无 1 煤，2 油，3 天然气，4 电，5 热水，6 蒸汽
+CoA_Chongqin_2015	LIB_CHILLER	FUEL_HEAT_VALUE	12	直燃机燃料热值(kJ/kg)
+CoA_Chongqin_2015	LIB_CHILLER	CONSUME_FUEL	13	直燃机额定工况下燃料的消耗量(kg/h)
+CoA_Chongqin_2015	LIB_CHILLER	CONSUME_ELEC	14	额定工况下耗电量(kW) 直燃机有此项
+CoA_Chongqin_2015	LIB_CHILLER	FANPUMP_NUM	15	风(水)冷机组需输入风机(水泵)台数
+CoA_Chongqin_2015	LIB_CHILLER	FANPUMP_POWER	16	风(水)冷机组需输入风机(水泵)功率(kW)
+CoA_Chongqin_2015	LIB_CHILLER	PRODUCT_ID	17	产品具体信息,对应LIB_PRODUCT表中的数据
+CoA_Chongqin_2015	LIB_CHILLER	BLANK_1	18	预留
+CoA_Chongqin_2015	LIB_CHILLER	BLANK_2	19	预留
+CoA_Chongqin_2015	LIB_CHILLER	EXT_PROPERTY	20	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_COOLINGTOWER	LIB_COOLINGTOWER_ID	1	冷却塔ID
+CoA_Chongqin_2015	LIB_COOLINGTOWER	NAME	2	名称
+CoA_Chongqin_2015	LIB_COOLINGTOWER	TYPE	3	冷却塔类型(暂时没有，预留）
+CoA_Chongqin_2015	LIB_COOLINGTOWER	CAPACITY	4	冷却塔额定供冷（热）能力,kW
+CoA_Chongqin_2015	LIB_COOLINGTOWER	FLOWRATE	5	冷却塔额定水流量,m3/h
+CoA_Chongqin_2015	LIB_COOLINGTOWER	PRESSURE_LOSS	6	冷却塔压降,kPa
+CoA_Chongqin_2015	LIB_COOLINGTOWER	SUPPLY_TEMPERATURE	7	额定供水温度,℃
+CoA_Chongqin_2015	LIB_COOLINGTOWER	RETURN_TEMPERATURE	8	额定回水温度,℃
+CoA_Chongqin_2015	LIB_COOLINGTOWER	AIR_WETBULB_TEMPERATURE	9	额定空气湿球温度(冷却塔用),℃
+CoA_Chongqin_2015	LIB_COOLINGTOWER	AIR_FLOWRATE	10	额定风量(冷却塔用),m3/h
+CoA_Chongqin_2015	LIB_COOLINGTOWER	FAN_POWER	11	额定风机功耗(冷却塔用),kW
+CoA_Chongqin_2015	LIB_COOLINGTOWER	REFILL_FLOWRATE	12	补水量(冷却塔用),m3/h
+CoA_Chongqin_2015	LIB_COOLINGTOWER	BETAF	13	冷却塔散质系数与面积乘积,kg/s
+CoA_Chongqin_2015	LIB_COOLINGTOWER	PRODUCT_ID	14	产品具体信息,对应LIB_PRODUCT表中的数据
+CoA_Chongqin_2015	LIB_COOLINGTOWER	BLANK_1	15	预留
+CoA_Chongqin_2015	LIB_COOLINGTOWER	BLANK_2	16	预留
+CoA_Chongqin_2015	LIB_COOLINGTOWER	EXT_PROPERTY	17	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_CURVE	LIB_CURVE_ID	1	曲线编号
+CoA_Chongqin_2015	LIB_CURVE	TYPE	2	曲线分类号
+CoA_Chongqin_2015	LIB_CURVE	NAME	3	曲线名称
+CoA_Chongqin_2015	LIB_CURVE	COUNT	4	曲线系数的总个数(预留最大12个,应付绝大多数情况应该是没有问题的)
+CoA_Chongqin_2015	LIB_CURVE	A	5	系数A
+CoA_Chongqin_2015	LIB_CURVE	B	6	系数B
+CoA_Chongqin_2015	LIB_CURVE	C	7	系数C
+CoA_Chongqin_2015	LIB_CURVE	D	8	系数D
+CoA_Chongqin_2015	LIB_CURVE	E	9	系数E
+CoA_Chongqin_2015	LIB_CURVE	F	10	系数F
+CoA_Chongqin_2015	LIB_CURVE	G	11	系数G
+CoA_Chongqin_2015	LIB_CURVE	H	12	系数H
+CoA_Chongqin_2015	LIB_CURVE	I	13	系数I
+CoA_Chongqin_2015	LIB_CURVE	J	14	系数J
+CoA_Chongqin_2015	LIB_CURVE	K	15	系数K
+CoA_Chongqin_2015	LIB_CURVE	L	16	系数L
+CoA_Chongqin_2015	LIB_CURVE	NOTE	17	曲线简要说明
+CoA_Chongqin_2015	LIB_CURVE	EXT_PROPERTY	18	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	LIB_HEATEXCHANGER_ID	1	换热器的编号
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	NAME	2	换热器名称
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	TYPE	3	类型编号(暂时没有数据,但为了和其它设备保持统一还是保留为好)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	CAPACITY	4	换热器的额定热交换量(kW)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	EX_AREA	5	换热器面积(m2)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	K	6	换热器额定换热系数
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	K_CURVE	7	换热器传热系数曲线,对应LIB_CURVE表中数据LIB_CURVE_ID
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	FLOWRATE1	8	一次水流量(m3/h)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	PRESSURE_LOSS1	9	一次水水阻(kPa)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	TIN1	10	一次水进口温度(℃)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	TOUT1	11	一次水出口温度(℃)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	FLOWRATE2	12	二次水流量(m3/h)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	PRESSURE_LOSS2	13	二次水水阻(kPa)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	TIN2	14	二次水进口温度(℃)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	TOUT2	15	二次水出口温度(℃)
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	PRODUCT_ID	16	产品具体信息,对应LIB_PRODUCT表中的数据
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	BLANK_1	17	预留
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	BLANK_2	18	预留
+CoA_Chongqin_2015	LIB_HEATEXCHANGER	EXT_PROPERTY	19	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	LIB_PHASE_CHANGE_MAT_ID	1	编号
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	NAME	2	名称
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	TM	3	相变温度(℃)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	CP_S	4	固态比热(J/kg.K)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	CP_M	5	两相比热(J/kg.K)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	CP_L	6	液态比热(J/kg.K)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	ROU	7	密度(kg/m^3)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	LAMDA	8	导热系数(W/m.K)
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	REMARK	9	说明
+CoA_Chongqin_2015	LIB_PHASE_CHANGE_MAT	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_PUMP	LIB_PUMP_ID	1	设备ID
+CoA_Chongqin_2015	LIB_PUMP	NAME	2	水泵的型号名称
+CoA_Chongqin_2015	LIB_PUMP	TYPE	3	水泵类型，0为定速，1为变频
+CoA_Chongqin_2015	LIB_PUMP	FLOWRATE	4	水泵额定流量,m3/h
+CoA_Chongqin_2015	LIB_PUMP	PRESSURE	5	水泵额定扬程,kPa
+CoA_Chongqin_2015	LIB_PUMP	EFFICIENCY	6	水泵额定效率
+CoA_Chongqin_2015	LIB_PUMP	GP_CURVE	7	水泵流量与扬程的性能曲线,对应LIB_CURVE表中的LIB_CURVE_ID
+CoA_Chongqin_2015	LIB_PUMP	GEFF_CURVE	8	水泵流量与效率的性能曲线 对应LIB_CURVE表中的LIB_CURVE_ID
+CoA_Chongqin_2015	LIB_PUMP	SPEED_RATIO_MAX	9	变频速比上限
+CoA_Chongqin_2015	LIB_PUMP	SPEED_RATIO_MIN	10	变频速比下限
+CoA_Chongqin_2015	LIB_PUMP	PRODUCT_ID	11	产品具体信息,对应LIB_PRODUCT表中的数据
+CoA_Chongqin_2015	LIB_PUMP	BLANK_1	12	预留
+CoA_Chongqin_2015	LIB_PUMP	BLANK_2	13	预留
+CoA_Chongqin_2015	LIB_PUMP	EXT_PROPERTY	14	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_SHADING	ID	1	编号
+CoA_Chongqin_2015	LIB_SHADING	NAME	2	名称
+CoA_Chongqin_2015	LIB_SHADING	B0	3	第一片遮阳板与窗口顶部或左框(垂直百叶)距离(m)
+CoA_Chongqin_2015	LIB_SHADING	B1	4	遮阳板一端至窗左边或上边(垂直百叶)距离(m)
+CoA_Chongqin_2015	LIB_SHADING	B2	5	遮阳板另一端至窗右边或下边(垂直百叶)距离(m)
+CoA_Chongqin_2015	LIB_SHADING	DEG	6	遮阳板倾斜角度(Deg)：0表示垂直，下、右角度>0
+CoA_Chongqin_2015	LIB_SHADING	DIST	7	遮阳板间距(m)
+CoA_Chongqin_2015	LIB_SHADING	W	8	遮阳板挑出宽度(m)
+CoA_Chongqin_2015	LIB_SHADING	N	9	百叶片数
+CoA_Chongqin_2015	LIB_SHADING	HF	10	非百叶遮阳：挑帘高度(m)
+CoA_Chongqin_2015	LIB_SHADING	HL	11	非百叶遮阳：左侧板高度(m)
+CoA_Chongqin_2015	LIB_SHADING	WL	12	非百叶遮阳：左侧板宽度(m)
+CoA_Chongqin_2015	LIB_SHADING	DEGL	13	非百叶遮阳：左侧板角度(Deg)：0表示垂直，下、右角度>0
+CoA_Chongqin_2015	LIB_SHADING	HR	14	非百叶遮阳：右侧板高度(m)
+CoA_Chongqin_2015	LIB_SHADING	WR	15	非百叶遮阳：右侧板宽度(m)
+CoA_Chongqin_2015	LIB_SHADING	DEGR	16	非百叶遮阳：左侧板角度(Deg)：0表示垂直，下、右角度>0
+CoA_Chongqin_2015	LIB_SHADING	PRICE	17	市场参考价格
+CoA_Chongqin_2015	LIB_SHADING	IMAGE	18	图片
+CoA_Chongqin_2015	LIB_SHADING	GROUP	19	遮阳结构造型分类：0-普通遮阳，1-水平百叶，2-垂直百叶
+CoA_Chongqin_2015	LIB_SHADING	NOTE	20	说明
+CoA_Chongqin_2015	LIB_SHADING	EXT_PROPERTY	21	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	LIB_SOLAR_ENERGY_COLLECTOR_ID	1	编号
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	NAME	2	名称
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	TYPE	3	类型 0=真空管, 1=平板型
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	FE	4	热转移因子
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	TAO	5	有效透射率
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	ALPHA	6	吸收率
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	K	7	总换热系数
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	AREA_RATIO	8	集热面积与总面积的比
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	TILT	9	集热板倾斜角度(RAD)
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	REMARK	10	说明
+CoA_Chongqin_2015	LIB_SOLAR_ENERGY_COLLECTOR	EXT_PROPERTY	11	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIGHT_GAINS	GAIN_ID	1	编号
+CoA_Chongqin_2015	LIGHT_GAINS	NAME	2	名称
+CoA_Chongqin_2015	LIGHT_GAINS	OF_ROOM	3	所在房间
+CoA_Chongqin_2015	LIGHT_GAINS	SCHEDULE	4	作息模式
+CoA_Chongqin_2015	LIGHT_GAINS	MAXPOWER	5	最大铬牌功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	LIGHT_GAINS	MINPOWER	6	最小铬牌功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	LIGHT_GAINS	HEAT_RATE	7	热/电比率
+CoA_Chongqin_2015	LIGHT_GAINS	PER_AREA	8	是否按每平米计
+CoA_Chongqin_2015	LIGHT_GAINS	A	9	A
+CoA_Chongqin_2015	LIGHT_GAINS	B	10	B
+CoA_Chongqin_2015	LIGHT_GAINS	DIST_MODE	11	分配模式
+CoA_Chongqin_2015	LIGHT_GAINS	OF_STOREY	12	所属楼层的ID
+CoA_Chongqin_2015	LIGHT_GAINS	X	13	图中灯光得热的X坐标
+CoA_Chongqin_2015	LIGHT_GAINS	Y	14	图中灯光得热的Y坐标
+CoA_Chongqin_2015	LIGHT_GAINS	Z	15	图中灯光得热的Z坐标
+CoA_Chongqin_2015	LOOP_POINT	LOOP_ID	1	标志
+CoA_Chongqin_2015	LOOP_POINT	POINT_NO	2	点顺序号(第一点和第二点是这个几何形状geometry的底线(图中平面图中所示线)的起点和终点)
+CoA_Chongqin_2015	LOOP_POINT	POINT	3	点的ID
+CoA_Chongqin_2015	LOOP_POINT	OF_GEOMETRY	4	所属的geometry的ID
+CoA_Chongqin_2015	MAIN_ENCLOSURE	ID	1	ID
+CoA_Chongqin_2015	MAIN_ENCLOSURE	NAME	2	名称
+CoA_Chongqin_2015	MAIN_ENCLOSURE	SIDE1	3	第一平面，面向图上有向线段方向，左手边的平面（若是地板，则表示上平面）
+CoA_Chongqin_2015	MAIN_ENCLOSURE	SIDE2	4	第二平面，面向图上有向线段方向，右手边的平面（若是地板，则表示下平面）
+CoA_Chongqin_2015	MAIN_ENCLOSURE	MIDDLE_PLANE	5	中平面
+CoA_Chongqin_2015	MAIN_ENCLOSURE	KIND	6	种类 1：外墙 2： 内墙 3：屋顶 4： 楼地 5：地板/天花板（如果既是地板又是天花板，算作地板），6：挑空楼板
+CoA_Chongqin_2015	MAIN_ENCLOSURE	CONSTRUCTION	7	构件号ID,由种类的不同，对应系统库中六个表中的ID，为0则使用缺省值。
+CoA_Chongqin_2015	MAIN_ENCLOSURE	USER_DEF_DLL	8	对应USER_DEF_DLL表中的用户自定义DLL的DLL_ID
+CoA_Chongqin_2015	MAIN_ENCLOSURE	CAL_NUM_SHARES	9	计算时这个围护被分成的份数
+CoA_Chongqin_2015	MAIN_ENCLOSURE	FOURIER_NUM	10	分割墙体份数的判据
+CoA_Chongqin_2015	MAIN_ENCLOSURE	OF_STOREY	11	墙所在的楼层
+CoA_Chongqin_2015	MAIN_ENCLOSURE	EXT_PROPERTY	12	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	OPTION	OPTION_ID	1	ID
+CoA_Chongqin_2015	OPTION	KEYWORD	2	关键词
+CoA_Chongqin_2015	OPTION	EXPLAIN	3	注释
+CoA_Chongqin_2015	OPTION	TYPE	4	1: BOOL 型， 2： 整型， 3：实型， 4：字符串, 5:复合
+CoA_Chongqin_2015	OPTION	OPTION_STRING	5	用sscanf 读这个串可以可到对应值
+CoA_Chongqin_2015	OUTSIDE	OUTSIDE_ID	1	ID
+CoA_Chongqin_2015	OUTSIDE	NAME	2	名称
+CoA_Chongqin_2015	OUTSIDE	X	3	图中表示该Outside的房间标志（如果有的话）的X坐标
+CoA_Chongqin_2015	OUTSIDE	Y	4	图中表示该Outside的房间标志（如果有的话）的Y坐标
+CoA_Chongqin_2015	OUTSIDE	Z	5	图中表示该Outside的房间标志（如果有的话）的Z坐标
+CoA_Chongqin_2015	OUTSIDE	EXT_PROPERTY	6	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	OUTSIDE_DATA	ID	1	编号
+CoA_Chongqin_2015	OUTSIDE_DATA	HOUR	2	0~8759小时
+CoA_Chongqin_2015	OUTSIDE_DATA	T	3	自定义外界温度℃
+CoA_Chongqin_2015	OUTSIDE_DATA	D	4	自定义外界含湿量g/kg.dra
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	ROOM_ID	1	所属房间
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	ENCLOSURE	2	所属围护结构(可选，默认0是地板)
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	THICKNESS	3	厚度(mm)
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	AREA_RATIO	4	面积比例
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	LIB_PHASE_CHANGE_MAT_ID	5	物性参数库编号
+CoA_Chongqin_2015	PHASE_CHANGE_MAT	EXT_PROPERTY	6	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	PLANE	PLANE_ID	1	ID
+CoA_Chongqin_2015	PLANE	NAME	2	名称
+CoA_Chongqin_2015	PLANE	GEOMETRY	3	几何形状编号，对应GEOMETRY表中的GEOMETRY_ID
+CoA_Chongqin_2015	PLANE	BASE_LINE_START_POINT	4	基线（房间划分依据线的起点）,对应POINT表中的ID
+CoA_Chongqin_2015	PLANE	BASE_LINE_END_POINT	5	基线（房间划分依据线的终点）,对应POINT表中的ID
+CoA_Chongqin_2015	PN_PIPE	ID	1	标志ID
+CoA_Chongqin_2015	PN_PIPE	START_POINT_ID	2	起点ID
+CoA_Chongqin_2015	PN_PIPE	END_POINT_ID	3	终点ID
+CoA_Chongqin_2015	PN_PIPE	IS_GIVEN_DIMENSION	4	水管尺寸是否给定
+CoA_Chongqin_2015	PN_PIPE	D	5	管径(m)
+CoA_Chongqin_2015	PN_PIPE	IS_GIVEN_S	6	水管S是否给定
+CoA_Chongqin_2015	PN_PIPE	S	7	风管S值
+CoA_Chongqin_2015	PN_PIPE	FLOW_RATE	8	管中水流量(m^3/h)
+CoA_Chongqin_2015	PN_PIPE	COLOR	9	水管颜色(1~255)
+CoA_Chongqin_2015	PN_PIPE	LINE_TYPE	10	水管线型(0~3)
+CoA_Chongqin_2015	PN_START	ID	1	标志ID
+CoA_Chongqin_2015	PN_START	POINT_ID	2	所在的点的ID
+CoA_Chongqin_2015	PN_START	PIPE_STYLE	3	水系统形式(1:一次泵 2:二次泵定水量 3:二次泵变水量(AHU变,FCU不变) 4:二次泵变水量(AHU变, FCU变)
+CoA_Chongqin_2015	PN_START	FIRST_A	4	一次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 (此时无用)
+CoA_Chongqin_2015	PN_START	FIRST_B	5	一次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 (此时无用)
+CoA_Chongqin_2015	PN_START	FIRST_C	6	一次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 (此时无用)
+CoA_Chongqin_2015	PN_START	FIRST_D	7	一次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 (此时无用)
+CoA_Chongqin_2015	PN_START	FIRST_W	8	一次泵的额定功率(kW)
+CoA_Chongqin_2015	PN_START	SECOND_A	9	二次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 功率单位为kW, 流量单位为m^3/h
+CoA_Chongqin_2015	PN_START	SECOND_B	10	二次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 功率单位为kW, 流量单位为m^3/h
+CoA_Chongqin_2015	PN_START	SECOND_C	11	二次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 功率单位为kW, 流量单位为m^3/h
+CoA_Chongqin_2015	PN_START	SECOND_D	12	二次泵功耗与流量的三次曲线的四个系数中的第一个 W=A+BQ+CQ^2+DQ^3 功率单位为kW, 流量单位为m^3/h
+CoA_Chongqin_2015	PN_START	SECOND_Q	13	二次泵的额定流量(m^3/h)
+CoA_Chongqin_2015	PN_TERM	ID	1	标志ID
+CoA_Chongqin_2015	PN_TERM	POINT_ID	2	所在的点的ID
+CoA_Chongqin_2015	PN_TERM	FLOW_TYPE	3	水量类型:0 计算结果输入 1 用户输入
+CoA_Chongqin_2015	PN_TERM	FLOW_RATE	4	水量(当水量类型为1时有效)
+CoA_Chongqin_2015	PN_VALVE	ID	1	标志ID
+CoA_Chongqin_2015	PN_VALVE	LENGTH_FACT	2	所在的水管的从起点至终点的百分比值
+CoA_Chongqin_2015	PN_VALVE	OPEN_FACT	3	开度(%),整型数
+CoA_Chongqin_2015	PN_VALVE	RESIST_FACT	4	开阀阻力系数
+CoA_Chongqin_2015	PN_VALVE	PIPE_ID	5	所在水管的ID
+CoA_Chongqin_2015	POINT	POINT_ID	1	ID
+CoA_Chongqin_2015	POINT	NAME	2	名称
+CoA_Chongqin_2015	POINT	X	3	X坐标（单位：m）
+CoA_Chongqin_2015	POINT	Y	4	Y坐标（单位：m）
+CoA_Chongqin_2015	POINT	Z	5	Z坐标（单位：m）
+CoA_Chongqin_2015	PUMP	PUMP_ID	1	水泵ID
+CoA_Chongqin_2015	PUMP	NAME	2	水泵的名称
+CoA_Chongqin_2015	PUMP	LIB_PUMP_ID	3	设备库中的ID
+CoA_Chongqin_2015	PUMP	USAGE	4	泵的用途： 0:冷源一次泵, 1:冷源二次泵, 2:冷却泵, 3:补水泵, 4:热源一次泵, 5:热源二次泵, 6: 热源泵
+CoA_Chongqin_2015	PUMP	BYPASS	5	水泵有无旁通 0：无旁通  1：有旁通
+CoA_Chongqin_2015	PUMP	ATTRIBUTE_TO	6	一机对一泵情况下的对应设备号
+CoA_Chongqin_2015	PUMP	PRIORITY	7	使用优先级(还需要考虑具体用法)
+CoA_Chongqin_2015	PUMP	BLANK_1	8	预留
+CoA_Chongqin_2015	PUMP	BLANK_2	9	预留
+CoA_Chongqin_2015	PUMP	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ROOM	ID	1	编号
+CoA_Chongqin_2015	ROOM	OF_ROOM_GROUP	2	所属的房间组
+CoA_Chongqin_2015	ROOM	NAME	3	名称
+CoA_Chongqin_2015	ROOM	OF_STOREY	4	楼层
+CoA_Chongqin_2015	ROOM	TYPE	5	房间类型(用于人员负荷的参考) 对应ROOM_TYPE_DATA表
+CoA_Chongqin_2015	ROOM	SPACE_TYPE	6	空间类型标记，0普通房间，1中庭，2阳台，3天井，4楼梯间……
+CoA_Chongqin_2015	ROOM	AREA	7	面积（单位：m2）
+CoA_Chongqin_2015	ROOM	VOLUME	8	容积（单位：m3）
+CoA_Chongqin_2015	ROOM	MIN_FRESH_FLOW_NUM	9	最小新风量( M3/Hr)
+CoA_Chongqin_2015	ROOM	SET_AIR_FLOWNUM_MIN	10	最小换气次数(次/Hr)
+CoA_Chongqin_2015	ROOM	SET_AIR_FLOWNUM_MAX	11	最大换气次数(次/Hr)
+CoA_Chongqin_2015	ROOM	SET_TERMINAL_MAX	12	最大末端再热量（最小为0）
+CoA_Chongqin_2015	ROOM	SET_FCU_MAX_COOL	13	盘管最大制冷量(W/m^2)
+CoA_Chongqin_2015	ROOM	SET_FCU_MAX_HEAT	14	盘管最大加热量(W/m^2)
+CoA_Chongqin_2015	ROOM	FURNITURE_COEF	15	家俱系数(几个房间的总的系数=各房间系数与体积的加权平均）
+CoA_Chongqin_2015	ROOM	POSITIVE_PRESSURE	16	要求的风口出口余压(Pa)
+CoA_Chongqin_2015	ROOM	USER_HVAC_HEAT_GAIN	17	用户自定义的附加HVAC热扰，对应USER_DEF_DLL表中的用户自定义DLL的DLL_ID
+CoA_Chongqin_2015	ROOM	RADIATOR_FLOW_SCHEDULE	18	散热器流量全年变化作息(m^3/h)
+CoA_Chongqin_2015	ROOM	RADIATOR_AREA	19	散热器面积(m^2)
+CoA_Chongqin_2015	ROOM	RADIATOR_K_A	20	散热器换热系数修正系数A(K=A*dT^B)
+CoA_Chongqin_2015	ROOM	RADIATOR_K_B	21	散热器换热系数修正系数B(K=A*dT^B)
+CoA_Chongqin_2015	ROOM	RADIATOR_DIST_MODE	22	散热器热量分配模式（对应DIST_MODE表）
+CoA_Chongqin_2015	ROOM	OF_HEATING_PIPE	23	所属供热系统立管编号(对应HEATING_PIPE表)
+CoA_Chongqin_2015	ROOM	OF_HEATING_PIPE_NO	24	在所属供热系统立管中的序号(从0开始)
+CoA_Chongqin_2015	ROOM	X	25	X
+CoA_Chongqin_2015	ROOM	Y	26	Y
+CoA_Chongqin_2015	ROOM	Z	27	Z
+CoA_Chongqin_2015	ROOM	EXT_PROPERTY	28	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ROOM_RELATION	ID	1	ID
+CoA_Chongqin_2015	ROOM_RELATION	NAME	2	名称
+CoA_Chongqin_2015	ROOM_RELATION	OF_BUILDING	3	所属建筑的ID
+CoA_Chongqin_2015	ROOM_RELATION	ROOM_ID	4	本房间的ID
+CoA_Chongqin_2015	ROOM_RELATION	RELA_ROOM_ID	5	相邻房间的ID(可以为室外）
+CoA_Chongqin_2015	ROOM_RELATION	VENT_SCHEDULE_ID	6	换气次数对应的Schedule_id
+CoA_Chongqin_2015	ROOM_RELATION	VENT_SET_MAX	7	房间与外界通风最大能力
+CoA_Chongqin_2015	ROOM_RELATION	VENT_TYPE	8	通风定义的含义：0:换气次数；1:附加换气次数范围
+CoA_Chongqin_2015	ROOM_RELATION	START_POINT_ID	9	START
+CoA_Chongqin_2015	ROOM_RELATION	END_POINT_ID	10	END
+CoA_Chongqin_2015	ROOM_RELATION	EXT_PROPERTY	11	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	ID	1	编号
+CoA_Chongqin_2015	ROOM_TYPE_DATA	NAME	2	房间类型名
+CoA_Chongqin_2015	ROOM_TYPE_DATA	FURNITURE_COEF	3	家俱系数(几个房间的总的系数=各房间系数与体积的加权平均）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_SCHEDULE	4	人员作息模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_MAXNUMBER	5	最多人数(人 或 人/平米）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_MINNUMBER	6	最少人数(人 或 人/平米）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_HEAT_PER_PERSON	7	每人产热量（W）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_DAMP_PER_PERSON	8	每人产湿量（Kg/hr）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_MIN_REQUIRE_FRESH_AIR	9	每人所需最小新风量(m^3/h)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_PER_AREA	10	是否按每平米计，0按总量计，1按平米指标计，2按功能计(使用A+BF公式)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_A	11	A
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_B	12	B
+CoA_Chongqin_2015	ROOM_TYPE_DATA	O_DIST_MODE	13	人员热扰分配模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_SCHEDULE	14	灯光作息模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_MAXPOWER	15	最大铬牌功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_MINPOWER	16	最小铬牌功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_HEAT_RATE	17	热/电比率
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_PER_AREA	18	是否按每平米计，0按总量计，1按平米指标计，2按功能计(使用A+BF公式)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_A	19	A
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_B	20	B
+CoA_Chongqin_2015	ROOM_TYPE_DATA	L_DIST_MODE	21	灯光热扰分配模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_SCHEDULE	22	设备作息模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_MAXPOWER	23	最大产热功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_MINPOWER	24	最小产热功率（单位：W或 W/M^2）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_MAX_HUM	25	最大设备散湿（kg/hr 或 Kg/(Hr.m^2)）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_MIN_HUM	26	最小设备散湿（kg/hr 或 Kg/(Hr.m^2)）
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_PER_AREA	27	是否按每平米计，0按总量计，1按平米指标计，2按功能计(使用A+BF公式)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_A	28	A
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_B	29	B
+CoA_Chongqin_2015	ROOM_TYPE_DATA	E_DIST_MODE	30	设备热扰分配模式
+CoA_Chongqin_2015	ROOM_TYPE_DATA	AC_SCHEDULE_ID	31	空调开停时间的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_TYPE_DATA	SET_T_MIN_SCHEDULE	32	房间设定温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID，空调设定温度下限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	SET_T_MAX_SCHEDULE	33	房间设定温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID，空调设定温度上限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	SET_RH_MIN_SCHEDULE	34	房间设定湿度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID，空调设定湿度下限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	SET_RH_MAX_SCHEDULE	35	房间设定湿度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID，空调设定湿度上限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	AC_T_MIN_SCHEDULE	36	空调开启温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID（用于独立空调系统），耐受温度下限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	AC_T_MAX_SCHEDULE	37	空调开启温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID（用于独立空调系统），耐受温度上限
+CoA_Chongqin_2015	ROOM_TYPE_DATA	SET_MIN_LUMINANCE	38	房间设定最低照度(Lx)
+CoA_Chongqin_2015	ROOM_TYPE_DATA	REMARK	39	说明
+CoA_Chongqin_2015	ROOM_TYPE_DATA	EXT_PROPERTY	40	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	SCHEDULE_YEAR	SCHEDULE_ID	1	编号
+CoA_Chongqin_2015	SCHEDULE_YEAR	TYPE	2	1:ratio,2:on_off,3:Int,4:float,5:double,但DATA都按double存
+CoA_Chongqin_2015	SCHEDULE_YEAR	NAME	3	名称
+CoA_Chongqin_2015	SCHEDULE_YEAR	DATA	4	数据
+CoA_Chongqin_2015	SHADING	ID	1	编号
+CoA_Chongqin_2015	SHADING	NAME	2	名称
+CoA_Chongqin_2015	SHADING	TYPE	3	遮阳类型，……
+CoA_Chongqin_2015	SHADING	TAO	4	遮阳板材料的透过率
+CoA_Chongqin_2015	SHADING	ROU	5	遮阳板材料的反射率
+CoA_Chongqin_2015	SHADING	LIB_SHADING_ID	6	遮阳结构编号(0表示不是结构化的遮阳定义)
+CoA_Chongqin_2015	SHADING	MATERIAL	7	遮阳板材料编号，指向SYS_APP_MATERIAL表，可定义厚度、透明度等信息
+CoA_Chongqin_2015	SHADING	OF_BUILDING	8	所在建筑(没有所在楼层的概念，用所在建筑标识)
+CoA_Chongqin_2015	SHADING	EXT_PROPERTY	9	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	SKY	SKY_ID	1	编号
+CoA_Chongqin_2015	SKY	NAME	2	名称
+CoA_Chongqin_2015	SKY	SKY_DATA_ID	3	对应SKY_DATA表中的 ID
+CoA_Chongqin_2015	SKY	EXT_PROPERTY	4	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	STOREY	ID	1	主索引
+CoA_Chongqin_2015	STOREY	NAME	2	名称
+CoA_Chongqin_2015	STOREY	OF_STOREY_GROUP	3	所属的楼层组
+CoA_Chongqin_2015	STOREY	OF_BUILDING	4	所属的建筑
+CoA_Chongqin_2015	STOREY	NO	5	楼层号0为第一层，-1为地下一层
+CoA_Chongqin_2015	STOREY	MULTIPLE	6	标准楼层的代表层数，MULTIPLE>1的楼层即为标准层
+CoA_Chongqin_2015	STOREY	HEIGHT	7	楼层高度(单位m)
+CoA_Chongqin_2015	STOREY	VISIBLE	8	楼层是否可见
+CoA_Chongqin_2015	STOREY	EXT_PROPERTY	9	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	STOREY_GROUP	ID	1	主索引
+CoA_Chongqin_2015	STOREY_GROUP	NAME	2	名称
+CoA_Chongqin_2015	SURFACE	SURFACE_ID	1	编号
+CoA_Chongqin_2015	SURFACE	NAME	2	名称
+CoA_Chongqin_2015	SURFACE	AREA	3	面积（单位：m2）
+CoA_Chongqin_2015	SURFACE	AZIMUTH	4	相对方位角（单位：°）相对于ENVIRONMENT表中的南向角度的顺时针角 [ 0, 360 ) 999表示地面或者是天花板
+CoA_Chongqin_2015	SURFACE	TILT	5	倾角（单位：°）,与水平面的夹角。垂直表面为90°。凸台的侧面大于90°。
+CoA_Chongqin_2015	SURFACE	OF_ROOM	6	所属的房间,可以是ROOM中的房间，也可以是OUTSIDE或GROUND表中的外界或大地
+CoA_Chongqin_2015	SURFACE	TYPE	7	0: 普通表面 1: 外表面 2: 与大地相接的表面 3：遮阳板的表面,4 水平朝上的内表面,5 水平朝下的内表面,6 需要计算的指向中庭的垂直内表面,7 不需要计算的背向中庭、指向外界的天窗外表面,8 需要计算的指向中庭的水平朝上内表面,9 需要计算的指向中庭的水平朝下内表面,9 虚拟构件的表面
+CoA_Chongqin_2015	SURFACE	SURFACESTATE	8	表面状态编号, 预留
+CoA_Chongqin_2015	SURFACE	GEOMETRY	9	几何形状编号,对应GEOMETRY表中的 GEOMETRY ID
+CoA_Chongqin_2015	SURFACE	VENTILATION_COEF	10	对流换热系数
+CoA_Chongqin_2015	SURFACE	BLACKNESS	11	表面黑度
+CoA_Chongqin_2015	SURFACE	ABSORB_COEF	12	表面吸收系数
+CoA_Chongqin_2015	SURFACE	CONVECT_T_ID	13	对应OUSIDE表中的外温或GROUND表中的地温，如果为0，则无此项
+CoA_Chongqin_2015	SURFACE	ABSORB_GAIN_ID	14	ABSORB_GAIN_ID
+CoA_Chongqin_2015	SURFACE	INDEX_IN_A_THIS_ROOM	15	表面节点在表面所属的房间的传热方程组A矩阵中的下标
+CoA_Chongqin_2015	SURFACE	INDEX_IN_A_OPP_ROOM	16	表面节点在对面表面（组成同一围护）所属的房间的传热方程组A矩阵中的下标
+CoA_Chongqin_2015	SURFACE	SKY_RADIA_COEF	17	乘以温差和面积就是换热量，温差是天空与表面的温差
+CoA_Chongqin_2015	SURFACE	OF_SHADING	18	仅用于遮阳表面，标识该表面所属的遮阳，对应SHADING表
+CoA_Chongqin_2015	SURFACE	EXT_PROPERTY	19	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	SURFACE_SUN_SHADE_MAP	SURFACE_ID	1	表面的ID
+CoA_Chongqin_2015	SURFACE_SUN_SHADE_MAP	AZIMUTH	2	太阳朝向角，正南为0度，顺时针方向至360度
+CoA_Chongqin_2015	SURFACE_SUN_SHADE_MAP	TILT	3	太阳高度角，水平为0，垂直为90度
+CoA_Chongqin_2015	SURFACE_SUN_SHADE_MAP	RATIO	4	表面的所受的太阳光所占比例，没有任何阴影时为1，全为阴影时为0
+CoA_Chongqin_2015	SURFACE_SUN_SHADE_MAP	WINDOW_ID	5	内表面的光源窗的编号
+CoA_Chongqin_2015	SYS_AIRFLOOR	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_AIRFLOOR	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_AIRFLOOR	NAME	3	NAME
+CoA_Chongqin_2015	SYS_AIRFLOOR	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_AIRFLOOR	RESI	5	RESI
+CoA_Chongqin_2015	SYS_AIRFLOOR	D	6	D
+CoA_Chongqin_2015	SYS_AIRFLOOR	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_AIRFLOOR	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_AIRFLOOR	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_AIRFLOOR	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	SYS_AIRFLOOR_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_AIRFLOOR_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_AIRFLOOR_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_AIRFLOOR_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_AIRFLOOR_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_APP_MATERIAL	APP_MATERIAL_ID	1	材料编号
+CoA_Chongqin_2015	SYS_APP_MATERIAL	COLOR	2	颜色标记
+CoA_Chongqin_2015	SYS_APP_MATERIAL	GROUP_ID	3	类型
+CoA_Chongqin_2015	SYS_APP_MATERIAL	NAME	4	材料英文名称
+CoA_Chongqin_2015	SYS_APP_MATERIAL	CNAME	5	材料中文名称
+CoA_Chongqin_2015	SYS_APP_MATERIAL	CONDUCTIVITY	6	导热系数(W/m.K)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	DENSITY	7	密度(kg/m^3)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	SPECIFIC_HEAT	8	定压比热(J/kg.K)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	S	9	蓄热系数(W/m^2.K)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	STEAM	10	蒸汽渗透系数(g/m.h.mmHg)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	EX_COEF	11	消光系数
+CoA_Chongqin_2015	SYS_APP_MATERIAL	RF_COEF	12	折射指数
+CoA_Chongqin_2015	SYS_APP_MATERIAL	EMISSIVITY	13	发射率
+CoA_Chongqin_2015	SYS_APP_MATERIAL	THICK	14	厚度(mm)
+CoA_Chongqin_2015	SYS_APP_MATERIAL	PATTERN	15	图例
+CoA_Chongqin_2015	SYS_APP_MATERIAL	ERASEFLAG	16	删除标记
+CoA_Chongqin_2015	SYS_APP_MATERIAL	FLAG	17	标记
+CoA_Chongqin_2015	SYS_APP_MATERIAL	ANOTATION	18	备注
+CoA_Chongqin_2015	SYS_CURTAIN	CURTAIN_ID	1	CURTAIN_ID
+CoA_Chongqin_2015	SYS_CURTAIN	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_CURTAIN	NAME	3	NAME
+CoA_Chongqin_2015	SYS_CURTAIN	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_CURTAIN	EXT_COEF	5	EXT_COEF
+CoA_Chongqin_2015	SYS_CURTAIN	REF_COEF	6	REF_COEF
+CoA_Chongqin_2015	SYS_CURTAIN	LONG_WAVE_REF	7	LONG_WAVE_REF
+CoA_Chongqin_2015	SYS_CURTAIN	SHIELD_INDEX	8	SHIELD_INDEX
+CoA_Chongqin_2015	SYS_CURTAIN	ANOTATION	9	ANOTATION
+CoA_Chongqin_2015	SYS_DOOR	DOOR_ID	1	主索引,门编号
+CoA_Chongqin_2015	SYS_DOOR	GROUP_ID	2	类型
+CoA_Chongqin_2015	SYS_DOOR	NAME	3	英文名
+CoA_Chongqin_2015	SYS_DOOR	CNAME	4	中文名
+CoA_Chongqin_2015	SYS_DOOR	CONDUCT_CO	5	导热系数
+CoA_Chongqin_2015	SYS_DOOR	MATERIAL_ID	6	材料表中门体材料的ID
+CoA_Chongqin_2015	SYS_DOOR	GAP_LENGTH	7	缝隙长度
+CoA_Chongqin_2015	SYS_DOOR	GLASS_RAT	8	透光比率
+CoA_Chongqin_2015	SYS_DOOR	APP_ID	9	透光材料表中透光材料的ID
+CoA_Chongqin_2015	SYS_DOOR	APP_FLAG	10	透光标记
+CoA_Chongqin_2015	SYS_DOOR	FLAG	11	引用标记
+CoA_Chongqin_2015	SYS_DOOR	ERASEFLAG	12	删除标记
+CoA_Chongqin_2015	SYS_DOOR	ANOTATION	13	附注
+CoA_Chongqin_2015	SYS_DUCT_MODAL	AREA	1	面积(单位m^2)
+CoA_Chongqin_2015	SYS_DUCT_MODAL	WIDTH	2	宽(单位mm)
+CoA_Chongqin_2015	SYS_DUCT_MODAL	HIGH	3	高(单位mm)
+CoA_Chongqin_2015	SYS_DUCT_MODAL	ANOTATION	4	说明
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	NAME	3	NAME
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	RESI	5	RESI
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	D	6	D
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_GROUNDFLOOR	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	SYS_GROUNDFLOOR_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_GROUNDFLOOR_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_GROUNDFLOOR_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_GROUNDFLOOR_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_GROUNDFLOOR_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_GROUPS	TYPE	1	TYPE
+CoA_Chongqin_2015	SYS_GROUPS	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_GROUPS	NAME	3	NAME
+CoA_Chongqin_2015	SYS_GROUPS	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_GROUPS	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_INWALL_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_INWALL_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_INWALL_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_INWALL_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_INWALL_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_MATERIAL	MATERIAL_ID	1	MATERIAL_ID
+CoA_Chongqin_2015	SYS_MATERIAL	COLOR	2	COLOR
+CoA_Chongqin_2015	SYS_MATERIAL	GROUP_ID	3	GROUP_ID
+CoA_Chongqin_2015	SYS_MATERIAL	NAME	4	NAME
+CoA_Chongqin_2015	SYS_MATERIAL	CNAME	5	CNAME
+CoA_Chongqin_2015	SYS_MATERIAL	CONDUCTIVITY	6	导热系数(W/m.K)
+CoA_Chongqin_2015	SYS_MATERIAL	DENSITY	7	密度(kg/m^3)
+CoA_Chongqin_2015	SYS_MATERIAL	SPECIFIC_HEAT	8	定压比热(J/kg.K)
+CoA_Chongqin_2015	SYS_MATERIAL	S	9	蓄热系数(W/m^2.K)
+CoA_Chongqin_2015	SYS_MATERIAL	STEAM	10	蒸气渗透系数(g/m.h.mmHg)
+CoA_Chongqin_2015	SYS_MATERIAL	PATTERN	11	PATTERN
+CoA_Chongqin_2015	SYS_MATERIAL	ERASEFLAG	12	ERASEFLAG
+CoA_Chongqin_2015	SYS_MATERIAL	FLAG	13	FLAG
+CoA_Chongqin_2015	SYS_MATERIAL	ANOTATION	14	ANOTATION
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	NAME	3	NAME
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	RESI	5	RESI
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	D	6	D
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_MIDDLEFLOOR_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_OPTION	OPTION_ID	1	编号
+CoA_Chongqin_2015	SYS_OPTION	KEYWORD	2	关键词
+CoA_Chongqin_2015	SYS_OPTION	EXPLAIN	3	解释
+CoA_Chongqin_2015	SYS_OPTION	TYPE	4	1: BOOL 型， 2： 整型， 3：实型， 4：字符串
+CoA_Chongqin_2015	SYS_OPTION	OPTION_STRING	5	用sscanf 读这个串可以可到对应值
+CoA_Chongqin_2015	SYS_OUTWALL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_OUTWALL	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_OUTWALL	NAME	3	NAME
+CoA_Chongqin_2015	SYS_OUTWALL	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_OUTWALL	RESI	5	导热热阻(m^2.K/W)
+CoA_Chongqin_2015	SYS_OUTWALL	D	6	热惰性指标
+CoA_Chongqin_2015	SYS_OUTWALL	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_OUTWALL	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_OUTWALL	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_OUTWALL	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	SYS_OUTWALL_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_OUTWALL_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_OUTWALL_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_OUTWALL_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_OUTWALL_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_ROOF	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_ROOF	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_ROOF	NAME	3	NAME
+CoA_Chongqin_2015	SYS_ROOF	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_ROOF	RESI	5	RESI
+CoA_Chongqin_2015	SYS_ROOF	D	6	D
+CoA_Chongqin_2015	SYS_ROOF	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_ROOF	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_ROOF	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_ROOF	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	SYS_ROOF_MATERIAL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_ROOF_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_ROOF_MATERIAL	MATERIAL_ID	3	MATERIAL_ID
+CoA_Chongqin_2015	SYS_ROOF_MATERIAL	LENGTH	4	LENGTH
+CoA_Chongqin_2015	SYS_ROOF_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	SYS_SHADING	SHIELD_ID	1	SHIELD_ID
+CoA_Chongqin_2015	SYS_SHADING	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_SHADING	NAME	3	NAME
+CoA_Chongqin_2015	SYS_SHADING	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_SHADING	A	5	几何参数WIDTH
+CoA_Chongqin_2015	SYS_SHADING	B	6	几何参数 LEFT WIDTH
+CoA_Chongqin_2015	SYS_SHADING	C	7	几何参数 RIGHT WIDTH
+CoA_Chongqin_2015	SYS_SHADING	D	8	几何参数 HEIGHT
+CoA_Chongqin_2015	SYS_SHADING	E	9	几何参数 DIFFERENCE
+CoA_Chongqin_2015	SYS_SHADING	F	10	几何参数 LEFT DIFFERENCE
+CoA_Chongqin_2015	SYS_SHADING	G	11	几何参数 RIGHT DIFFERENCE
+CoA_Chongqin_2015	SYS_SHADING	H1	12	几何参数 LEFT HEIGHT
+CoA_Chongqin_2015	SYS_SHADING	H2	13	几何参数 RIGHT HEIGHT
+CoA_Chongqin_2015	SYS_SHADING	ANOTATION	14	ANOTATION
+CoA_Chongqin_2015	SYS_WINDOW	WINDOW_ID	1	WINDOW_ID
+CoA_Chongqin_2015	SYS_WINDOW	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_WINDOW	NAME	3	NAME
+CoA_Chongqin_2015	SYS_WINDOW	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_WINDOW	HEAT_RESISTENCE	5	HEAT_RESISTENCE
+CoA_Chongqin_2015	SYS_WINDOW	GLASS_NET_RATIO	6	GLASS_NET_RATIO
+CoA_Chongqin_2015	SYS_WINDOW	REFLECT_CO	7	REFLECT_CO
+CoA_Chongqin_2015	SYS_WINDOW	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_WINDOW	SPFLAG	9	SPFLAG
+CoA_Chongqin_2015	SYS_WINDOW	ERASEFLAG	10	ERASEFLAG
+CoA_Chongqin_2015	SYS_WINDOW	ANOTATION	11	ANOTATION
+CoA_Chongqin_2015	SYS_WINDOW_MATERIAL	WINDOW_ID	1	WINDOW_ID
+CoA_Chongqin_2015	SYS_WINDOW_MATERIAL	LAYER_NO	2	LAYER_NO
+CoA_Chongqin_2015	SYS_WINDOW_MATERIAL	MATERIAL_ID	3	为0时表示空气
+CoA_Chongqin_2015	SYS_WINDOW_MATERIAL	LENGTH	4	空气层厚度(若是空气,则此数据无用,只是一个冗余数据)
+CoA_Chongqin_2015	SYS_WINDOW_MATERIAL	ANOTATION	5	ANOTATION
+CoA_Chongqin_2015	UNIQUE_ID	ID	1	编号
+CoA_Chongqin_2015	UNIQUE_ID	REMARK	2	调试时的信息
+CoA_Chongqin_2015	USER_DEF_DEV	ID	1	编号
+CoA_Chongqin_2015	USER_DEF_DEV	NAME	2	名称
+CoA_Chongqin_2015	USER_DEF_DEV	OF_ROOM	3	所属房间
+CoA_Chongqin_2015	USER_DEF_DEV	DLL_FILE_NAME	4	设备DLL的文件名,在安装目录的USER目录下，用户自定义的设备的计算接口在这个文件中
+CoA_Chongqin_2015	USER_DEF_DLL	DLL_ID	1	编号
+CoA_Chongqin_2015	USER_DEF_DLL	TYPE	2	1: 窗
+CoA_Chongqin_2015	USER_DEF_DLL	NAME	3	名称
+CoA_Chongqin_2015	USER_DEF_DLL	DLL	4	存DLL本身
+CoA_Chongqin_2015	VERSION_CONTROL	MAJOR	1	主版本号
+CoA_Chongqin_2015	VERSION_CONTROL	MINOR	2	副版本号
+CoA_Chongqin_2015	WATER_SYS	WATER_SYS_ID	1	编号
+CoA_Chongqin_2015	WATER_SYS	NAME	2	名称
+CoA_Chongqin_2015	WATER_SYS	STATIC_NODE_ID	3	静压点的ID
+CoA_Chongqin_2015	WATER_SYS	ACTIVATED_NET	4	ACTIVATED_NET
+CoA_Chongqin_2015	WATER_SYSTEM	WATER_SYSTEM_ID	1	水系统编号
+CoA_Chongqin_2015	WATER_SYSTEM	NAME	2	水系统名称(好像不太有用,先留着吧)
+CoA_Chongqin_2015	WATER_SYSTEM	SECOND_PUMP_COOL	3	冷源是否有二次泵
+CoA_Chongqin_2015	WATER_SYSTEM	SECOND_PUMP_HEAT	4	热源是否有二次泵
+CoA_Chongqin_2015	WATER_SYSTEM	PRIM_PUMP_CTRL_COOL	5	冷源一次泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	SECD_PUMP_CTRL_COOL	6	冷源二次泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	PRIM_PUMP_CTRL_HEAT	7	热源一次泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	SECD_PUMP_CTRL_HEAT	8	热源二次泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	COOL_PUMP_CTRL	9	冷却泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	REFILL_PUMP_CTRL	10	补水泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	HEAT_PUMP_CTRL	11	热源泵控制方式 0:一机对一泵 1：台数控制  2：变频控制
+CoA_Chongqin_2015	WATER_SYSTEM	COOLINGTOWER_CTRL	12	冷却塔控制方式 0:一机对一塔 1：台数控制
+CoA_Chongqin_2015	WATER_SYSTEM	HEATEXCHANGER_CTRL	13	换热器控制方式 0:一对一 1：台数控制
+CoA_Chongqin_2015	WATER_SYSTEM	HEATEXCHANGER	14	是否有换热器
+CoA_Chongqin_2015	WATER_SYSTEM	HEATSOURCE_PUMP	15	是否有热源泵
+CoA_Chongqin_2015	WATER_SYSTEM	TANK_BYBASS_COOL	16	冷源分集水箱有无旁通，0：无旁通  >0：有旁通(将来可存旁通设备编号)
+CoA_Chongqin_2015	WATER_SYSTEM	TANK_BYBASS_HEAT	17	热源分集水箱有无旁通，0：无旁通  >0：有旁通(将来可存旁通设备编号)
+CoA_Chongqin_2015	WATER_SYSTEM	PRESSURE_LOSS1_COOL	18	冷源系统用户侧管网压降（kPa)
+CoA_Chongqin_2015	WATER_SYSTEM	PRESSURE_LOSS2_COOL	19	冷源系统冷却侧管网压降（kPa)
+CoA_Chongqin_2015	WATER_SYSTEM	PRESSURE_LOSS1_HEAT	20	热源系统用户侧管网压降（kPa)
+CoA_Chongqin_2015	WATER_SYSTEM	PRESSURE_LOSS2_HEAT	21	热源系统热源侧管网压降（kPa)
+CoA_Chongqin_2015	WATER_SYSTEM	FOUR_PIPE_SYS	22	两管制或四管制，TRUE为四管制
+CoA_Chongqin_2015	WATER_SYSTEM	WATER_TEMPERATURE	23	两管制供水温度作息或四管制的冷水供水温度作息
+CoA_Chongqin_2015	WATER_SYSTEM	HOT_WATER_TEMPERATURE	24	四管制的热水供水温度作息
+CoA_Chongqin_2015	WATER_SYSTEM	BLANK_1	25	预留
+CoA_Chongqin_2015	WATER_SYSTEM	BLANK_2	26	预留
+CoA_Chongqin_2015	WATER_SYSTEM	EXT_PROPERTY	27	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	WINDOW	ID	1	ID, 同时为图上的句柄
+CoA_Chongqin_2015	WINDOW	NAME	2	名称
+CoA_Chongqin_2015	WINDOW	SIDE1	3	第一平面，面向图上有向线段方向，左手边的平面(所指的surface)
+CoA_Chongqin_2015	WINDOW	SIDE2	4	第二平面，面向图上有向线段方向，右手边的平面
+CoA_Chongqin_2015	WINDOW	MIDDLE_PLANE	5	中平面
+CoA_Chongqin_2015	WINDOW	OF_ENCLOSURE	6	所在的墙的ID
+CoA_Chongqin_2015	WINDOW	WINDOW_CONSTRUCTION	7	窗结构编号 对应系统库中SYS_WINDOW表中的WINDOW_ID，为0则使用缺省值。
+CoA_Chongqin_2015	WINDOW	SHADING	8	旧的窗遮阳构件编号 对应SYS_SHADING中的ID，0表示没有遮阳。
+CoA_Chongqin_2015	WINDOW	SHADINGID	9	窗遮阳编号 对应SHADING中的ID，为0则表示没有外遮阳。(2.6版结构为避免和旧的遮阳定义模式冲突而增加)
+CoA_Chongqin_2015	WINDOW	CURTAIN	10	窗帘编号 对应系统库中SYS_CURTAIN表中的CURTAIN_ID，为0则使用缺省值。
+CoA_Chongqin_2015	WINDOW	CUR_REF_SCHEDULE	11	窗帘反射率作息模式编号
+CoA_Chongqin_2015	WINDOW	SCHEDULE	12	开启作息模式编号（预留）
+CoA_Chongqin_2015	WINDOW	USER_DEF_DLL	13	对应USER_DEF_DLL表中的用户自定义DLL的DLL_ID
+CoA_Chongqin_2015	WINDOW	SUN_TRANS_DIST_MODE	14	太阳透过热扰的分配系数
+CoA_Chongqin_2015	WINDOW	OF_STOREY	15	所在的楼层的ID，如果是在地板或天花板上时，指天花板所在的楼层的ID
+CoA_Chongqin_2015	WINDOW	TYPE	16	类型
+CoA_Chongqin_2015	WINDOW	K	17	凸窗面积修正系数
+CoA_Chongqin_2015	WINDOW	SC	18	外遮阳对散射辐射的遮阳系数
+CoA_Chongqin_2015	WINDOW	EXT_PROPERTY	19	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	ID	1	编号
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	NAME	2	窗类型名
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	LAYER_NUM	3	窗户透光材料层数
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	K	4	K值
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	SC	5	SC值
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	ENERGY_TRANS_RATIO	6	太阳能透过率
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	ENERGY_REFLECT_RATIO	7	太阳能反射率
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	LIGHT_TRANS_RATIO	8	可见光透过率
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	LIGHT_REFLECT_RATIO	9	可见光反射率
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	REMARK	10	备注
+CoA_Chongqin_2015	WINDOW_TYPE_DATA	EXT_PROPERTY	11	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	CHILLER	CHILLER_ID	1	冷机ID
+CoA_Chongqin_2015	CHILLER	NAME	2	名称
+CoA_Chongqin_2015	CHILLER	LIB_CHILLER_ID	3	设备库中的ID
+CoA_Chongqin_2015	CHILLER	PRIME_PUMP	4	一次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	CHILLER	SECOND_PUMP	5	二次泵的ID(一机对一泵情况)
+CoA_Chongqin_2015	CHILLER	COOLINGTOWER	6	冷却塔的ID(一机对一塔情况)
+CoA_Chongqin_2015	CHILLER	PRIORITY	7	使用优先级(还需要考虑具体用法)
+CoA_Chongqin_2015	CHILLER	BLANK_1	8	预留
+CoA_Chongqin_2015	CHILLER	BLANK_2	9	预留
+CoA_Chongqin_2015	CHILLER	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	CPS	CPS_ID	1	CPS 的 ID
+CoA_Chongqin_2015	CPS	NAME	2	名称
+CoA_Chongqin_2015	CPS	WATER_SYS	3	水系统的ID,对应WATER_SYS表中的WATER_SYS_ID
+CoA_Chongqin_2015	DN_FCU	ID	1	标志ID
+CoA_Chongqin_2015	DN_FCU	FLOW_TYPE	2	风量类型:0 计算结果输入 1 用户输入
+CoA_Chongqin_2015	DN_FCU	FLOW_RATE	3	风量(当风量类型为1时有效)
+CoA_Chongqin_2015	DN_FCU	AREA	4	出风口处面积
+CoA_Chongqin_2015	DN_FCU	KSAI	5	局阻系数
+CoA_Chongqin_2015	DN_FCU	ROOM_ID	6	所在的房间的ID
+CoA_Chongqin_2015	DN_FCU	POINT_ID	7	所在的点的ID
+CoA_Chongqin_2015	DOOR	ID	1	ID,同时是图上的HANDLE
+CoA_Chongqin_2015	DOOR	NAME	2	名字
+CoA_Chongqin_2015	DOOR	SIDE1	3	第一平面，面向图上有向线段方向，左手边的平面
+CoA_Chongqin_2015	DOOR	SIDE2	4	第二平面，面向图上有向线段方向，右手边的平面
+CoA_Chongqin_2015	DOOR	MIDDLE_PLANE	5	中平面的ID
+CoA_Chongqin_2015	DOOR	OF_ENCLOSURE	6	所在的墙的ID
+CoA_Chongqin_2015	DOOR	DOOR_CONSTRUCTION	7	系统库中DOOR表中的DOOR_ID关联，为0则使用缺省值。
+CoA_Chongqin_2015	DOOR	SCHEDULE	8	开启作息模式编号(预留)
+CoA_Chongqin_2015	DOOR	USER_DEF_DLL	9	用户自定义门的计算DLL文件名，非全路径，在安装目录的USER目录下。
+CoA_Chongqin_2015	DOOR	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ENVIRONMENT	ENVIRONMENT_ID	1	编号
+CoA_Chongqin_2015	ENVIRONMENT	NAME	2	名称
+CoA_Chongqin_2015	ENVIRONMENT	SOUTH_DIRECTION	3	图中南向与X轴成的角度（°）
+CoA_Chongqin_2015	ENVIRONMENT	DATA_SOURCE	4	气象数据的来源标记, 0-3位(0-15)来源: 0-内置, 1-DeST气象数据库, 2-公开的气象数据集, 3-用户输入, 4-15其它数据源; 4-7位(0-15)类型: 0-典型年,1-焓值极高年,2-辐射极低年,3-辐射极高年,4-气温极低年,5-气温极高年
+CoA_Chongqin_2015	ENVIRONMENT	CITY_ID	5	气象台站ID，北京54511
+CoA_Chongqin_2015	ENVIRONMENT	CITY_NAME	6	城市名称
+CoA_Chongqin_2015	ENVIRONMENT	PROVINCE	7	省份
+CoA_Chongqin_2015	ENVIRONMENT	COUNTRY	8	国家
+CoA_Chongqin_2015	ENVIRONMENT	LATITUDE	9	纬度: 北纬0-90, 南纬0-(-90)
+CoA_Chongqin_2015	ENVIRONMENT	LONGITUDE	10	经度: 东经0-180, 西经0-(-180)
+CoA_Chongqin_2015	ENVIRONMENT	ELEVATION	11	拔海高度(m)
+CoA_Chongqin_2015	ENVIRONMENT	AIR_PRESSURE	12	常年大气压(Pa)
+CoA_Chongqin_2015	ENVIRONMENT	PROPERTY	13	台站属性,0-15位(0-36000):时区经度(东经0-18000,西经18000-36000,含两位小数); 16位:当地太阳时标记; 17位:风速风向缺测标记;18位:地表温度缺测标记;19位:天空等效温度缺测标记;20位:逐时大气压力缺测标记
+CoA_Chongqin_2015	ENVIRONMENT	GROUND_REFLECT_COEF	14	地面反射率
+CoA_Chongqin_2015	ENVIRONMENT	X	15	图中DPECompass(指北针）放置位置的X坐标
+CoA_Chongqin_2015	ENVIRONMENT	Y	16	图中DPECompass(指北针）放置位置的Y坐标
+CoA_Chongqin_2015	ENVIRONMENT	Z	17	图中DPECompass(指北针）放置位置的Z坐标
+CoA_Chongqin_2015	ENVIRONMENT	EXT_PROPERTY	18	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	GEOMETRY	GEOMETRY_ID	1	ID
+CoA_Chongqin_2015	GEOMETRY	NAME	2	名称
+CoA_Chongqin_2015	GEOMETRY	BOUNDARY_LOOP_ID	3	最外围的loop_point的ID
+CoA_Chongqin_2015	HACNET_NET	NET_ID	1	""
+CoA_Chongqin_2015	HACNET_NET	SINGLE_LINE_NET	2	YES--单线制 NO--双线制
+CoA_Chongqin_2015	HACNET_NET	ACTIVE_SUBNET	3	当前子网号
+CoA_Chongqin_2015	HACNET_NET	PRECISION	4	计算精度
+CoA_Chongqin_2015	HACNET_NET	bAfterCal	5	是否可以显示压力和流量
+CoA_Chongqin_2015	HACNET_NET	bDHCMode	6	是否为区域供热供冷水系统方式
+CoA_Chongqin_2015	HACNET_NET	sVersion	7	版本号
+CoA_Chongqin_2015	HACNET_NET	dblFlowToArea	8	供热流量标准(单位：Kg / m2 * H )
+CoA_Chongqin_2015	HACNET_NET	dblQToArea	9	供热热量指标（单位：W/m2*H）
+CoA_Chongqin_2015	HACNET_NET	dblHeatCalFactor	10	供热稳态计算因子
+CoA_Chongqin_2015	HACNET_TEXT	TEXT_ID	1	""
+CoA_Chongqin_2015	HACNET_TEXT	TEXT	2	""
+CoA_Chongqin_2015	HACNET_TEXT	X	3	x坐标(pixel)
+CoA_Chongqin_2015	HACNET_TEXT	Y	4	y坐标(pixel)
+CoA_Chongqin_2015	HACNET_TEXT	COLOR	5	文字颜色
+CoA_Chongqin_2015	HACNET_TEXT	lfHeight	6	高度
+CoA_Chongqin_2015	HACNET_TEXT	lfWidth	7	宽度
+CoA_Chongqin_2015	HACNET_TEXT	lfEscapement	8	文本角度
+CoA_Chongqin_2015	HACNET_TEXT	lfOrientation	9	字体角度
+CoA_Chongqin_2015	HACNET_TEXT	lfWeight	10	磅数
+CoA_Chongqin_2015	HACNET_TEXT	OF_SUBNET	11	""
+CoA_Chongqin_2015	HACNET_TEXT	lfFaceName	12	""
+CoA_Chongqin_2015	HACNET_TEXT	SHOW	13	是否显示用于通用字体
+CoA_Chongqin_2015	HACNET_TEXT	KIND	14	种类---0表示普通,其余见程序
+CoA_Chongqin_2015	LIB_BOILER	LIB_BOILER_ID	1	设备编号
+CoA_Chongqin_2015	LIB_BOILER	NAME	2	热源型号名称
+CoA_Chongqin_2015	LIB_BOILER	TYPE	3	热源类型：0 热水锅炉，1 蒸汽锅炉，2 外网热水， 3 外网蒸气，4 直燃机，5风源热泵, 6水源热泵
+CoA_Chongqin_2015	LIB_BOILER	CAPACITY	4	热源容量(kW)，外网热源为空
+CoA_Chongqin_2015	LIB_BOILER	FlOWRATE	5	热源水流量或蒸汽流量(m3/h)，外网热源为空
+CoA_Chongqin_2015	LIB_BOILER	PRESSURE_LOSS	6	热源压降(kPa)：外网热源为空
+CoA_Chongqin_2015	LIB_BOILER	STEAM_PRESSURE	7	热源供蒸汽压力(kPa)：蒸气热源需要
+CoA_Chongqin_2015	LIB_BOILER	SUPPLY_TEMPERATURE	8	热源供水温度或蒸汽温度(℃)
+CoA_Chongqin_2015	LIB_BOILER	RETURN_TEMPERATURE	9	热源回水温度(℃)
+CoA_Chongqin_2015	LIB_BOILER	EFFICIENCY	10	锅炉效率：锅炉热源需要
+CoA_Chongqin_2015	LIB_BOILER	COP	11	额定COP，热泵需要
+CoA_Chongqin_2015	LIB_BOILER	COP_CURVE	12	热源效率曲线,对应LIB_CURVE表中数据LIB_CURVE_ID
+CoA_Chongqin_2015	LIB_BOILER	FUEL_TYPE	13	热源燃料类型：0 无 1 煤，2 油，3 天然气，4 电，5 热水，6 蒸汽
+CoA_Chongqin_2015	LIB_BOILER	FUEL_HEAT_VALUE	14	燃料热值(kJ/kg)
+CoA_Chongqin_2015	LIB_BOILER	CONSUME_FUEL	15	额定工况下燃料的消耗量(kg/h) 直燃机有此项
+CoA_Chongqin_2015	LIB_BOILER	CONSUME_ELEC	16	额定工况下耗电量(kW) 直燃机有此项
+CoA_Chongqin_2015	LIB_BOILER	FANPUMP_NUM	17	风(水)源热泵机组需输入风机(水泵)台数
+CoA_Chongqin_2015	LIB_BOILER	FANPUMP_POWER	18	风(水)源热泵机组需输入风机(水泵)功率(kW)
+CoA_Chongqin_2015	LIB_BOILER	PRODUCT_ID	19	产品具体信息,对应LIB_PRODUCT表中的数据
+CoA_Chongqin_2015	LIB_BOILER	BLANK_1	20	预留
+CoA_Chongqin_2015	LIB_BOILER	BLANK_2	21	预留
+CoA_Chongqin_2015	LIB_BOILER	EXT_PROPERTY	22	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_PRODUCT	PRODUCT_ID	1	设备信息的ID
+CoA_Chongqin_2015	LIB_PRODUCT	NAME	2	设备名称
+CoA_Chongqin_2015	LIB_PRODUCT	PRODUCER	3	生产厂家
+CoA_Chongqin_2015	LIB_PRODUCT	CONTACT	4	定货联系方式
+CoA_Chongqin_2015	LIB_PRODUCT	PRICE	5	单价(元)
+CoA_Chongqin_2015	LIB_PRODUCT	LENGTH	6	长度(m)
+CoA_Chongqin_2015	LIB_PRODUCT	WIDTH	7	宽度(m)
+CoA_Chongqin_2015	LIB_PRODUCT	HEIGHT	8	高度(m)
+CoA_Chongqin_2015	LIB_PRODUCT	WEIGHT	9	重量(kg)
+CoA_Chongqin_2015	LIB_PRODUCT	EXPIRE	10	信息有效期
+CoA_Chongqin_2015	LIB_PRODUCT	PICTURE	11	设备图片等详细文档
+CoA_Chongqin_2015	LIB_PRODUCT	NOTE	12	设备简介
+CoA_Chongqin_2015	LIB_PRODUCT	EXT_PROPERTY	13	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	OCCUPANT_GAINS	GAIN_ID	1	编号
+CoA_Chongqin_2015	OCCUPANT_GAINS	NAME	2	名称
+CoA_Chongqin_2015	OCCUPANT_GAINS	OF_ROOM	3	所在房间
+CoA_Chongqin_2015	OCCUPANT_GAINS	SCHEDULE	4	作息模式
+CoA_Chongqin_2015	OCCUPANT_GAINS	USER_DEFINED	5	是否用户指定
+CoA_Chongqin_2015	OCCUPANT_GAINS	MAXNUMBER	6	最多人数(人 或 人/平米）
+CoA_Chongqin_2015	OCCUPANT_GAINS	MINNUMBER	7	最少人数(人 或 人/平米）
+CoA_Chongqin_2015	OCCUPANT_GAINS	HEAT_PER_PERSON	8	每人产热量（W）
+CoA_Chongqin_2015	OCCUPANT_GAINS	DAMP_PER_PERSON	9	每人产湿量（Kg/hr）
+CoA_Chongqin_2015	OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	每人所需最小新风量(m^3/h)
+CoA_Chongqin_2015	OCCUPANT_GAINS	PER_AREA	11	是否按每平米计
+CoA_Chongqin_2015	OCCUPANT_GAINS	A	12	A
+CoA_Chongqin_2015	OCCUPANT_GAINS	B	13	B
+CoA_Chongqin_2015	OCCUPANT_GAINS	DIST_MODE	14	分配模式
+CoA_Chongqin_2015	OCCUPANT_GAINS	OF_STOREY	15	所属楼层的ID
+CoA_Chongqin_2015	OCCUPANT_GAINS	X	16	图中人员得热的X坐标
+CoA_Chongqin_2015	OCCUPANT_GAINS	Y	17	图中人员得热的Y坐标
+CoA_Chongqin_2015	OCCUPANT_GAINS	Z	18	图中人员得热的Z坐标
+CoA_Chongqin_2015	PN_POINT	ID	1	标志ID
+CoA_Chongqin_2015	PN_POINT	X	2	点的X坐标
+CoA_Chongqin_2015	PN_POINT	Y	3	点的Y坐标
+CoA_Chongqin_2015	PN_POINT	STOREY_ID	4	所在的层的ID
+CoA_Chongqin_2015	ROOM_GROUP	ROOM_GROUP_ID	1	编号
+CoA_Chongqin_2015	ROOM_GROUP	NAME	2	名称
+CoA_Chongqin_2015	ROOM_GROUP	OF_BUILDING	3	所属建筑的编号，与BUILDING表的BUILDING_ID关联
+CoA_Chongqin_2015	ROOM_GROUP	OF_AC_SYS	4	所属空调系统的ID，为0时不属于任何系统。
+CoA_Chongqin_2015	ROOM_GROUP	IS_AC_ROOM	5	非0时表示这是个空调房间
+CoA_Chongqin_2015	ROOM_GROUP	AC_SCHEDULE_ID	6	空调开停时间的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_GROUP	SET_T_MIN_SCHEDULE	7	房间设定温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_GROUP	SET_T_MAX_SCHEDULE	8	房间设定温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_GROUP	SET_RH_MIN_SCHEDULE	9	房间设定湿度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_GROUP	SET_RH_MAX_SCHEDULE	10	房间设定湿度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID
+CoA_Chongqin_2015	ROOM_GROUP	AC_T_MIN_SCHEDULE	11	空调开启温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID（用于独立空调系统）
+CoA_Chongqin_2015	ROOM_GROUP	AC_T_MAX_SCHEDULE	12	空调开启温度ID， 对应SCHEDULE_YEAR中的SCHEDULE_ID（用于独立空调系统）
+CoA_Chongqin_2015	ROOM_GROUP	DO_STIFFEN	13	计算landa,fai时，是否进行Stiffen刚性化处理，刚性化处理可以增强计算的稳定性。
+CoA_Chongqin_2015	ROOM_GROUP	STIFFEN_EXPECT	14	做Stiffen刚性化处理时的期望值
+CoA_Chongqin_2015	ROOM_GROUP	DO_ZIP_SIMULAR_LANDA	15	计算landa,Fai后，是否将相近/似的landarZip以提高计算速度
+CoA_Chongqin_2015	ROOM_GROUP	ZIP_TOLERANCE	16	在Zip landa时的容忍度，相差不大于ZIP_TOLERANCE的landa被认为是相同的。
+CoA_Chongqin_2015	ROOM_GROUP	HVAC_GAIN_ID	17	HVAC热扰的ID，这个值也必须是全局唯一的。
+CoA_Chongqin_2015	ROOM_GROUP	VIEW_AIR_VOLUME	18	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	ROOM_GROUP	VIEW_TERMINAL_LOAD	19	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	ROOM_GROUP	VIEW_TEMPERATURE	20	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	ROOM_GROUP	VIEW_DAMP	21	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	ROOM_GROUP	VIEW_BASE_TEMPERATURE	22	结果浏览界面的选项，是否显示此曲线
+CoA_Chongqin_2015	ROOM_GROUP	EXT_PROPERTY	23	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	SOLAR_ENERGY_COLLECTOR	ROOM_ID	1	所属房间
+CoA_Chongqin_2015	SOLAR_ENERGY_COLLECTOR	ENCLOSURE	2	所属围护(默认0指屋顶)
+CoA_Chongqin_2015	SOLAR_ENERGY_COLLECTOR	AREA_RATIO	3	所占面积比例
+CoA_Chongqin_2015	SOLAR_ENERGY_COLLECTOR	LIB_SOLAR_ENERGY_COLLECTOR_ID	4	性能参数库编号
+CoA_Chongqin_2015	SOLAR_ENERGY_COLLECTOR	EXT_PROPERTY	5	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	SYS_CITY	CITY_ID	1	城市编号
+CoA_Chongqin_2015	SYS_CITY	COUNTRY	2	国别(英文名称)
+CoA_Chongqin_2015	SYS_CITY	CCOUNTRY	3	国别(中文名称)
+CoA_Chongqin_2015	SYS_CITY	PROVINCE	4	省份(英文名称)
+CoA_Chongqin_2015	SYS_CITY	CPROVINCE	5	省份(中文名称)
+CoA_Chongqin_2015	SYS_CITY	NAME	6	城市(英文名称)
+CoA_Chongqin_2015	SYS_CITY	CNAME	7	城市(中文名称)
+CoA_Chongqin_2015	SYS_CITY	LONGITUDE	8	经度
+CoA_Chongqin_2015	SYS_CITY	LATITUDE	9	纬度
+CoA_Chongqin_2015	SYS_CITY	ELEVATION	10	海拔
+CoA_Chongqin_2015	SYS_CITY	WEATHER_TYPE	11	气候类型
+CoA_Chongqin_2015	SYS_CITY	CLIMATE_ID	12	对应气象数据表SYS_CLIMATE_DATA的ID
+CoA_Chongqin_2015	SYS_CITY	GROUND_ID	13	对应地温数据表SYS_GROUND_DATA的ID
+CoA_Chongqin_2015	SYS_CITY	NOTE	14	说明
+CoA_Chongqin_2015	SYS_INWALL	STRUCT_ID	1	STRUCT_ID
+CoA_Chongqin_2015	SYS_INWALL	GROUP_ID	2	GROUP_ID
+CoA_Chongqin_2015	SYS_INWALL	NAME	3	NAME
+CoA_Chongqin_2015	SYS_INWALL	CNAME	4	CNAME
+CoA_Chongqin_2015	SYS_INWALL	RESI	5	RESI
+CoA_Chongqin_2015	SYS_INWALL	D	6	D
+CoA_Chongqin_2015	SYS_INWALL	SPFLAG	7	SPFLAG
+CoA_Chongqin_2015	SYS_INWALL	FLAG	8	FLAG
+CoA_Chongqin_2015	SYS_INWALL	ERASEFLAG	9	ERASEFLAG
+CoA_Chongqin_2015	SYS_INWALL	ANOTATION	10	ANOTATION
+CoA_Chongqin_2015	LIB_VRV_SOURCE	ID	1	编号
+CoA_Chongqin_2015	LIB_VRV_SOURCE	NAME	2	名称
+CoA_Chongqin_2015	LIB_VRV_SOURCE	TYPE	3	分类名称
+CoA_Chongqin_2015	LIB_VRV_SOURCE	MANUFACTURER	4	制造商
+CoA_Chongqin_2015	LIB_VRV_SOURCE	CAPACITY_COOL	5	室外机制冷容量 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	CAPACITY_HEAT	6	室外机制热容量 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	POWER_COOL	7	室外机额定制冷功率 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	POWER_HEAT	8	室外机额定制热功率 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	POWER_COMP_COOL	9	制冷时室外机额定功率(风机与压缩机之和) kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FLOWRATE	10	额定风量 m^3/h
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_NOM	11	风机额定功率 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAI_LIQUID	12	连接配管直径：液管 mm
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAI_GAS	13	连接配管直径：气管 mm
+CoA_Chongqin_2015	LIB_VRV_SOURCE	POWER_LOSS	14	室外机压缩机功耗损失常数 kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	ALPHA_1	15	室外机压缩机功耗系数1
+CoA_Chongqin_2015	LIB_VRV_SOURCE	ALPHA_2	16	室外机压缩机功耗系数2
+CoA_Chongqin_2015	LIB_VRV_SOURCE	SWEPTVOLUME	17	室外机压缩机容积系数
+CoA_Chongqin_2015	LIB_VRV_SOURCE	R_AIR	18	室外机换热器空气侧热阻 K/kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	R_REF	19	室外机换热器制冷剂侧热阻 K/kW
+CoA_Chongqin_2015	LIB_VRV_SOURCE	NOM_REF_FLOW	20	额定制冷剂流量 m3/s
+CoA_Chongqin_2015	LIB_VRV_SOURCE	NOM_AIR_FLOW	21	额定室外机空气流量 m3/s
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_A	22	50%以下室外机风机功耗系数A
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_B	23	50%以下室外机风机功耗系数B
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_C	24	50%以下室外机风机功耗系数C
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_D	25	50%以下室外机风机功耗系数D
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_E	26	50%以下室外机风机功耗系数E
+CoA_Chongqin_2015	LIB_VRV_SOURCE	FAN_POWER_F	27	50%以下室外机风机功耗系数F
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_A	28	50%以上压缩机能耗系数A
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_B	29	50%以上压缩机能耗系数B
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_C	30	50%以上压缩机能耗系数C
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_D	31	50%以上压缩机能耗系数D
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_E	32	50%以上压缩机能耗系数E
+CoA_Chongqin_2015	LIB_VRV_SOURCE	H_CPPOWER_F	33	50%以上压缩机能耗系数F
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_A	34	50%以下压缩机能耗系数A
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_B	35	50%以下压缩机能耗系数B
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_C	36	50%以下压缩机能耗系数C
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_D	37	50%以下压缩机能耗系数D
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_E	38	50%以下压缩机能耗系数E
+CoA_Chongqin_2015	LIB_VRV_SOURCE	L_CPPOWER_F	39	50%以下压缩机能耗系数F
+CoA_Chongqin_2015	LIB_VRV_SOURCE	PLR_LOWLIMIT	40	系统运行的负荷率下限
+CoA_Chongqin_2015	LIB_VRV_SOURCE	EXT_PROPERTY	41	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	ID	1	编号
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	NAME	2	名称
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	TYPE	3	分类名称
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	MANUFACTURER	4	制造商
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	CAPACITY_COOL	5	制冷容量 kW
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	CAPACITY_HEAT	6	制热容量 kW
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	FAN_POWER	7	室内机风机额定功率 kW
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	FAN_FLOW_HIGH	8	室内机风机额定风量（高档） m^3/h
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	FAN_FLOW_LOW	9	室内机风机额定风量（低档） m^3/h
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	FAI_LIQUID	10	连接配管直径：液管 mm
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	FAI_GAS	11	连接配管直径：气管 mm
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	R_AIR	12	室外机换热器空气侧热阻 K/kW
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	R_REF	13	室外机换热器制冷剂侧热阻 K/kW
+CoA_Chongqin_2015	LIB_VRV_TERMINAL	EXT_PROPERTY	14	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	VRV_SOURCE	ID	1	编号
+CoA_Chongqin_2015	VRV_SOURCE	NAME	2	名称
+CoA_Chongqin_2015	VRV_SOURCE	LIB_ID	3	室外机类型编号
+CoA_Chongqin_2015	VRV_SOURCE	X	4	室外机位置
+CoA_Chongqin_2015	VRV_SOURCE	Y	5	室外机位置
+CoA_Chongqin_2015	VRV_SOURCE	Z	6	室外机位置
+CoA_Chongqin_2015	VRV_SOURCE	EXT_PROPERTY	7	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	VRV_TERMINAL	ID	1	编号
+CoA_Chongqin_2015	VRV_TERMINAL	NAME	2	名称
+CoA_Chongqin_2015	VRV_TERMINAL	LIB_ID	3	室内机类型编号
+CoA_Chongqin_2015	VRV_TERMINAL	OF_ROOM_GROUP	4	所属房间组编号
+CoA_Chongqin_2015	VRV_TERMINAL	OF_SYS	5	所属室外机编号
+CoA_Chongqin_2015	VRV_TERMINAL	OF_SYS_NO	6	所在序号
+CoA_Chongqin_2015	VRV_TERMINAL	X	7	室内机位置
+CoA_Chongqin_2015	VRV_TERMINAL	Y	8	室内机位置
+CoA_Chongqin_2015	VRV_TERMINAL	Z	9	室内机位置
+CoA_Chongqin_2015	VRV_TERMINAL	CX	10	主管连接点位置
+CoA_Chongqin_2015	VRV_TERMINAL	CY	11	主管连接点位置
+CoA_Chongqin_2015	VRV_TERMINAL	CZ	12	主管连接点位置
+CoA_Chongqin_2015	VRV_TERMINAL	EXT_PROPERTY	13	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	ID	1	编号
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	NAME	2	名称
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	A1	3	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	B1	4	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	P1	5	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	A2	6	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	B2	7	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	P2	8	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	A3	9	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	B3	10	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	P3	11	""
+CoA_Chongqin_2015	LIB_SHP_DEVICE_V1	REMARK	12	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE	ID	1	编号
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE	NAME	2	名称
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE	GROUP_NAME	3	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE	REMARK	4	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	ID	1	编号
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	NAME	2	名称
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D0	3	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D1	4	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D2	5	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D3	6	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D4	7	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D5	8	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D6	9	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D7	10	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D8	11	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D9	12	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D10	13	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D11	14	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D12	15	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D13	16	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D14	17	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	D15	18	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_MODEL_V1	REMARK	19	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE_MODEL	TYPE_ID	1	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE_MODEL	PERCENT	2	""
+CoA_Chongqin_2015	LIB_WIND_RATIO_TYPE_MODEL	MODEL_ID	3	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	ID	1	编号
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	NAME	2	名称
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	POWER	3	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	DENSITY	4	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	RATIO	5	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	COUNT	6	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	STANDBY	7	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	SCHEDULE	8	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	MODE	9	""
+CoA_Chongqin_2015	ENERGY_LIFT_ESCALATOR	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	ID	1	编号
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	NAME	2	名称
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	FLOWRATE	3	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	PRESSURE	4	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	RATIO	5	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	COUNT	6	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	INVERTER	7	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	SCHEDULE	8	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	MODE	9	""
+CoA_Chongqin_2015	ENERGY_PUMP_FAN	EXT_PROPERTY	10	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	ID	1	编号
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	NAME	2	名称
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	MEAN_FLOWRATE_DAY	3	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	SCHEDULE	4	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	MODE	5	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	MAX_FLOWRATE_COOLING	6	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	SCHEDULE_COOLING	7	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	FLOWRATE_MAJOR	8	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	PRESSURE_MAJOR	9	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	RATIO_MAJOR	10	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	COUNT_MAJOR	11	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	FLOWRATE_MINOR	12	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	PRESSURE_MINOR	13	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	RATIO_MINOR	14	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	COUNT_MINOR	15	""
+CoA_Chongqin_2015	ENERGY_PUMP_GROUP	EXT_PROPERTY	16	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ENERGY_DEVICE	ID	1	编号
+CoA_Chongqin_2015	ENERGY_DEVICE	NAME	2	名称
+CoA_Chongqin_2015	ENERGY_DEVICE	POWER	3	""
+CoA_Chongqin_2015	ENERGY_DEVICE	COUNT	4	""
+CoA_Chongqin_2015	ENERGY_DEVICE	SCHEDULE	5	""
+CoA_Chongqin_2015	ENERGY_DEVICE	EXT_PROPERTY	6	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	ENERGY_HOTWATER	ID	1	编号
+CoA_Chongqin_2015	ENERGY_HOTWATER	NAME	2	名称
+CoA_Chongqin_2015	ENERGY_HOTWATER	SYS_TYPE	3	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	FUEL_TYPE	4	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	MEAN_FLOWRATE_DAY	5	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	SCHEDULE_SUPPLY	6	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	SCHEDULE_HOT_TEMP	7	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	SCHEDULE_SOURCE_TEMP	8	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	SCHEDULE_ENV_TEMP	9	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	DISTANCE	10	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	INSULATION_LEVEL	11	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	FLOWRATE_PUMP	12	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	PRESSURE_PUMP	13	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	RATIO_PUMP	14	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	COUNT_PUMP	15	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	SCHEDULE_PUMP	16	""
+CoA_Chongqin_2015	ENERGY_HOTWATER	EXT_PROPERTY	17	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	ID	1	编号
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	LAYER_NO	2	""
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	THICKNESS	3	""
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	CONDUCTIVITY	4	""
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	DENSITY	5	""
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	SPECIFIC_HEAT	6	""
+CoA_Chongqin_2015	GROUND_CONSTRUCTION	EXT_PROPERTY	7	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	GROUND_Q	ID	1	编号
+CoA_Chongqin_2015	GROUND_Q	QA	2	""
+CoA_Chongqin_2015	GROUND_Q	QF	3	""
+CoA_Chongqin_2015	GROUND_Q	EXT_PROPERTY	4	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	ID	1	编号
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	NAME	2	名称
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	TYPE	3	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	MANUFACTURER	4	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	CAPACITY_COOL	5	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	CAPACITY_HEAT	6	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	POWER_COOL	7	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	POWER_HEAT	8	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	POWER_COMP_COOL	9	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	POWER_COMP_HEAT	10	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FLOWRATE	11	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_NOM	12	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAI_LIQUID	13	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAI_GAS	14	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	NOM_REF_FLOW	15	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	NOM_AIR_FLOW	16	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_A	17	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_B	18	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_C	19	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_D	20	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_E	21	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	FAN_POWER_F	22	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_A	23	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_B	24	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_C	25	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_D	26	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_E	27	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	C_CPPOWER_F	28	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_A	29	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_B	30	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_C	31	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_D	32	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_E	33	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	H_CPPOWER_F	34	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	PLR_LOWLIMIT	35	""
+CoA_Chongqin_2015	LIB_VRV_SOURCE_V1	EXT_PROPERTY	36	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	ID	1	编号
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	NAME	2	名称
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	TYPE	3	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	MANUFACTURER	4	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	CAPACITY_COOL	5	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	CAPACITY_HEAT	6	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	FAN_POWER	7	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	FAN_FLOW_HIGH	8	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	FAN_FLOW_LOW	9	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	FAI_LIQUID	10	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	FAI_GAS	11	""
+CoA_Chongqin_2015	LIB_VRV_TERMINAL_V1	EXT_PROPERTY	12	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	ID	1	编号
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	NAME	2	名称
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	FLOWRATE	3	""
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	COOL_CAP	4	""
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	HEAT_CAP	5	""
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	COOL_POWER	6	""
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	HEAT_POWER	7	""
+CoA_Chongqin_2015	LIB_ROOFUNIT_DEVICE	EXT_PROPERTY	8	扩展属性(扩展属性编号,对应EXT_PROPERTY表)
+CoA_Chongqin_2015	Conversion Errors	Object Type	1	""
+CoA_Chongqin_2015	Conversion Errors	Object Name	2	""
+CoA_Chongqin_2015	Conversion Errors	Error Description	3	""
