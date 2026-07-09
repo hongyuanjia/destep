@@ -27,6 +27,8 @@ Material
 
 Construction
 
+Outdoor ventilation from `ROOM_RELATION` (#14)
+
 Internal gains \[WIP\]
 
 Shading
@@ -61,25 +63,42 @@ read_dest(path) |> to_eplus(23.1)
 #> ── EnergPlus Input Data File ───────────────────────────────────────────────────
 #>  • Path: NOT LOCAL
 #>  • Version: '23.1.0'
-#> 
+#>
 #> Group: <Simulation Parameters>
 #> ├─ [001<O>] Class: <Version>
 #> └─ [001<O>] Class: <Building>
-#> 
+#>
 #> Group: <Location and Climate>
 #> └─ [001<O>] Class: <Site:Location>
-#> 
+#>
+#> Group: <Schedules>
+#> ├─ [003<O>] Class: <ScheduleTypeLimits>
+#> │─ [100<O>] Class: <Schedule:Day:Interval>
+#> │─ [187<O>] Class: <Schedule:Week:Compact>
+#> │─ [177<O>] Class: <Schedule:Year>
+#> └─ [002<O>] Class: <Schedule:Constant>
+#>
 #> Group: <Surface Construction Elements>
 #> ├─ [014<O>] Class: <Material>
 #> │─ [001<O>] Class: <WindowMaterial:Glazing>
 #> │─ [001<O>] Class: <WindowMaterial:Gas>
 #> └─ [007<O>] Class: <Construction>
-#> 
+#>
 #> Group: <Thermal Zones and Surfaces>
-#> ├─ [036<O>] Class: <Zone>
+#> ├─ [001<O>] Class: <GlobalGeometryRules>
+#> │─ [036<O>] Class: <Zone>
 #> │─ [003<O>] Class: <ZoneList>
 #> │─ [003<O>] Class: <ZoneGroup>
-#> └─ [470<O>] Class: <BuildingSurface:Detailed>
+#> │─ [371<O>] Class: <BuildingSurface:Detailed>
+#> └─ [045<O>] Class: <FenestrationSurface:Detailed>
+#>
+#> Group: <Internal Gains>
+#> ├─ [036<O>] Class: <People>
+#> │─ [072<O>] Class: <Lights>
+#> └─ [036<O>] Class: <ElectricEquipment>
+#>
+#> Group: <Zone Airflow>
+#> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
 ```
 
 # Package index
