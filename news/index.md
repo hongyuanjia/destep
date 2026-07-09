@@ -2,6 +2,8 @@
 
 ## destep 0.0.0.9000
 
+- Added CI coverage for the full real DeST ACCDB to SQLite to EnergyPlus
+  IDF conversion path using a cached GitHub release fixture (#16).
 - Fixed `Schedule:Week:Compact` day schedule references generated from
   `SCHEDULE_YEAR`, preventing missing `Schedule:Day Name` values in
   converted EnergyPlus schedules (#15).

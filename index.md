@@ -27,9 +27,9 @@ Material
 
 Construction
 
-Hourly schedules from `SCHEDULE_YEAR` (#15)
+Hourly schedules from `SCHEDULE_YEAR`
 
-Outdoor ventilation from `ROOM_RELATION` (#14)
+Outdoor ventilation from `ROOM_RELATION`
 
 Internal gains \[WIP\]
 
