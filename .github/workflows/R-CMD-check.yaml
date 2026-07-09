@@ -25,9 +25,28 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      DESTEP_TEST_ACCDB: ${{ github.workspace }}/tests/testthat/fixture/CoA_Chongqin_2015.accdb
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache DeST ACCDB fixture
+        id: cache-dest-accdb
+        uses: actions/cache@v4
+        with:
+          path: tests/testthat/fixture/CoA_Chongqin_2015.accdb
+          key: ${{ runner.os }}-destep-CoA_Chongqin_2015-accdb-v1
+
+      - name: Download DeST ACCDB fixture
+        if: steps.cache-dest-accdb.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p tests/testthat/fixture
+          gh release download fixtures-coa-chongqin-2015-v1 \
+            -p CoA_Chongqin_2015.accdb \
+            -D tests/testthat/fixture
+        shell: bash
 
       - name: Set up Homebrew
         id: set-up-homebrew

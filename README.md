@@ -31,8 +31,8 @@ Currently, the following components are supported:
 - [x] Geometry
 - [x] Material
 - [x] Construction
-- [x] Hourly schedules from `SCHEDULE_YEAR` (#15)
-- [x] Outdoor ventilation from `ROOM_RELATION` (#14)
+- [x] Hourly schedules from `SCHEDULE_YEAR`
+- [x] Outdoor ventilation from `ROOM_RELATION`
 - [ ] Internal gains \[WIP\]
 - [ ] Shading
 - [ ] HVAC

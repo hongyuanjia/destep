@@ -5,6 +5,7 @@ test_that("to_eplus() works", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path)
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     # can insert a comment about the original DeST version in `Version` comment
     expect_equal(
@@ -61,6 +62,13 @@ test_that("to_eplus() works", {
     expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
     expect_s3_class(attr(surface, "table"), "data.table")
 
-    # can convert a DeST model to an EnergyPlus model
-    expect_message(expect_s3_class(idf <- to_eplus(dest), "Idf"))
+    # can convert a DeST model to a valid EnergyPlus model
+    expect_message(expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf"))
+    expect_true(idf$is_valid())
+
+    validity <- idf$validate()
+    issue_count <- vapply(validity, function(issue) {
+        if (is.data.frame(issue)) nrow(issue) else length(issue)
+    }, integer(1))
+    expect_equal(issue_count, setNames(rep(0L, length(issue_count)), names(issue_count)))
 })
