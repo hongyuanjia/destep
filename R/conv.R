@@ -165,7 +165,8 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         surface  = destep_conv_surface(tmpdb, ep),
         window   = destep_conv_window(tmpdb, ep),
         const    = destep_conv_const(tmpdb, ep),
-        schedule = destep_conv_schedule(tmpdb, ep)
+        schedule = destep_conv_schedule(tmpdb, ep),
+        ventilation = destep_conv_room_ventilation(tmpdb, ep)
     )
 
     if (any(vapply(

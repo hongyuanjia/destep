@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added `ROOM_RELATION` outdoor ventilation conversion to
+  `ZoneVentilation:DesignFlowRate`, using the referenced air-change schedule and
+  keeping inter-zone mixing deferred.
 - Added normalized DeST schema catalog TSV assets and schema coverage diagnostics
   for comparing real SQLite models against the catalog (#10).
 - Cataloged `ROOM_TYPE_DATA` as the room-type template table behind `ROOM.TYPE`,

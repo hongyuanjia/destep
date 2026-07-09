@@ -4,6 +4,7 @@
 
 ^\.github$
 ^\.gitignore$
+^\.cursor$
 ^_pkgdown\.yml$
 ^pkgdown$
 ^docs$
