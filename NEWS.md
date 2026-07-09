@@ -2,7 +2,7 @@
 
 - Added `GROUND_DATA` conversion to
   `Site:GroundTemperature:BuildingSurface` using monthly averages of the
-  selected hourly ground-temperature series.
+  selected hourly ground-temperature series (#20).
 - Added occupant outdoor-air conversion from `OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR`
   to `DesignSpecification:OutdoorAir`, with IdealLoads systems referencing the
   converted outdoor-air objects (#19).
