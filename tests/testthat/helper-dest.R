@@ -30,6 +30,12 @@ ensure_dest_sqlite_file <- function(clean = FALSE) {
                 )
             )
         }
+        # R CMD check excludes large fixtures from the source tarball. When the
+        # ACCDB is supplied via DESTEP_TEST_ACCDB, write the derived SQLite file
+        # to tempdir() instead of a non-existent package fixture directory.
+        if (!dir.exists(dirname(path_sql))) {
+            path_sql <- tempfile("CoA_Chongqin_2015-", fileext = ".sql")
+        }
         read_dest(path_accdb, sqlite = path_sql, verbose = TRUE, drop = TRUE)
     }
 }
