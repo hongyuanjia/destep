@@ -20,7 +20,8 @@ to_epw <- function(dest) {
 
     climate <- destep_climate_data_table(con)
     environment <- destep_epw_environment(con)
-    weather <- destep_epw_data(climate, environment)
+    missing <- destep_epw_missing_codes()
+    weather <- destep_epw_data(climate, environment, missing)
 
     path <- tempfile("destep-", fileext = ".epw")
     destep_write_epw(path, weather, environment)
@@ -287,27 +288,16 @@ destep_epw_environment <- function(dest) {
 }
 
 # Construct the full EPW data frame written by destep_write_epw(). DeST only
-# stores weather variables needed by DeST, so EPW-specific illuminance, sky
-# cover, and precipitation fields use documented EPW missing codes/defaults.
-destep_epw_data <- function(climate, environment) {
+# stores weather variables needed by DeST, so EPW-specific fields with no DeST
+# source use eplusr's EPW missing-code table instead of local magic constants.
+destep_epw_data <- function(climate, environment, missing) {
     humidity <- destep_epw_humidity(
         dry_bulb = climate$DRY_BULB_T,
         humidity_ratio_g_per_kg = climate$DAMP,
         pressure = climate$B
     )
-    time_zone <- destep_epw_time_zone(environment)
     datetime <- as.POSIXct("1999-01-01 01:00:00", tz = "UTC") +
         as.numeric(climate$HOUR) * 3600
-    datetime_midpoint <- as.POSIXct("1999-01-01 00:30:00", tz = "UTC") +
-        as.numeric(climate$HOUR) * 3600
-    direct_normal <- destep_epw_direct_normal_radiation(
-        global_horizontal = climate$HORI_TOTAL_RAD,
-        diffuse_horizontal = climate$HORI_SCATTER_RAD,
-        datetime = datetime_midpoint,
-        latitude = environment$LATITUDE,
-        longitude = environment$LONGITUDE,
-        time_zone = time_zone
-    )
 
     data.table::data.table(
         datetime = datetime,
@@ -317,31 +307,31 @@ destep_epw_data <- function(climate, environment) {
         dew_point_temperature = humidity$dew_point_temperature,
         relative_humidity = humidity$relative_humidity,
         atmospheric_pressure = climate$B,
-        extraterrestrial_horizontal_radiation = 9999,
-        extraterrestrial_direct_normal_radiation = 9999,
+        extraterrestrial_horizontal_radiation = missing$extraterrestrial_horizontal_radiation,
+        extraterrestrial_direct_normal_radiation = missing$extraterrestrial_direct_normal_radiation,
         horizontal_infrared_radiation_intensity_from_sky = 5.6697e-8 * climate$T_SKY^4,
         global_horizontal_radiation = climate$HORI_TOTAL_RAD,
-        direct_normal_radiation = direct_normal,
+        direct_normal_radiation = missing$direct_normal_radiation,
         diffuse_horizontal_radiation = climate$HORI_SCATTER_RAD,
-        global_horizontal_illuminance = 999999,
-        direct_normal_illuminance = 999999,
-        diffuse_horizontal_illuminance = 999999,
-        zenith_luminance = 9999,
+        global_horizontal_illuminance = missing$global_horizontal_illuminance,
+        direct_normal_illuminance = missing$direct_normal_illuminance,
+        diffuse_horizontal_illuminance = missing$diffuse_horizontal_illuminance,
+        zenith_luminance = missing$zenith_luminance,
         wind_direction = destep_epw_wind_direction(climate$WD),
         wind_speed = climate$WS,
-        total_sky_cover = 99L,
-        opaque_sky_cover = 99L,
-        visibility = 9999,
-        ceiling_height = 99999,
-        present_weather_observation = 9L,
-        present_weather_codes = "999999999",
-        precipitable_water = 999,
-        aerosol_optical_depth = 0.999,
-        snow_depth = 999,
-        days_since_last_snow = 99L,
-        albedo = 999,
-        liquid_precip_depth = 999,
-        liquid_precip_rate = 99
+        total_sky_cover = missing$total_sky_cover,
+        opaque_sky_cover = missing$opaque_sky_cover,
+        visibility = missing$visibility,
+        ceiling_height = missing$ceiling_height,
+        present_weather_observation = missing$present_weather_observation,
+        present_weather_codes = missing$present_weather_codes,
+        precipitable_water = missing$precipitable_water,
+        aerosol_optical_depth = missing$aerosol_optical_depth,
+        snow_depth = missing$snow_depth,
+        days_since_last_snow = missing$days_since_last_snow,
+        albedo = missing$albedo,
+        liquid_precip_depth = missing$liquid_precip_depth,
+        liquid_precip_rate = missing$liquid_precip_rate
     )
 }
 
@@ -360,47 +350,6 @@ destep_epw_humidity <- function(dry_bulb, humidity_ratio_g_per_kg, pressure) {
         dew_point_temperature = dew_point,
         relative_humidity = relative_humidity
     )
-}
-
-# Derive direct normal radiation from DeST global and diffuse horizontal
-# radiation.  The calculation uses the solar altitude at the middle of each
-# hour; nighttime or very-low-sun beam components are written as zero.
-destep_epw_direct_normal_radiation <- function(global_horizontal,
-                                               diffuse_horizontal,
-                                               datetime,
-                                               latitude,
-                                               longitude,
-                                               time_zone) {
-    beam_horizontal <- pmax(0, global_horizontal - diffuse_horizontal)
-    cos_zenith <- destep_epw_cos_zenith(datetime, latitude, longitude, time_zone)
-    ifelse(cos_zenith > 0.01 & beam_horizontal > 0, beam_horizontal / cos_zenith, 0)
-}
-
-# Compute the cosine of the solar zenith angle using a compact NOAA-style
-# approximation.  This avoids a new dependency while keeping DNI deterministic.
-destep_epw_cos_zenith <- function(datetime, latitude, longitude, time_zone) {
-    day_of_year <- as.integer(format(datetime, "%j", tz = "UTC"))
-    hour <- as.integer(format(datetime, "%H", tz = "UTC"))
-    minute <- as.integer(format(datetime, "%M", tz = "UTC"))
-    local_hour <- hour + minute / 60
-
-    gamma <- 2 * pi / 365 * (day_of_year - 1 + (local_hour - 12) / 24)
-    equation_of_time <- 229.18 * (
-        0.000075 + 0.001868 * cos(gamma) - 0.032077 * sin(gamma) -
-            0.014615 * cos(2 * gamma) - 0.040849 * sin(2 * gamma)
-    )
-    declination <- 0.006918 - 0.399912 * cos(gamma) +
-        0.070257 * sin(gamma) - 0.006758 * cos(2 * gamma) +
-        0.000907 * sin(2 * gamma) - 0.002697 * cos(3 * gamma) +
-        0.00148 * sin(3 * gamma)
-
-    time_offset <- equation_of_time + 4 * (longitude - 15 * time_zone)
-    true_solar_time <- local_hour * 60 + time_offset
-    hour_angle <- (true_solar_time / 4 - 180) * pi / 180
-    latitude <- latitude * pi / 180
-
-    sin(latitude) * sin(declination) +
-        cos(latitude) * cos(declination) * cos(hour_angle)
 }
 
 # DeST stores wind direction as a 16-point compass code with 0 meaning calm.
@@ -428,6 +377,9 @@ destep_epw_time_zone <- function(environment) {
 # eplusr::Epw object without using Epw$set(), which would require eplusr's
 # optional 'units' dependency during R CMD check.
 destep_write_epw <- function(path, weather, environment) {
+    # GROUND_DATA is handled by the IDF converter as BuildingSurface ground
+    # temperature; the EPW ground-temperature header needs depth/soil metadata
+    # that DeST does not provide in CLIMATE_DATA, so it is intentionally empty.
     header <- c(
         sprintf(
             "LOCATION,%s,%s,%s,DeST CLIMATE_DATA,%s,%s,%s,%s,%s",
@@ -446,7 +398,7 @@ destep_write_epw <- function(path, weather, environment) {
         "HOLIDAYS/DAYLIGHT SAVINGS,No,0,0,0",
         "COMMENTS 1,Generated by destep from DeST CLIMATE_DATA",
         "COMMENTS 2,Missing EPW-only fields use EPW missing codes or safe defaults",
-        "DATA PERIODS,1,1,Data,Friday, 1/ 1,12/31"
+        "DATA PERIODS,1,1,Data,Sunday, 1/ 1,12/31"
     )
     dates <- seq(as.Date("1999-01-01"), as.Date("1999-12-31"), by = "day")
     month <- rep(as.integer(format(dates, "%m")), each = 24L)
@@ -492,6 +444,44 @@ destep_write_epw <- function(path, weather, environment) {
         weather$albedo,
         weather$liquid_precip_depth,
         weather$liquid_precip_rate
+    )
+
+    writeLines(c(header, data), path, useBytes = TRUE)
+}
+
+# Ask eplusr for the EPW missing-code table so destep follows the same values
+# that eplusr uses when it parses and validates weather files.
+destep_epw_missing_codes <- function() {
+    path <- tempfile("destep-missing-code-", fileext = ".epw")
+    destep_write_epw_missing_code_template(path)
+    suppressWarnings(eplusr::read_epw(path)$missing_code())
+}
+
+# Write a tiny valid EPW file used only to initialize an eplusr::Epw object for
+# missing-code lookup.  The weather data are placeholders, not a DeST export.
+destep_write_epw_missing_code_template <- function(path) {
+    header <- c(
+        "LOCATION,DeST Template,NA,Unknown,DeST,000000,0,0,0,0",
+        "DESIGN CONDITIONS,0",
+        "TYPICAL/EXTREME PERIODS,0",
+        "GROUND TEMPERATURES,0",
+        "HOLIDAYS/DAYLIGHT SAVINGS,No,0,0,0",
+        "COMMENTS 1,Generated by destep for EPW missing-code lookup",
+        "COMMENTS 2,Weather data are placeholders",
+        "DATA PERIODS,1,1,Data,Sunday, 1/ 1,12/31"
+    )
+    dates <- seq(as.Date("1999-01-01"), as.Date("1999-12-31"), by = "day")
+    month <- rep(as.integer(format(dates, "%m")), each = 24L)
+    day <- rep(as.integer(format(dates, "%d")), each = 24L)
+    hour <- rep(1:24, times = length(dates))
+    data <- sprintf(
+        paste(
+            "1999,%d,%d,%d,0,?,20,10,50,101325,9999,9999,300,0,",
+            "9999,0,999999,999999,999999,9999,0,0,99,99,9999,",
+            "99999,9,999999999,999,0.999,999,99,999,999,99",
+            sep = ""
+        ),
+        month, day, hour
     )
 
     writeLines(c(header, data), path, useBytes = TRUE)

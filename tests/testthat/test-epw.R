@@ -69,10 +69,13 @@ test_that("to_epw() converts CLIMATE_DATA to an eplusr Epw object", {
     epw <- to_epw(dest)
     data <- epw$data()
     location <- epw$location()
+    period <- epw$period()
+    missing <- destep_epw_missing_codes()
     humidity <- destep_test_epw_humidity(20, 7.5, 101325)
 
     expect_s3_class(epw, "Epw")
     expect_equal(nrow(data), 8760L)
+    expect_equal(period$start_day_of_week, "Sunday")
     expect_equal(location$city, "Test City")
     expect_equal(location$state_province, "Test Province")
     expect_equal(location$country, "Test Country")
@@ -82,6 +85,9 @@ test_that("to_epw() converts CLIMATE_DATA to an eplusr Epw object", {
     expect_equal(data$atmospheric_pressure[[1L]], 101325)
     expect_equal(data$global_horizontal_radiation[[13L]], 400)
     expect_equal(data$diffuse_horizontal_radiation[[13L]], 100)
+    expect_equal(data$direct_normal_radiation[[13L]], missing$direct_normal_radiation)
+    expect_equal(data$visibility[[1L]], missing$visibility)
+    expect_equal(data$present_weather_codes[[1L]], missing$present_weather_codes)
     expect_equal(data$wind_direction[1:17], c(0, 0, seq(22.5, 337.5, by = 22.5)))
     expect_equal(
         data$relative_humidity[[1L]],
@@ -93,8 +99,6 @@ test_that("to_epw() converts CLIMATE_DATA to an eplusr Epw object", {
         humidity$dew_point_temperature,
         tolerance = 1e-6
     )
-    expect_gt(data$direct_normal_radiation[[13L]], 0)
-    expect_false(any(data$direct_normal_radiation == 9999))
 })
 
 test_that("to_epw() accepts SQLite file paths", {

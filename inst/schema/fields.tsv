@@ -515,9 +515,9 @@ CLIMATE_DATA	ID	1	primary_key	ID	""
 CLIMATE_DATA	HOUR	2	""	Hour index from 0 to 8759.	Used as a non-leap hourly year for EPW weather data export.
 CLIMATE_DATA	DRY_BULB_T	3	""	Dry-bulb temperature in degrees C.	Converted to EPW dry bulb temperature.
 CLIMATE_DATA	DAMP	4	""	Humidity ratio, in g/kg dry air.	Converted to EPW dew point temperature and relative humidity with DRY_BULB_T and B.
-CLIMATE_DATA	HORI_TOTAL_RAD	5	""	Global horizontal radiation in W/m2.	Converted to EPW global horizontal radiation and used with HORI_SCATTER_RAD to derive direct normal radiation.
-CLIMATE_DATA	HORI_SCATTER_RAD	6	""	Diffuse horizontal radiation in W/m2.	Converted to EPW diffuse horizontal radiation and used with HORI_TOTAL_RAD to derive direct normal radiation.
-CLIMATE_DATA	T_GROUND	7	""	Ground surface temperature in degrees C.	""
+CLIMATE_DATA	HORI_TOTAL_RAD	5	""	Global horizontal radiation in W/m2.	Converted to EPW global horizontal radiation; direct normal radiation is left as the EPW missing code because DeST has no direct-normal field here.
+CLIMATE_DATA	HORI_SCATTER_RAD	6	""	Diffuse horizontal radiation in W/m2.	Converted to EPW diffuse horizontal radiation; direct normal radiation is left as the EPW missing code because DeST has no direct-normal field here.
+CLIMATE_DATA	T_GROUND	7	""	Ground surface temperature in degrees C.	Not used by to_epw() v1; GROUND_DATA is converted separately to Site:GroundTemperature:BuildingSurface for IDF ground boundaries.
 CLIMATE_DATA	T_SKY	8	""	Effective sky temperature in K.	Converted to EPW horizontal infrared radiation intensity from sky.
 CLIMATE_DATA	WS	9	""	Wind speed in m/s.	Converted to EPW wind speed.
 CLIMATE_DATA	WD	10	""	Wind direction code: 0 C, 1 N, 2 NNE, 3 NE, 4 ENE, 5 E, ..., 9 S, ..., 13 W, ..., 16 NNW.	Converted to EPW wind direction degrees.
