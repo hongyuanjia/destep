@@ -86,9 +86,9 @@ test_that("destep_schema_coverage reports real fixture coverage", {
     expect_true(room_relation$in_database)
     expect_true(room_relation$in_catalog)
     expect_equal(room_relation$rows, 28L)
-    expect_equal(room_relation$status, "observed")
+    expect_equal(room_relation$status, "converted")
     expect_true(room_relation$is_non_empty)
-    expect_false(room_relation$is_converted)
+    expect_true(room_relation$is_converted)
 
     uncataloged_non_empty <- coverage$tables[
         coverage$tables$in_database &

@@ -25,6 +25,9 @@ files instead of leaving that knowledge only in converter comments.
 
 ## Catalog updates
 
+- Outdoor-ventilation rows in `ROOM_RELATION` are converted to
+  `ZoneVentilation:DesignFlowRate` when `RELA_ROOM_ID` references `OUTSIDE`.
+  Inter-zone mixing remains deferred until adjacent-room semantics are verified.
 - Access field descriptions were extracted to `fields_cn.tsv` in PR #13, and
   `fields.tsv` was refreshed so English field semantics are derived from those
   source comments.
