@@ -38,6 +38,7 @@ Currently, the following components are supported:
 - [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
   `EQUIPMENT_GAINS`
 - [x] Outdoor air requirements from `OCCUPANT_GAINS`
+- [x] Ground temperatures from `GROUND_DATA`
 - [ ] Shading
 - [ ] HVAC
 
@@ -74,7 +75,8 @@ read_dest(path) |> to_eplus(23.1)
 #> └─ [001<O>] Class: <Building>
 #>
 #> Group: <Location and Climate>
-#> └─ [001<O>] Class: <Site:Location>
+#> ├─ [001<O>] Class: <Site:Location>
+#> └─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
 #>
 #> Group: <Schedules>
 #> ├─ [003<O>] Class: <ScheduleTypeLimits>
