@@ -33,7 +33,10 @@ Outdoor ventilation from `ROOM_RELATION`
 
 Thermostat setpoints from `ROOM_GROUP`
 
-Internal gains \[WIP\]
+Ideal loads zone equipment from `ROOM_GROUP`
+
+Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
+`EQUIPMENT_GAINS`
 
 Shading
 
@@ -80,7 +83,7 @@ read_dest(path) |> to_eplus(23.1)
 #> │─ [100<O>] Class: <Schedule:Day:Interval>
 #> │─ [187<O>] Class: <Schedule:Week:Compact>
 #> │─ [177<O>] Class: <Schedule:Year>
-#> └─ [003<O>] Class: <Schedule:Constant>
+#> └─ [004<O>] Class: <Schedule:Constant>
 #>
 #> Group: <Surface Construction Elements>
 #> ├─ [014<O>] Class: <Material>
@@ -107,4 +110,11 @@ read_dest(path) |> to_eplus(23.1)
 #> Group: <Zone HVAC Controls and Thermostats>
 #> ├─ [036<O>] Class: <ZoneControl:Thermostat>
 #> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
+#>
+#> Group: <Zone HVAC Forced Air Units>
+#> └─ [027<O>] Class: <ZoneHVAC:IdealLoadsAirSystem>
+#>
+#> Group: <Zone HVAC Equipment Connections>
+#> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
+#> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
 ```
