@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added `ROOM_GROUP` thermostat/setpoint conversion to shared
+  `ThermostatSetpoint:DualSetpoint` objects and per-zone
+  `ZoneControl:Thermostat` controls (#17).
 - Added CI coverage for the full real DeST ACCDB to SQLite to EnergyPlus IDF
   conversion path using a cached GitHub release fixture (#16).
 - Fixed `Schedule:Week:Compact` day schedule references generated from

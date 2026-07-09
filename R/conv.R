@@ -102,7 +102,7 @@ MAP_ID_NAME <- list(
 #' @return \[eplusr::Idf\] The converted EnergyPlus model.
 #'
 #' @export
-# TODO: How about ROOM_GROUP? and STOREY_GROUP?
+# TODO: How about STOREY_GROUP?
 to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
@@ -166,6 +166,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         window   = destep_conv_window(tmpdb, ep),
         const    = destep_conv_const(tmpdb, ep),
         schedule = destep_conv_schedule(tmpdb, ep),
+        thermostat = destep_conv_thermostat(tmpdb, ep),
         ventilation = destep_conv_room_ventilation(tmpdb, ep)
     )
 
