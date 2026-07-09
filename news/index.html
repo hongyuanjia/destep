@@ -33,7 +33,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li>Added occupant outdoor-air conversion from <code>OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR</code> to <code>DesignSpecification:OutdoorAir</code>, with IdealLoads systems referencing the converted outdoor-air objects (#19).</li>
+<ul><li>Added <code>GROUND_DATA</code> conversion to <code>Site:GroundTemperature:BuildingSurface</code> using monthly averages of the selected hourly ground-temperature series (#20).</li>
+<li>Added occupant outdoor-air conversion from <code>OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR</code> to <code>DesignSpecification:OutdoorAir</code>, with IdealLoads systems referencing the converted outdoor-air objects (#19).</li>
 <li>Added <code>ROOM_GROUP</code> ideal-loads conversion to create <code>ZoneHVAC:IdealLoadsAirSystem</code> zone equipment using DeST air-conditioning availability schedules (#18).</li>
 <li>Added <code>ROOM_GROUP</code> thermostat/setpoint conversion to shared <code>ThermostatSetpoint:DualSetpoint</code> objects and per-zone <code>ZoneControl:Thermostat</code> controls (#17).</li>
 <li>Added CI coverage for the full real DeST ACCDB to SQLite to EnergyPlus IDF conversion path using a cached GitHub release fixture (#16).</li>
