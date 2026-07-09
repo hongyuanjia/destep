@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Added `to_epw()` to convert DeST `CLIMATE_DATA` into an in-memory
+  `eplusr::Epw` weather object.
 - Added `GROUND_DATA` conversion to
   `Site:GroundTemperature:BuildingSurface` using monthly averages of the
   selected hourly ground-temperature series (#20).

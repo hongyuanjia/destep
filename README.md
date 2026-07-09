@@ -38,6 +38,7 @@ Currently, the following components are supported:
 - [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
   `EQUIPMENT_GAINS`
 - [x] Outdoor air requirements from `OCCUPANT_GAINS`
+- [x] Weather files from `CLIMATE_DATA`
 - [x] Ground temperatures from `GROUND_DATA`
 - [ ] Shading
 - [ ] HVAC
