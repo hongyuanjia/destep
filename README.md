@@ -33,6 +33,7 @@ Currently, the following components are supported:
 - [x] Construction
 - [x] Hourly schedules from `SCHEDULE_YEAR`
 - [x] Outdoor ventilation from `ROOM_RELATION`
+- [x] Thermostat setpoints from `ROOM_GROUP`
 - [ ] Internal gains \[WIP\]
 - [ ] Shading
 - [ ] HVAC
@@ -77,7 +78,7 @@ read_dest(path) |> to_eplus(23.1)
 #> │─ [100<O>] Class: <Schedule:Day:Interval>
 #> │─ [187<O>] Class: <Schedule:Week:Compact>
 #> │─ [177<O>] Class: <Schedule:Year>
-#> └─ [002<O>] Class: <Schedule:Constant>
+#> └─ [003<O>] Class: <Schedule:Constant>
 #>
 #> Group: <Surface Construction Elements>
 #> ├─ [014<O>] Class: <Material>
@@ -100,4 +101,8 @@ read_dest(path) |> to_eplus(23.1)
 #>
 #> Group: <Zone Airflow>
 #> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
+#>
+#> Group: <Zone HVAC Controls and Thermostats>
+#> ├─ [036<O>] Class: <ZoneControl:Thermostat>
+#> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
 ```

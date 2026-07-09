@@ -78,9 +78,9 @@ ROOM_GROUP	NAME	2	""	Name.	""
 ROOM_GROUP	OF_BUILDING	3	""	Owning building identifier, related to BUILDING.BUILDING_ID.	""
 ROOM_GROUP	OF_AC_SYS	4	""	Owning air-conditioning system ID; 0 means it does not belong to any system.	""
 ROOM_GROUP	IS_AC_ROOM	5	""	Nonzero means this is an air-conditioned room.	""
-ROOM_GROUP	AC_SCHEDULE_ID	6	""	Air-conditioning on/off schedule ID.	""
-ROOM_GROUP	SET_T_MIN_SCHEDULE	7	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
-ROOM_GROUP	SET_T_MAX_SCHEDULE	8	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
+ROOM_GROUP	AC_SCHEDULE_ID	6	""	Air-conditioning on/off schedule ID.	Not used by thermostat conversion; reserve for future HVAC availability handling.
+ROOM_GROUP	SET_T_MIN_SCHEDULE	7	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by destep_conv_thermostat as the heating setpoint schedule.
+ROOM_GROUP	SET_T_MAX_SCHEDULE	8	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by destep_conv_thermostat as the cooling setpoint schedule.
 ROOM_GROUP	SET_RH_MIN_SCHEDULE	9	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
 ROOM_GROUP	SET_RH_MAX_SCHEDULE	10	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
 ROOM_GROUP	AC_T_MIN_SCHEDULE	11	""	Air-conditioning activation temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems.	""
