@@ -167,6 +167,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         const    = destep_conv_const(tmpdb, ep),
         schedule = destep_conv_schedule(tmpdb, ep),
         thermostat = destep_conv_thermostat(tmpdb, ep),
+        outdoor_air = destep_conv_design_specification_outdoor_air(tmpdb, ep),
         ideal_loads = destep_conv_ideal_loads(tmpdb, ep),
         ventilation = destep_conv_room_ventilation(tmpdb, ep)
     )
