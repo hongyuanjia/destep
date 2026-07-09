@@ -167,6 +167,58 @@ destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "
     list(map = map_week, data = sch_day)
 }
 
+# `destep_field()` stores one row per EnergyPlus field, but schedule references
+# need a stable object-level map. Collapse field rows back to one id/name pair
+# per generated schedule object before resolving Day/Week references.
+destep_schedule_object_lookup <- function(fields, object_class) {
+    required <- c("id", "name", "index")
+    missing <- setdiff(required, names(fields))
+    if (length(missing) > 0L) {
+        abort(sprintf(
+            "Cannot build %s schedule lookup. Missing column(s): [%s].",
+            object_class, paste(missing, collapse = ", ")
+        ))
+    }
+
+    lookup <- collapse::ss(
+        fields,
+        collapse::whichv(fields$index, 1L),
+        c("id", "name"),
+        check = FALSE
+    )
+    lookup <- data.table::as.data.table(unique(lookup))
+
+    if (anyDuplicated(lookup$id)) {
+        abort(sprintf(
+            "Cannot build %s schedule lookup because object ids are not unique: [%s].",
+            object_class, paste(unique(lookup$id[duplicated(lookup$id)]), collapse = ", ")
+        ))
+    }
+
+    if (anyNA(lookup$id) || anyNA(lookup$name) || any(!nzchar(lookup$name))) {
+        abort(sprintf(
+            "Cannot build %s schedule lookup because at least one object id or name is missing.",
+            object_class
+        ))
+    }
+
+    lookup
+}
+
+# Resolve object ids through an explicit schedule lookup so missing references
+# fail before invalid IDF objects with blank Schedule names are created.
+destep_schedule_lookup_names <- function(ids, lookup, object_class) {
+    matched <- collapse::fmatch(ids, lookup$id)
+    if (anyNA(matched)) {
+        abort(sprintf(
+            "Cannot resolve %s schedule reference id(s): [%s].",
+            object_class, paste(unique(ids[is.na(matched)]), collapse = ", ")
+        ))
+    }
+
+    lookup$name[matched]
+}
+
 destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
     num_sch <- nrow(schedule)
     map <- data.table::copy(days$map)
@@ -337,12 +389,12 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
 
     fld_daytype <- paste("For:", names(ENUM_SCH_DAYTYPE)[week_daytype$daytype])
 
-    fld_day <- days$name[
-        collapse::fmatch(
-            week_daytype$rleid_day,
-            days$id
-        )
-    ]
+    day_lookup <- destep_schedule_object_lookup(days$data, "Schedule:Day:Interval")
+    fld_day <- destep_schedule_lookup_names(
+        week_daytype$rleid_day,
+        day_lookup,
+        "Schedule:Day:Interval"
+    )
 
     sch_week <- destep_field(dest, ep, "Schedule:Week:Compact", num_fld)
     data.table::set(sch_week, NULL, "name", rep(week_name, num_fld))
@@ -413,11 +465,17 @@ destep_conv_schedule_year <- function(dest, ep, schedule, type_limits, weeks) {
         type_limits$name[collapse::fmatch(schedule$TYPE, type_limits$id)]
     )
 
+    week_lookup <- destep_schedule_object_lookup(weeks$data, "Schedule:Week:Compact")
+
     # field-sets
     data.table::set(
         sch_year, which(sch_year$index > 2L), "value",
         c(
-            weeks$data$name[collapse::fmatch(year_span$rleid_week, weeks$data$id)],
+            destep_schedule_lookup_names(
+                year_span$rleid_week,
+                week_lookup,
+                "Schedule:Week:Compact"
+            ),
             as.character(year_span$start_month),
             as.character(year_span$start_day),
             as.character(year_span$end_month),
