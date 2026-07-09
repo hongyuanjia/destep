@@ -35,7 +35,8 @@ Currently, the following components are supported:
 - [x] Outdoor ventilation from `ROOM_RELATION`
 - [x] Thermostat setpoints from `ROOM_GROUP`
 - [x] Ideal loads zone equipment from `ROOM_GROUP`
-- [ ] Internal gains \[WIP\]
+- [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
+  `EQUIPMENT_GAINS`
 - [ ] Shading
 - [ ] HVAC
 
