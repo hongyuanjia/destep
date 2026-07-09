@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added `ROOM_GROUP` ideal-loads conversion to create
+  `ZoneHVAC:IdealLoadsAirSystem` zone equipment using DeST air-conditioning
+  availability schedules (#18).
 - Added `ROOM_GROUP` thermostat/setpoint conversion to shared
   `ThermostatSetpoint:DualSetpoint` objects and per-zone
   `ZoneControl:Thermostat` controls (#17).
