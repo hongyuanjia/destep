@@ -38,6 +38,8 @@ Ideal loads zone equipment from `ROOM_GROUP`
 Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
 `EQUIPMENT_GAINS`
 
+Outdoor air requirements from `OCCUPANT_GAINS`
+
 Shading
 
 HVAC
@@ -106,6 +108,9 @@ read_dest(path) |> to_eplus(23.1)
 #>
 #> Group: <Zone Airflow>
 #> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
+#>
+#> Group: <HVAC Design Objects>
+#> └─ [036<O>] Class: <DesignSpecification:OutdoorAir>
 #>
 #> Group: <Zone HVAC Controls and Thermostats>
 #> ├─ [036<O>] Class: <ZoneControl:Thermostat>
