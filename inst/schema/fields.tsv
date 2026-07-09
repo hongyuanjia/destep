@@ -523,8 +523,8 @@ CLIMATE_DATA	WS	9	""	Wind speed in m/s.	""
 CLIMATE_DATA	WD	10	""	Wind direction code: 0 C, 1 N, 2 NNE, 3 NE, 4 ENE, 5 E, ..., 9 S, ..., 13 W, ..., 16 NNW.	""
 CLIMATE_DATA	B	11	""	Atmospheric pressure in Pa.	""
 GROUND_DATA	ID	1	primary_key	ID	""
-GROUND_DATA	HOUR	2	""	Hour index from 0 to 8759.	""
-GROUND_DATA	T	3	""	User-defined hourly ground temperature in degrees C.	""
+GROUND_DATA	HOUR	2	""	Hour index from 0 to 8759.	Used with a non-leap year calendar to aggregate the selected 8760-hour series to 12 monthly BuildingSurface ground temperatures.
+GROUND_DATA	T	3	""	User-defined hourly ground temperature in degrees C.	Converted by monthly averaging to Site:GroundTemperature:BuildingSurface fields.
 AC_SYS	AC_SYS_ID	1	primary_key	ID	""
 AC_SYS	NAME	2	""	Name.	""
 AC_SYS	OF_STOREY	3	""	Owning storey.	""
