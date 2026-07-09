@@ -471,7 +471,7 @@ OCCUPANT_GAINS	MAXNUMBER	6	""	Maximum number of people, as people or people per 
 OCCUPANT_GAINS	MINNUMBER	7	""	Minimum number of people, as people or people per square meter.	""
 OCCUPANT_GAINS	HEAT_PER_PERSON	8	""	Heat gain per person in W.	""
 OCCUPANT_GAINS	DAMP_PER_PERSON	9	""	Moisture generation per person in kg/hr.	""
-OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	""	Minimum outdoor-air flow required per person in m3/h.	""
+OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	""	Minimum outdoor-air flow required per person in m3/h.	Converted by destep_conv_design_specification_outdoor_air as Flow/Person after converting from m3/h-person to m3/s-person.
 OCCUPANT_GAINS	PER_AREA	11	""	Whether the value is per square meter.	""
 OCCUPANT_GAINS	A	12	""	A	""
 OCCUPANT_GAINS	B	13	""	B	""

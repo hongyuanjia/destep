@@ -74,6 +74,29 @@ test_that("can convert ROOM_GROUP ideal loads for air-conditioned rooms", {
     ))
 })
 
+test_that("ideal loads reference occupant outdoor-air requirements", {
+    ep <- ensure_empty_idf()
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "OCCUPANT_GAINS", data.frame(
+        GAIN_ID = c(1L, 2L, 3L),
+        OF_ROOM = c(1L, 2L, 3L),
+        MIN_REQUIRE_FRESH_AIR = c(25, 10, 15)
+    ))
+
+    ideal <- destep_conv_ideal_loads(dest, ep)
+    value <- ideal$value
+
+    expect_equal(
+        value$value_chr[
+            value$class_name == "ZoneHVAC:IdealLoadsAirSystem" &
+                value$field_name == "Design Specification Outdoor Air Object Name"
+        ],
+        c("Room 1 Outdoor Air", "Room 3 Outdoor Air")
+    )
+})
+
 test_that("stops when ROOM_GROUP AC schedules cannot be resolved", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
@@ -168,20 +191,32 @@ test_that("to_eplus() includes resolvable ideal loads references", {
 
     idf <- to_eplus(src, 23.1)
     ideal <- idf$to_table(class = "ZoneHVAC:IdealLoadsAirSystem", all = TRUE)
+    outdoor_air <- idf$to_table(class = "DesignSpecification:OutdoorAir", all = TRUE)
     equipment <- idf$to_table(class = "ZoneHVAC:EquipmentList", all = TRUE)
     connection <- idf$to_table(class = "ZoneHVAC:EquipmentConnections", all = TRUE)
     year <- idf$to_table(class = "Schedule:Year", all = TRUE)
 
     ideal_names <- ideal$value[ideal$field == "Name"]
+    outdoor_air_names <- outdoor_air$value[outdoor_air$field == "Name"]
     equipment_names <- equipment$value[equipment$field == "Name"]
     year_names <- year$value[year$field == "Name"]
+    ideal_outdoor_air <- ideal$value[
+        ideal$field == "Design Specification Outdoor Air Object Name"
+    ]
+    outdoor_air_flow <- as.numeric(outdoor_air$value[
+        outdoor_air$field == "Outdoor Air Flow per Person"
+    ])
 
     expect_equal(length(ideal_names), 27L)
+    expect_equal(length(outdoor_air_names), 36L)
+    expect_equal(unique(outdoor_air_flow), 25 / 3600)
     expect_equal(length(equipment_names), 27L)
     expect_equal(length(connection$value[connection$field == "Zone Name"]), 27L)
     expect_true(all(
         ideal$value[ideal$field == "Availability Schedule Name"] %in% year_names
     ))
+    expect_true(all(nzchar(ideal_outdoor_air)))
+    expect_true(all(ideal_outdoor_air %in% outdoor_air_names))
     expect_true(all(
         equipment$value[equipment$field == "Zone Equipment 1 Name"] %in%
             ideal_names

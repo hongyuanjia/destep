@@ -76,6 +76,15 @@ destep_room_group_ideal_loads_table <- function(dest) {
         "
     )
     data.table::setDT(ideal)
+
+    # Reuse occupant-derived outdoor-air objects when they exist; rooms without
+    # a positive people fresh-air requirement keep the IdealLoads field blank.
+    outdoor_air <- destep_occupant_outdoor_air_table(dest)
+    data.table::set(
+        ideal, NULL, "ENERGYPLUS_OUTDOOR_AIR_NAME",
+        outdoor_air$ENERGYPLUS_OUTDOOR_AIR_NAME[match(ideal$ROOM_ID, outdoor_air$ROOM_ID)]
+    )
+
     ideal
 }
 
@@ -148,6 +157,11 @@ destep_ideal_loads_objects <- function(dest, ep, ideal) {
 
 # Build one ZoneHVAC:IdealLoadsAirSystem value list.
 destep_ideal_loads_value <- function(ideal, i) {
+    outdoor_air_name <- ideal$ENERGYPLUS_OUTDOOR_AIR_NAME[[i]]
+    if (is.na(outdoor_air_name)) {
+        outdoor_air_name <- NULL
+    }
+
     list(
         name = ideal$ENERGYPLUS_IDEAL_LOADS_NAME[[i]],
         availability_schedule_name = ideal$AC_SCHEDULE_NAME[[i]],
@@ -169,7 +183,7 @@ destep_ideal_loads_value <- function(ideal, i) {
         dehumidification_control_type = "ConstantSensibleHeatRatio",
         cooling_sensible_heat_ratio = 0.7,
         humidification_control_type = "None",
-        design_specification_outdoor_air_object_name = NULL,
+        design_specification_outdoor_air_object_name = outdoor_air_name,
         outdoor_air_inlet_node_name = NULL,
         demand_controlled_ventilation_type = "None",
         outdoor_air_economizer_type = "NoEconomizer",

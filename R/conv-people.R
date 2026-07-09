@@ -9,8 +9,9 @@ destep_conv_internal_gains <- function(dest, ep) {
 }
 
 # OCCUPANT_GAINS -> People
-# TODO: Map OCCUPANT_GAINS$MIN_REQUIRE_FRESH_AIR to
-#       DesignSpecification:OutdoorAir once ventilation conversion is supported.
+# MIN_REQUIRE_FRESH_AIR is handled separately by
+# destep_conv_design_specification_outdoor_air() so People remains focused on
+# internal sensible/latent heat gains.
 destep_conv_people <- function(dest, ep) {
     if (!destep_has_rows(dest, "OCCUPANT_GAINS")) return(NULL)
 

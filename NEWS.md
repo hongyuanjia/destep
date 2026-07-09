@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added occupant outdoor-air conversion from `OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR`
+  to `DesignSpecification:OutdoorAir`, with IdealLoads systems referencing the
+  converted outdoor-air objects.
 - Added `ROOM_GROUP` ideal-loads conversion to create
   `ZoneHVAC:IdealLoadsAirSystem` zone equipment using DeST air-conditioning
   availability schedules (#18).
