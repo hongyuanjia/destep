@@ -2,6 +2,9 @@
 
 ## destep 0.0.0.9000
 
+- Fixed `Schedule:Week:Compact` day schedule references generated from
+  `SCHEDULE_YEAR`, preventing missing `Schedule:Day Name` values in
+  converted EnergyPlus schedules (#15).
 - Added `ROOM_RELATION` outdoor ventilation conversion to
   `ZoneVentilation:DesignFlowRate`, using the referenced air-change
   schedule and keeping inter-zone mixing deferred (#14).
