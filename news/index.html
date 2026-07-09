@@ -33,7 +33,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li>Added CI coverage for the full real DeST ACCDB to SQLite to EnergyPlus IDF conversion path using a cached GitHub release fixture (#16).</li>
+<ul><li>Added <code>ROOM_GROUP</code> thermostat/setpoint conversion to shared <code>ThermostatSetpoint:DualSetpoint</code> objects and per-zone <code>ZoneControl:Thermostat</code> controls (#17).</li>
+<li>Added CI coverage for the full real DeST ACCDB to SQLite to EnergyPlus IDF conversion path using a cached GitHub release fixture (#16).</li>
 <li>Fixed <code>Schedule:Week:Compact</code> day schedule references generated from <code>SCHEDULE_YEAR</code>, preventing missing <code>Schedule:Day Name</code> values in converted EnergyPlus schedules (#15).</li>
 <li>Added <code>ROOM_RELATION</code> outdoor ventilation conversion to <code>ZoneVentilation:DesignFlowRate</code>, using the referenced air-change schedule and keeping inter-zone mixing deferred (#14).</li>
 <li>Added normalized DeST schema catalog TSV assets and schema coverage diagnostics for comparing real SQLite models against the catalog (#10).</li>

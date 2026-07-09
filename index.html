@@ -75,6 +75,7 @@
 <li><label><input type="checkbox" checked>Construction</label></li>
 <li><label><input type="checkbox" checked>Hourly schedules from <code>SCHEDULE_YEAR</code></label></li>
 <li><label><input type="checkbox" checked>Outdoor ventilation from <code>ROOM_RELATION</code></label></li>
+<li><label><input type="checkbox" checked>Thermostat setpoints from <code>ROOM_GROUP</code></label></li>
 <li><label><input type="checkbox">Internal gains [WIP]</label></li>
 <li><label><input type="checkbox">Shading</label></li>
 <li><label><input type="checkbox">HVAC</label></li>
@@ -121,7 +122,7 @@
 <span><span class="co">#&gt; │─ [100&lt;O&gt;] Class: &lt;Schedule:Day:Interval&gt;</span></span>
 <span><span class="co">#&gt; │─ [187&lt;O&gt;] Class: &lt;Schedule:Week:Compact&gt;</span></span>
 <span><span class="co">#&gt; │─ [177&lt;O&gt;] Class: &lt;Schedule:Year&gt;</span></span>
-<span><span class="co">#&gt; └─ [002&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
+<span><span class="co">#&gt; └─ [003&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Surface Construction Elements&gt;</span></span>
 <span><span class="co">#&gt; ├─ [014&lt;O&gt;] Class: &lt;Material&gt;</span></span>
@@ -143,7 +144,11 @@
 <span><span class="co">#&gt; └─ [036&lt;O&gt;] Class: &lt;ElectricEquipment&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone Airflow&gt;</span></span>
-<span><span class="co">#&gt; └─ [028&lt;O&gt;] Class: &lt;ZoneVentilation:DesignFlowRate&gt;</span></span></code></pre></div>
+<span><span class="co">#&gt; └─ [028&lt;O&gt;] Class: &lt;ZoneVentilation:DesignFlowRate&gt;</span></span>
+<span><span class="co">#&gt;</span></span>
+<span><span class="co">#&gt; Group: &lt;Zone HVAC Controls and Thermostats&gt;</span></span>
+<span><span class="co">#&gt; ├─ [036&lt;O&gt;] Class: &lt;ZoneControl:Thermostat&gt;</span></span>
+<span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;ThermostatSetpoint:DualSetpoint&gt;</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="license">
