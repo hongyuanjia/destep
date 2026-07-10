@@ -65,7 +65,10 @@ test_that("to_eplus() works", {
     # can convert a DeST model to a valid EnergyPlus model
     expect_message(expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf"))
     expect_true(idf$is_valid())
-    expect_equal(nrow(idf$to_table(class = "RunPeriod")), 1L)
+    # Request the raw field table because eplusr versions differ in the default
+    # shape returned by `$to_table()` for a one-object class.
+    run_period <- idf$to_table(class = "RunPeriod", all = TRUE)
+    expect_equal(run_period$value[run_period$field == "Name"], "Annual")
 
     validity <- idf$validate()
     issue_count <- vapply(validity, function(issue) {
