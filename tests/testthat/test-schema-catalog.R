@@ -90,7 +90,8 @@ test_that("DeST schema catalog has the expected shape", {
     expect_true(all(c(
         "BUILDING", "ENVIRONMENT", "ROOM", "SURFACE", "MAIN_ENCLOSURE",
         "SCHEDULE_YEAR", "WINDOW", "ROOM_GROUP", "ROOM_RELATION",
-        "OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS", "GROUND_DATA"
+        "OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS", "CLIMATE_DATA",
+        "GROUND_DATA"
     ) %in% converted_tables))
 
     for (table_name in tables$table) {

@@ -38,6 +38,7 @@ Currently, the following components are supported:
 - [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
   `EQUIPMENT_GAINS`
 - [x] Outdoor air requirements from `OCCUPANT_GAINS`
+- [x] Weather files from `CLIMATE_DATA`
 - [x] Ground temperatures from `GROUND_DATA`
 - [ ] Shading
 - [ ] HVAC
@@ -120,4 +121,22 @@ read_dest(path) |> to_eplus(23.1)
 #> Group: <Zone HVAC Equipment Connections>
 #> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
 #> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+
+# convert the DeST climate data to an EnergyPlus weather object
+epw <- suppressMessages(to_epw(path))
+epw
+#> ══ EnergyPlus Weather File ═════════════════════════════════════════════════════
+#> [Location ]: Chongqin, Chongqing, P.R.China
+#>              {N 29°34'}, {E 106°28'}, {UTC+08:00}
+#> [Elevation]: 259m above see level
+#> [Data Src ]: DeST CLIMATE_DATA
+#> [WMO Stat ]: 57516
+#> [Leap Year]: No
+#> [Interval ]: 60 mins
+#>
+#> ── Data Periods ────────────────────────────────────────────────────────────────
+#>    Name StartDayOfWeek StartDay EndDay
+#> 1: Data         Sunday     1/ 1  12/31
+#>
+#> ────────────────────────────────────────────────────────────────────────────────
 ```

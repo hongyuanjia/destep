@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added `to_epw()` to convert DeST `CLIMATE_DATA` into an in-memory
+  `eplusr::Epw` weather object; fields without a direct DeST source, including
+  direct normal radiation, are written with EPW missing codes from eplusr (#21).
 - Added `GROUND_DATA` conversion to
   `Site:GroundTemperature:BuildingSurface` using monthly averages of the
   selected hourly ground-temperature series (#20).

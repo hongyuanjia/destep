@@ -512,16 +512,16 @@ EQUIPMENT_GAINS	X	14	""	X coordinate of the equipment heat-gain object in the dr
 EQUIPMENT_GAINS	Y	15	""	Y coordinate of the equipment heat-gain object in the drawing.	""
 EQUIPMENT_GAINS	Z	16	""	Z coordinate of the equipment heat-gain object in the drawing.	""
 CLIMATE_DATA	ID	1	primary_key	ID	""
-CLIMATE_DATA	HOUR	2	""	Hour index from 0 to 8759.	""
-CLIMATE_DATA	DRY_BULB_T	3	""	Dry-bulb temperature in degrees C.	""
-CLIMATE_DATA	DAMP	4	""	Humidity ratio, in g/kg dry air.	""
-CLIMATE_DATA	HORI_TOTAL_RAD	5	""	Global horizontal radiation in W/m2.	""
-CLIMATE_DATA	HORI_SCATTER_RAD	6	""	Diffuse horizontal radiation in W/m2.	""
-CLIMATE_DATA	T_GROUND	7	""	Ground surface temperature in degrees C.	""
-CLIMATE_DATA	T_SKY	8	""	Effective sky temperature in K.	""
-CLIMATE_DATA	WS	9	""	Wind speed in m/s.	""
-CLIMATE_DATA	WD	10	""	Wind direction code: 0 C, 1 N, 2 NNE, 3 NE, 4 ENE, 5 E, ..., 9 S, ..., 13 W, ..., 16 NNW.	""
-CLIMATE_DATA	B	11	""	Atmospheric pressure in Pa.	""
+CLIMATE_DATA	HOUR	2	""	Hour index from 0 to 8759.	Used as a non-leap hourly year for EPW weather data export.
+CLIMATE_DATA	DRY_BULB_T	3	""	Dry-bulb temperature in degrees C.	Converted to EPW dry bulb temperature.
+CLIMATE_DATA	DAMP	4	""	Humidity ratio, in g/kg dry air.	Converted to EPW dew point temperature and relative humidity with DRY_BULB_T and B.
+CLIMATE_DATA	HORI_TOTAL_RAD	5	""	Global horizontal radiation in W/m2.	Converted to EPW global horizontal radiation; direct normal radiation is left as the EPW missing code because DeST has no direct-normal field here.
+CLIMATE_DATA	HORI_SCATTER_RAD	6	""	Diffuse horizontal radiation in W/m2.	Converted to EPW diffuse horizontal radiation; direct normal radiation is left as the EPW missing code because DeST has no direct-normal field here.
+CLIMATE_DATA	T_GROUND	7	""	Ground surface temperature in degrees C.	Not used by to_epw() v1; GROUND_DATA is converted separately to Site:GroundTemperature:BuildingSurface for IDF ground boundaries.
+CLIMATE_DATA	T_SKY	8	""	Effective sky temperature in K.	Converted to EPW horizontal infrared radiation intensity from sky.
+CLIMATE_DATA	WS	9	""	Wind speed in m/s.	Converted to EPW wind speed.
+CLIMATE_DATA	WD	10	""	Wind direction code: 0 C, 1 N, 2 NNE, 3 NE, 4 ENE, 5 E, ..., 9 S, ..., 13 W, ..., 16 NNW.	Converted to EPW wind direction degrees.
+CLIMATE_DATA	B	11	""	Atmospheric pressure in Pa.	Converted to EPW atmospheric pressure and used for humidity calculations.
 GROUND_DATA	ID	1	primary_key	ID	""
 GROUND_DATA	HOUR	2	""	Hour index from 0 to 8759.	Used with a non-leap year calendar to aggregate the selected 8760-hour series to 12 monthly BuildingSurface ground temperatures.
 GROUND_DATA	T	3	""	User-defined hourly ground temperature in degrees C.	Converted by monthly averaging to Site:GroundTemperature:BuildingSurface fields.
