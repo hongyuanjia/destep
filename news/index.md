@@ -2,6 +2,10 @@
 
 ## destep 0.0.0.9000
 
+- Fixed EnergyPlus simulation initialization for converted DeST models
+  by adding an annual run period and normalizing schedule day types,
+  surface polygons, material thicknesses, and zone thermostat coverage
+  (#22).
 - Added `GROUND_DATA` conversion to
   `Site:GroundTemperature:BuildingSurface` using monthly averages of the
   selected hourly ground-temperature series (#20).
