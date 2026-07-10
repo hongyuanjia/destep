@@ -18,5 +18,11 @@ test_that("can convert 'Construction' and 'Material'", {
             "Construction"
         )
     )
+    material_thickness <- const$value[
+        class_name == "Material" & field_name == "Thickness",
+        value_num
+    ]
+    expect_equal(max(material_thickness, na.rm = TRUE), 0.2)
+    expect_true(any(material_thickness == 0.02))
     expect_s3_class(attr(const, "table"), "data.table")
 })

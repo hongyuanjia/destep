@@ -340,7 +340,9 @@ destep_conv_const <- function(dest, ep) {
                 name                = .(dt_mat$MATERIAL_NAME),
                 # NOTE: here we use "MediumSmooth" for roughness"
                 roughness           = "MediumSmooth",
-                thickness           = .(dt_mat$LENGTH),
+                # DeST construction lengths are stored in millimetres, while
+                # EnergyPlus Material thickness is expressed in metres.
+                thickness           = .(dt_mat$LENGTH / 1000),
                 conductivity        = .(dt_mat$MATERIAL_CONDUCTIVITY),
                 density             = .(dt_mat$MATERIAL_DENSITY),
                 specific_heat       = .(dt_mat$MATERIAL_SPECIFIC_HEAT),

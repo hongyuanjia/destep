@@ -70,4 +70,15 @@ test_that("real model schedule week and year references are resolvable", {
         ]),
         0L
     )
+
+    # AllOtherDays matches every still-unassigned day type, so EnergyPlus
+    # requires it to follow the explicit Schedule:Week:Compact assignments.
+    for (week_name in unique(week$name)) {
+        daytypes <- week[
+            name == week_name & grepl("^DayType List", field) & !is.na(value),
+            value
+        ]
+        all_other <- which(daytypes == "For: AllOtherDays")
+        if (length(all_other)) expect_equal(all_other, length(daytypes))
+    }
 })

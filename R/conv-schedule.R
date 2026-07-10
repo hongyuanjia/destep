@@ -365,6 +365,16 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
                 }
             }
 
+            # EnergyPlus resolves day types in field order. AllOtherDays
+            # therefore has to be the final group, after every explicit type.
+            has_all_other_days <- vapply(compacted, function(daytypes) {
+                any(daytypes == ENUM_SCH_DAYTYPE[["AllOtherDays"]])
+            }, logical(1L))
+            compacted <- c(
+                compacted[!has_all_other_days],
+                compacted[has_all_other_days]
+            )
+
             len_daytype <- collapse::vlengths(compacted, use.names = FALSE)
             list(
                 rleid = rep(rleid, sum(len_daytype)),

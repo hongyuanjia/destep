@@ -15,6 +15,16 @@ destep_conv_thermostat <- function(dest, ep) {
     skip_reason[is.na(thermostat$ROOM_GROUP_ID)] <- "ROOM.OF_ROOM_GROUP does not reference ROOM_GROUP"
     missing_setpoint <- is.na(skip_reason) & !destep_has_thermostat_setpoints(thermostat)
     skip_reason[missing_setpoint] <- "ROOM_GROUP setpoint schedule is zero or missing"
+    # A ZoneControl:Thermostat is valid only for a Zone with equipment. Keep
+    # this predicate aligned with IdealLoads so unconditioned DeST rooms do not
+    # become EnergyPlus controlled zones without EquipmentConnections.
+    unsupported_zone <- is.na(skip_reason) & (
+        is.na(thermostat$IS_AC_ROOM) |
+            thermostat$IS_AC_ROOM == 0L |
+            is.na(thermostat$AC_SCHEDULE_ID) |
+            thermostat$AC_SCHEDULE_ID == 0L
+    )
+    skip_reason[unsupported_zone] <- "ROOM_GROUP does not describe a supported ideal loads zone"
     data.table::set(thermostat, NULL, "SKIP_REASON", skip_reason)
     data.table::set(thermostat, NULL, "CAN_CONVERT", is.na(skip_reason))
     data.table::set(
@@ -28,15 +38,15 @@ destep_conv_thermostat <- function(dest, ep) {
 
     if (any(!thermostat$CAN_CONVERT)) {
         warn(sprintf(
-            "Skipped %i ROOM row(s) that do not have complete ROOM_GROUP thermostat setpoints.",
+            "Skipped %i ROOM row(s) that do not describe supported controlled zones.",
             sum(!thermostat$CAN_CONVERT)
         ))
     }
 
-    thermostat <- thermostat[thermostat$CAN_CONVERT]
-    if (nrow(thermostat) == 0L) return(NULL)
+    converted <- thermostat[thermostat$CAN_CONVERT]
+    if (nrow(converted) == 0L) return(NULL)
 
-    setpoint <- unique(thermostat[, c(
+    setpoint <- unique(converted[, c(
         "SET_T_MIN_SCHEDULE", "HEATING_SCHEDULE_NAME",
         "SET_T_MAX_SCHEDULE", "COOLING_SCHEDULE_NAME",
         "ENERGYPLUS_SETPOINT_NAME"
@@ -45,7 +55,7 @@ destep_conv_thermostat <- function(dest, ep) {
     out <- destep_combine_outputs(list(
         control_type = destep_thermostat_control_type_schedule(dest, ep),
         setpoint = destep_thermostat_setpoint_objects(dest, ep, setpoint),
-        control = destep_thermostat_control_objects(dest, ep, thermostat)
+        control = destep_thermostat_control_objects(dest, ep, converted)
     ), table = thermostat)
 
     out
