@@ -85,6 +85,7 @@ destep_conv_surface <- function(dest, ep) {
     )
     assert_unique_name(surface$NAME[surface$POINT_NO == 0L], "surface")
     data.table::setDT(surface)
+    data.table::setorderv(surface, c("ID", "POINT_NO"))
 
     # find the adjacent surfaces
     surface[BOUNDARY == "Surface", by = "PLANE", BOUNDARY_OBJECT := rev(NAME)]
@@ -121,6 +122,11 @@ destep_conv_surface <- function(dest, ep) {
             POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
         )]
     }
+
+    # Use one minimal vertex sequence for each polygon. EnergyPlus simplifies
+    # adjacent polygons internally; leaving redundant collinear points can make
+    # the two otherwise identical sides end up with different vertex counts.
+    surface <- surface[, destep_simplify_surface_polygon(.SD), by = "ID"]
 
     # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
     # TODO: how does EnergyPlus handle "empty floor slab"?
@@ -179,4 +185,44 @@ destep_conv_surface <- function(dest, ep) {
     attr(out, "table") <- surface
 
     out
+}
+
+# Remove redundant vertices from one ordered DeST surface polygon while
+# retaining turns and at least the three vertices needed for a valid face.
+destep_simplify_surface_polygon <- function(surface, tolerance = 1e-8) {
+    surface <- data.table::copy(surface)
+
+    repeat {
+        n_vertex <- nrow(surface)
+        if (n_vertex <= 3L) break
+
+        previous <- c(n_vertex, seq_len(n_vertex - 1L))
+        following <- c(seq.int(2L, n_vertex), 1L)
+        coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
+        incoming <- coordinates - coordinates[previous, , drop = FALSE]
+        outgoing <- coordinates[following, , drop = FALSE] - coordinates
+
+        incoming_length <- sqrt(rowSums(incoming ^ 2))
+        outgoing_length <- sqrt(rowSums(outgoing ^ 2))
+        cross_product <- cbind(
+            incoming[, 2L] * outgoing[, 3L] - incoming[, 3L] * outgoing[, 2L],
+            incoming[, 3L] * outgoing[, 1L] - incoming[, 1L] * outgoing[, 3L],
+            incoming[, 1L] * outgoing[, 2L] - incoming[, 2L] * outgoing[, 1L]
+        )
+        # A vertex is redundant only when the path continues straight through
+        # it. A collinear reversal is retained because it changes the polygon.
+        redundant <- incoming_length <= tolerance |
+            outgoing_length <= tolerance |
+            (
+                sqrt(rowSums(cross_product ^ 2)) <=
+                    tolerance * pmax(1, incoming_length * outgoing_length) &
+                rowSums(incoming * outgoing) > 0
+            )
+
+        if (!any(redundant) || n_vertex - sum(redundant) < 3L) break
+        surface <- surface[!redundant]
+    }
+
+    data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
+    surface
 }
