@@ -65,6 +65,7 @@ test_that("to_eplus() works", {
     # can convert a DeST model to a valid EnergyPlus model
     expect_message(expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf"))
     expect_true(idf$is_valid())
+    expect_equal(nrow(idf$to_table(class = "RunPeriod")), 1L)
 
     validity <- idf$validate()
     issue_count <- vapply(validity, function(issue) {

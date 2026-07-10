@@ -150,6 +150,21 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         daylighting_reference_point_coordinate_system = "Relative"
     ))
 
+    # DeST stores model inputs but no EnergyPlus simulation period.  Add a
+    # calendar-year period so each converted model can run against an EPW file.
+    ep$add("RunPeriod" := list(
+        name                                   = "Annual",
+        begin_month                            = 1L,
+        begin_day_of_month                     = 1L,
+        end_month                              = 12L,
+        end_day_of_month                       = 31L,
+        use_weather_file_holidays_and_special_days = "Yes",
+        use_weather_file_daylight_saving_period = "Yes",
+        apply_weekend_holiday_rule             = "No",
+        use_weather_file_rain_indicators       = "Yes",
+        use_weather_file_snow_indicators       = "Yes"
+    ))
+
     # update object names and make sure all names are unique
     destep_update_name(tmpdb)
 
