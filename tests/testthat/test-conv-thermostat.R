@@ -39,9 +39,9 @@ test_that("can convert ROOM_GROUP thermostat setpoints with shared dual setpoint
 
     expect_equal(sum(thermostat$object$class_name == "Schedule:Constant"), 1L)
     expect_equal(sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"), 2L)
-    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 3L)
+    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 2L)
 
-    expect_true(all(tab$CAN_CONVERT))
+    expect_equal(tab$CAN_CONVERT, c(TRUE, FALSE, TRUE))
     expect_equal(
         tab$ENERGYPLUS_SETPOINT_NAME,
         c(
@@ -150,14 +150,14 @@ test_that("can convert ROOM_GROUP thermostat setpoints from a real DeST model", 
     thermostat <- destep_conv_thermostat(dest, ep)
     tab <- attr(thermostat, "table")
 
-    expect_equal(sum(tab$CAN_CONVERT), 36L)
-    expect_equal(sum(tab$CAN_CONVERT & tab$IS_AC_ROOM == 0L), 9L)
+    expect_equal(sum(tab$CAN_CONVERT), 27L)
+    expect_equal(sum(!tab$CAN_CONVERT & tab$IS_AC_ROOM == 0L), 9L)
     expect_equal(
         unique(tab$ENERGYPLUS_SETPOINT_NAME),
         "DeST Dual Setpoint H10 C7"
     )
     expect_equal(sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"), 1L)
-    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 36L)
+    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 27L)
 })
 
 test_that("to_eplus() includes resolvable thermostat references", {
@@ -177,7 +177,7 @@ test_that("to_eplus() includes resolvable thermostat references", {
     constant_names <- constant$value[constant$field == "Name"]
     year_names <- year$value[year$field == "Name"]
 
-    expect_equal(length(control_names), 36L)
+    expect_equal(length(control_names), 27L)
     expect_equal(length(setpoint_names), 1L)
     expect_true("DeST Dual Setpoint Control Type" %in% constant_names)
     expect_true(all(
