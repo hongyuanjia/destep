@@ -175,14 +175,19 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ver <- destep_comment_version(tmpdb, ep)
     ep$Version$comment(un_list(ver$object$comment))
 
+    # Surface part geometry must be available when a window crosses a topology
+    # split, because each clipped window piece references exactly one host part.
+    surface <- destep_conv_surface(tmpdb, ep)
+    window <- destep_conv_window(tmpdb, ep, attr(surface, "table"))
+
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
         location = destep_conv_location(tmpdb, ep),
         ground_temperature = destep_conv_ground_temperature(tmpdb, ep),
         building = destep_conv_building(tmpdb, ep),
         zone     = destep_conv_zone(tmpdb, ep),
-        surface  = destep_conv_surface(tmpdb, ep),
-        window   = destep_conv_window(tmpdb, ep),
+        surface  = surface,
+        window   = window,
         const    = destep_conv_const(tmpdb, ep),
         schedule = destep_conv_schedule(tmpdb, ep),
         thermostat = destep_conv_thermostat(tmpdb, ep),
