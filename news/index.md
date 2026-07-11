@@ -2,6 +2,11 @@
 
 ## destep 0.0.0.9000
 
+- Preserved DeST enclosure geometry during EnergyPlus conversion by
+  correcting surface types, outward normals, reciprocal boundary
+  references, true-north rotation, EnergyPlus-tolerance vertex handling,
+  shared-edge topology, reciprocal interzone windows, and windows
+  crossing host partitions (#24).
 - Fixed EnergyPlus simulation initialization for converted DeST models
   by adding an annual run period and normalizing schedule day types,
   surface polygons, material thicknesses, and zone thermostat coverage
