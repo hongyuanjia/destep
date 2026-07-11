@@ -146,6 +146,9 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ep$add("GlobalGeometryRules" := list(
         starting_vertex_position                      = "UpperLeftCorner",
         vertex_entry_direction                        = "Counterclockwise",
+        # DeST POINT coordinates share one building-wide drawing origin. Keep
+        # every EnergyPlus Zone origin at zero and use relative coordinates so
+        # Building North Axis can rotate that drawing to true north.
         coordinate_system                             = "Relative",
         daylighting_reference_point_coordinate_system = "Relative"
     ))

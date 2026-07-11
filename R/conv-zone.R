@@ -42,6 +42,12 @@ destep_conv_zone <- function(dest, ep) {
         # Zone
         quote("Zone" := list(
             name = room$NAME,
+            # All DeST POINT values already use the common drawing origin;
+            # explicit zero transforms prevent accidental double translation.
+            direction_of_relative_north = 0.0,
+            x_origin = 0.0,
+            y_origin = 0.0,
+            z_origin = 0.0,
             # NOTE: DeST use room types to refer to default loads and etc.
             # However, 'type' field is not used by EnergyPlus and is always set
             # to 1.

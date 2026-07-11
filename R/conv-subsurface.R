@@ -26,15 +26,23 @@ destep_conv_window <- function(dest, ep) {
             W.TYPE         AS TYPE,
             SW.CNAME       AS CONSTRUCTION,
             CASE
-                WHEN S1.TYPE = 0 THEN S1.NAME
-                WHEN S2.TYPE = 0 THEN S2.NAME
+                WHEN S1.TYPE NOT IN (1, 2) THEN S1.NAME
+                WHEN S2.TYPE NOT IN (1, 2) THEN S2.NAME
                 ELSE COALESCE(S1.NAME, S2.NAME)
             END            AS SURFACE_NAME,
             CASE
-                WHEN S1.TYPE = 0 THEN 1
-                WHEN S2.TYPE = 0 THEN 2
+                WHEN S1.TYPE NOT IN (1, 2) THEN 1
+                WHEN S2.TYPE NOT IN (1, 2) THEN 2
                 ELSE 1
             END            AS SIDE,
+            CASE
+                WHEN S1.TYPE NOT IN (1, 2) THEN S1.AZIMUTH
+                ELSE S2.AZIMUTH
+            END            AS AZIMUTH,
+            CASE
+                WHEN S1.TYPE NOT IN (1, 2) THEN S1.TILT
+                ELSE S2.TILT
+            END            AS TILT,
             L.POINT_NO     AS POINT_NO,
             ROUND(P.X, 3)  AS POINT_X,
             ROUND(P.Y, 3)  AS POINT_Y,
@@ -65,10 +73,10 @@ destep_conv_window <- function(dest, ep) {
     assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
     data.table::setDT(window)
 
-    # Match the parent wall orientation used by destep_conv_surface().
-    window[SIDE == 2L, by = "ID", `:=`(
-        POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
-    )]
+    # Use the same DeST direction metadata as the parent surface so a window
+    # cannot silently face into its zone when enclosure side ordering varies.
+    south_direction <- destep_south_direction(dest)
+    window <- window[, destep_orient_surface_polygon(.SD, south_direction), by = "ID"]
 
     value <- window[,
         by = "ID",

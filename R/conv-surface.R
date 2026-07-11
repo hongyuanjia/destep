@@ -10,6 +10,7 @@ destep_conv_surface <- function(dest, ep) {
         dest,
         "
         SELECT
+            E.ENCLOSURE_ID                                AS ENCLOSURE_ID,
             E.SURFACE_ID                                   AS ID,
             E.PLANE                                        AS PLANE,
             S.NAME                                         AS NAME,
@@ -17,30 +18,44 @@ destep_conv_surface <- function(dest, ep) {
             S.TYPE                                         AS TYPE_SURFACE,
             CASE
                 WHEN E.KIND = 1 OR E.KIND = 2 THEN 'Wall'
-                WHEN E.KIND = 3 OR E.KIND = 6 THEN 'Roof'
+                WHEN E.KIND = 3               THEN 'Roof'
                 WHEN E.KIND = 4               THEN 'Floor'
+                WHEN E.KIND = 5 AND S.AZIMUTH = 999 THEN 'Floor'
                 WHEN E.KIND = 5               THEN 'Ceiling'
+                WHEN E.KIND = 6               THEN 'Floor'
             END                                            AS TYPE,
             E.SIDE                                         AS SIDE,
             E.CONSTRUCTION                                 AS CONSTRUCTION,
             COALESCE(ROOM.NAME, OUTSIDE.NAME, GROUND.NAME) AS ROOM,
             CASE
-                WHEN E.KIND = 1 OR S.TYPE = 1 THEN 'Outdoors'
-                WHEN E.KIND = 4 OR S.TYPE = 2 THEN 'Ground'
+                WHEN PEER.TYPE = 1 THEN 'Outdoors'
+                WHEN PEER.TYPE = 2 THEN 'Ground'
                 ELSE 'Surface'
             END                                            AS BOUNDARY,
+            CASE
+                WHEN PEER.TYPE NOT IN (1, 2) THEN PEER.NAME
+            END                                            AS BOUNDARY_OBJECT,
+            S.AZIMUTH                                      AS AZIMUTH,
+            S.TILT                                         AS TILT,
             L.POINT_NO                                     AS POINT_NO,
             ROUND(P.X, 3)                                  AS POINT_X,
             ROUND(P.Y, 3)                                  AS POINT_Y,
             ROUND(P.Z, 3)                                  AS POINT_Z
         FROM (
             SELECT
-                SURFACE_ID, S.KIND, SIDE, C.CNAME AS CONSTRUCTION, PLANE
+                ENCLOSURE_ID, SURFACE_ID, PEER_ID, S.KIND, SIDE,
+                C.CNAME AS CONSTRUCTION, PLANE
             FROM (
                 -- get both side surfaces
-                SELECT SIDE1 AS SURFACE_ID, KIND, 1 AS SIDE, CONSTRUCTION, MIDDLE_PLANE AS PLANE FROM MAIN_ENCLOSURE
-                UNION
-                SELECT SIDE2 AS SURFACE_ID, KIND, 2 AS SIDE, CONSTRUCTION, MIDDLE_PLANE AS PLANE FROM MAIN_ENCLOSURE
+                SELECT ID AS ENCLOSURE_ID, SIDE1 AS SURFACE_ID,
+                    SIDE2 AS PEER_ID, KIND, 1 AS SIDE, CONSTRUCTION,
+                    MIDDLE_PLANE AS PLANE
+                FROM MAIN_ENCLOSURE
+                UNION ALL
+                SELECT ID AS ENCLOSURE_ID, SIDE2 AS SURFACE_ID,
+                    SIDE1 AS PEER_ID, KIND, 2 AS SIDE, CONSTRUCTION,
+                    MIDDLE_PLANE AS PLANE
+                FROM MAIN_ENCLOSURE
             ) S
             -- get construction name
             LEFT JOIN (
@@ -66,6 +81,8 @@ destep_conv_surface <- function(dest, ep) {
         ) E
         LEFT JOIN SURFACE S
         ON E.SURFACE_ID = S.SURFACE_ID
+        LEFT JOIN SURFACE PEER
+        ON E.PEER_ID = PEER.SURFACE_ID
         -- get room name
         LEFT JOIN ROOM
         ON S.OF_ROOM = ROOM.ID
@@ -87,52 +104,38 @@ destep_conv_surface <- function(dest, ep) {
     data.table::setDT(surface)
     data.table::setorderv(surface, c("ID", "POINT_NO"))
 
-    # find the adjacent surfaces
-    surface[BOUNDARY == "Surface", by = "PLANE", BOUNDARY_OBJECT := rev(NAME)]
-    # TODO: reverse the order of the vertices for the adjacent surface
-    # If 'MAIN_ENCLOSURE$KIND' = 5, it means that this enclosure can either be a
-    # ceiling or floor. The actual surface type is determined by the
-    # 'SURFACE$TYPE'. If 'SURFACE$TYPE' = 4, this is a floor. The coordinates
-    # should be reversed. If 'SURFACE$TYPE' = 5, this is a ceiling.
-    surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 4L, by = "ID", `:=`(
-        TYPE = "Floor",
-        POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
-    )]
-    surface[KIND_ENCLOSURE == 5L & TYPE_SURFACE == 5L, TYPE := "Ceiling"]
+    # Normalize each shared middle-plane polygon once before the two room-side
+    # copies are oriented. Vertices used by another plane are topological
+    # junctions and must survive collinear-point cleanup.
+    window_parent <- integer()
+    if (destep_has_rows(dest, "WINDOW")) {
+        window_parent <- DBI::dbGetQuery(dest, "
+            SELECT CASE
+                WHEN S1.TYPE NOT IN (1, 2) THEN E.SIDE1
+                ELSE E.SIDE2
+            END AS ID
+            FROM WINDOW W
+            INNER JOIN MAIN_ENCLOSURE E ON W.OF_ENCLOSURE = E.ID
+            LEFT JOIN SURFACE S1 ON E.SIDE1 = S1.SURFACE_ID
+        ")$ID
+    }
+    surface <- destep_normalize_surface_topology(surface, window_parent)
     # remove the surface indicating outside environment and grounds
     surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
 
-    # for walls, reverse the order of the vertices if the side is 2
-    surface[TYPE == "Wall" & SIDE == 2L, by = "ID", `:=`(
-        POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
-    )]
-    # use newall vector to determine the correct side of the surface for ceilings and floors
-    # Reference: https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal#Newell.27s_Method
-    ids_ceiling <- surface[TYPE %in% c("Ceiling", "Roof"), by = "ID", {
-        nx <- seq_len(.N) %% .N + 1L
-        list(z = sum((POINT_Y + POINT_Y[nx]) * (POINT_X - POINT_X[nx])))
-    }][z < 0.0, ID]
-    ids_floor <- surface[TYPE %in% c("Floor", "Ground"), by = "ID", {
-        nx <- seq_len(.N) %% .N + 1L
-        list(z = sum((POINT_Y + POINT_Y[nx]) * (POINT_X - POINT_X[nx])))
-    }][z > 0.0, ID]
-    ids <- c(ids_ceiling, ids_floor)
-    if (length(ids) > 0L) {
-        surface[J(ids), on = "ID", by = "ID", `:=`(
-            POINT_X = rev(POINT_X), POINT_Y = rev(POINT_Y), POINT_Z = rev(POINT_Z)
-        )]
-    }
-
-    # Use one minimal vertex sequence for each polygon. EnergyPlus simplifies
-    # adjacent polygons internally; leaving redundant collinear points can make
-    # the two otherwise identical sides end up with different vertex counts.
-    surface <- surface[, destep_simplify_surface_polygon(.SD), by = "ID"]
+    # Orient every polygon from DeST's source azimuth and tilt. This also makes
+    # exposed floors face downward without relying on enclosure side numbers.
+    south_direction <- destep_south_direction(dest)
+    surface <- surface[
+        , destep_orient_surface_polygon(.SD, south_direction),
+        by = "OUTPUT_ID"
+    ]
 
     # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
     # TODO: how does EnergyPlus handle "empty floor slab"?
 
     value <- surface[,
-        by = "ID",
+        by = "OUTPUT_ID",
         list(value = list(c(
             list(
                 # 01: Name
@@ -150,9 +153,9 @@ destep_conv_surface <- function(dest, ep) {
                 # 07: Outside Boundary Condition Object
                 outside_boundary_condition_object = if (!is.na(BOUNDARY_OBJECT[[1L]])) BOUNDARY_OBJECT[[1L]],
                 # 08: Sun Exposure
-                sun_exposure = NULL,
+                sun_exposure = if (BOUNDARY[[1L]] == "Outdoors") "SunExposed" else "NoSun",
                 # 09: Wind Exposure
-                wind_exposure = NULL,
+                wind_exposure = if (BOUNDARY[[1L]] == "Outdoors") "WindExposed" else "NoWind",
                 # 10: View Factor to Ground
                 view_factor_to_ground = "Autocalculate",
                 # 11: Number of Vertices
@@ -187,6 +190,367 @@ destep_conv_surface <- function(dest, ep) {
     out
 }
 
+# Return the drawing-space south direction used to interpret DeST surface
+# azimuths. Older ad hoc databases without ENVIRONMENT retain DeST's standard
+# drawing convention, where drawing +Y points north.
+destep_south_direction <- function(dest) {
+    if (!"ENVIRONMENT" %in% DBI::dbListTables(dest) ||
+        !destep_table_has_fields(dest, "ENVIRONMENT", "SOUTH_DIRECTION")) {
+        return(270.0)
+    }
+
+    direction <- DBI::dbGetQuery(
+        dest,
+        "SELECT DISTINCT SOUTH_DIRECTION FROM ENVIRONMENT WHERE SOUTH_DIRECTION IS NOT NULL"
+    )$SOUTH_DIRECTION
+    if (length(direction) == 0L) return(270.0)
+    if (length(direction) > 1L) {
+        stop("Multiple DeST south directions cannot be represented in one EnergyPlus model.")
+    }
+
+    as.double(direction[[1L]]) %% 360.0
+}
+
+# Translate the DeST drawing south-vector angle to EnergyPlus's clockwise
+# rotation from true north to the model +Y axis.
+destep_north_axis <- function(dest) {
+    (destep_south_direction(dest) + 90.0) %% 360.0
+}
+
+# Convert DeST's azimuth/tilt convention into one drawing-coordinate unit
+# normal. The sentinel azimuths distinguish downward and upward horizontal
+# faces, while regular azimuths rotate clockwise from drawing north.
+destep_expected_surface_normal <- function(azimuth, tilt, south_direction) {
+    if (length(azimuth) != 1L || length(tilt) != 1L ||
+        is.na(azimuth) || is.na(tilt)) {
+        stop("A DeST surface must have one azimuth and tilt to determine its orientation.")
+    }
+    if (azimuth == 999.0) return(c(0.0, 0.0, -1.0))
+    if (azimuth == -999.0) return(c(0.0, 0.0, 1.0))
+
+    direction <- (south_direction - 180.0 - azimuth) * pi / 180.0
+    inclination <- tilt * pi / 180.0
+    c(
+        cos(direction) * sin(inclination),
+        sin(direction) * sin(inclination),
+        cos(inclination)
+    )
+}
+
+# Calculate a polygon normal with Newell's method so concave planar DeST faces
+# can be oriented without assuming a particular starting vertex.
+destep_surface_normal <- function(surface) {
+    following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
+    normal <- c(
+        sum((surface$POINT_Y - surface$POINT_Y[following]) *
+            (surface$POINT_Z + surface$POINT_Z[following])),
+        sum((surface$POINT_Z - surface$POINT_Z[following]) *
+            (surface$POINT_X + surface$POINT_X[following])),
+        sum((surface$POINT_X - surface$POINT_X[following]) *
+            (surface$POINT_Y + surface$POINT_Y[following]))
+    )
+    magnitude <- sqrt(sum(normal ^ 2))
+    if (!is.finite(magnitude) || magnitude <= 1e-12) {
+        name <- if ("NAME" %in% names(surface)) surface$NAME[[1L]] else "<unknown>"
+        stop(sprintf("DeST surface '%s' has a degenerate polygon.", name))
+    }
+
+    normal / magnitude
+}
+
+# Reverse a canonical polygon only when its geometric normal opposes the DeST
+# outward direction. A non-positive alignment is rejected rather than silently
+# emitting an ambiguous EnergyPlus face.
+destep_orient_surface_polygon <- function(surface, south_direction, tolerance = 1e-8) {
+    surface <- data.table::copy(surface)
+    expected <- destep_expected_surface_normal(
+        surface$AZIMUTH[[1L]], surface$TILT[[1L]], south_direction
+    )
+    alignment <- sum(destep_surface_normal(surface) * expected)
+    if (abs(alignment) <= tolerance) {
+        stop(sprintf(
+            "DeST surface '%s' polygon is inconsistent with its azimuth and tilt.",
+            surface$NAME[[1L]]
+        ))
+    }
+    if (alignment < 0.0) surface <- surface[nrow(surface):1L]
+    data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
+    surface
+}
+
+# Build one canonical vertex sequence per MAIN_ENCLOSURE middle plane. A
+# collinear coordinate shared with another plane is a zone-edge junction, so it
+# is protected while redundant vertices private to the plane are removed.
+destep_normalize_surface_topology <- function(surface, window_surface = integer()) {
+    coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+    metadata <- unique(
+        surface[, setdiff(names(surface), coordinate_columns), with = FALSE],
+        by = "ID"
+    )
+    window_plane <- unique(metadata[ID %in% window_surface, PLANE])
+    point <- unique(
+        surface[, c("PLANE", coordinate_columns), with = FALSE],
+        by = c("PLANE", "POINT_NO")
+    )
+    # Split edges only with coordinates from zones incident to the same middle
+    # plane. This closes local T-junctions without importing unrelated points
+    # from collinear walls elsewhere in the building.
+    room_plane <- unique(
+        metadata[!TYPE_SURFACE %in% c(1L, 2L), .(ROOM, PLANE)]
+    )
+    room_point <- merge(room_plane, point, by = "PLANE", allow.cartesian = TRUE)
+    plane_room <- room_plane[, .(ROOMS = list(ROOM)), by = "PLANE"]
+    point <- point[, {
+        rooms <- plane_room[PLANE == .BY$PLANE, ROOMS][[1L]]
+        candidates <- unique(
+            room_point[ROOM %in% rooms, .(POINT_X, POINT_Y, POINT_Z)]
+        )
+        destep_split_surface_edges(.SD, candidates)
+    }, by = "PLANE"]
+    point[, COORDINATE_KEY := sprintf(
+        "%.3f|%.3f|%.3f", POINT_X, POINT_Y, POINT_Z
+    )]
+    point[, PROTECTED := data.table::uniqueN(PLANE) > 1L, by = "COORDINATE_KEY"]
+    point <- point[, destep_simplify_surface_polygon(.SD), by = "PLANE"]
+    point <- point[, {
+        split <- any(destep_redundant_surface_vertices(.SD) & PROTECTED)
+        if (split && .BY$PLANE %in% window_plane) {
+            destep_partition_window_surface_polygon(.SD)
+        } else if (split) {
+            destep_triangulate_surface_polygon(.SD)
+        } else {
+            copy <- data.table::copy(.SD)
+            copy[, `:=`(PART = 1L, POINT_NO = seq_len(.N) - 1L)]
+            copy
+        }
+    }, by = "PLANE"]
+    point[, PART_COUNT := data.table::uniqueN(PART), by = "PLANE"]
+    point[, c("COORDINATE_KEY", "PROTECTED") := NULL]
+
+    surface <- merge(metadata, point, by = "PLANE", allow.cartesian = TRUE)
+    surface[, ORIGINAL_NAME := NAME]
+    surface[, PRESERVE_BASE_NAME := PLANE %in% window_plane & PART == 1L]
+    surface[PART_COUNT > 1L & !PRESERVE_BASE_NAME,
+        NAME := sprintf("%s [%d]", NAME, PART)]
+    surface[PART_COUNT > 1L & !PRESERVE_BASE_NAME & !is.na(BOUNDARY_OBJECT),
+        BOUNDARY_OBJECT := sprintf("%s [%d]", BOUNDARY_OBJECT, PART)]
+    surface[, OUTPUT_ID := sprintf("%s-%d", ID, PART)]
+    data.table::setorderv(surface, c("ID", "PART", "POINT_NO"))
+    surface
+}
+
+# Insert zone-local junction coordinates that lie in the interior of a
+# polygon edge. The operation changes only segmentation, never face area or
+# position, and is performed before protected-vertex simplification.
+destep_split_surface_edges <- function(surface, all_coordinates, tolerance = 1e-8) {
+    surface <- data.table::copy(surface)
+    coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
+    candidates <- as.matrix(all_coordinates[, .(POINT_X, POINT_Y, POINT_Z)])
+    output <- vector("list", nrow(surface))
+
+    for (index in seq_len(nrow(surface))) {
+        following <- index %% nrow(surface) + 1L
+        start <- coordinates[index, ]
+        difference <- coordinates[following, ] - start
+        length_squared <- sum(difference ^ 2)
+        if (length_squared <= tolerance ^ 2) {
+            stop("A DeST surface polygon contains a zero-length edge.")
+        }
+
+        relative <- sweep(candidates, 2L, start, "-")
+        position <- as.vector(relative %*% difference / length_squared)
+        projected <- relative - position * rep(difference, each = nrow(relative))
+        on_segment <- position > tolerance & position < 1.0 - tolerance &
+            sqrt(rowSums(projected ^ 2)) <= tolerance
+        interior <- which(on_segment)
+
+        value <- data.table::data.table(
+            POINT_X = start[[1L]],
+            POINT_Y = start[[2L]],
+            POINT_Z = start[[3L]]
+        )
+        if (length(interior) > 0L) {
+            order <- interior[order(position[interior])]
+            value <- data.table::rbindlist(list(
+                value,
+                all_coordinates[order]
+            ))
+        }
+        output[[index]] <- value
+    }
+
+    output <- data.table::rbindlist(output)
+    output[, POINT_NO := seq_len(.N) - 1L]
+    output
+}
+
+# Partition a window-bearing polygon only as far as needed to eliminate its
+# protected collinear junctions. Small ears adjacent to each junction become
+# separate surfaces, while part 1 remains the largest window-hosting polygon
+# and retains the original base-surface name.
+destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) {
+    surface <- data.table::copy(surface)
+    normal <- destep_surface_normal(surface)
+    projection <- setdiff(1:3, which.max(abs(normal)))
+    xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
+    signed_area <- sum(
+        xy[, 1L] * xy[c(2:nrow(xy), 1L), 2L] -
+            xy[c(2:nrow(xy), 1L), 1L] * xy[, 2L]
+    ) / 2.0
+    if (signed_area < 0.0) {
+        surface <- surface[nrow(surface):1L]
+        xy <- xy[nrow(xy):1L, , drop = FALSE]
+    }
+
+    cross_2d <- function(a, b, c) {
+        (b[[1L]] - a[[1L]]) * (c[[2L]] - a[[2L]]) -
+            (b[[2L]] - a[[2L]]) * (c[[1L]] - a[[1L]])
+    }
+    inside_triangle <- function(point, a, b, c) {
+        cross_2d(a, b, point) >= -tolerance &&
+            cross_2d(b, c, point) >= -tolerance &&
+            cross_2d(c, a, point) >= -tolerance
+    }
+    is_ear <- function(position, remaining) {
+        previous <- remaining[(position - 2L) %% length(remaining) + 1L]
+        current <- remaining[[position]]
+        following <- remaining[position %% length(remaining) + 1L]
+        area <- cross_2d(xy[previous, ], xy[current, ], xy[following, ])
+        if (area <= tolerance) return(NULL)
+        other <- setdiff(remaining, c(previous, current, following))
+        contains <- vapply(other, function(index) {
+            inside_triangle(
+                xy[index, ], xy[previous, ], xy[current, ], xy[following, ]
+            )
+        }, logical(1L))
+        if (any(contains)) return(NULL)
+        list(indices = c(previous, current, following), area = area / 2.0)
+    }
+
+    remaining <- seq_len(nrow(surface))
+    clipped <- list()
+    repeat {
+        subset <- surface[remaining]
+        redundant <- which(
+            destep_redundant_surface_vertices(subset) & subset$PROTECTED
+        )
+        if (length(redundant) == 0L) break
+
+        junction <- redundant[[1L]]
+        candidates <- unique(c(
+            (junction - 2L) %% length(remaining) + 1L,
+            junction %% length(remaining) + 1L
+        ))
+        ears <- lapply(candidates, is_ear, remaining = remaining)
+        valid <- which(!vapply(ears, is.null, logical(1L)))
+        if (length(valid) == 0L) {
+            stop("Could not partition a window-bearing DeST surface polygon.")
+        }
+        selected <- valid[[which.min(vapply(
+            ears[valid], function(ear) ear$area, double(1L)
+        ))]]
+        clipped[[length(clipped) + 1L]] <- ears[[selected]]$indices
+        remaining <- remaining[-candidates[[selected]]]
+    }
+
+    part <- list(remaining)
+    if (length(clipped) > 0L) part <- c(part, clipped)
+    data.table::rbindlist(lapply(seq_along(part), function(index) {
+        value <- data.table::copy(surface[part[[index]]])
+        value[, `:=`(PART = index, POINT_NO = seq_len(.N) - 1L)]
+        value
+    }))
+}
+
+# Mark duplicate or straight-through vertices in one ordered polygon. Keeping
+# this calculation separate ensures topology splitting and simplification use
+# exactly the same geometric tolerance.
+destep_redundant_surface_vertices <- function(surface, tolerance = 1e-8) {
+    n_vertex <- nrow(surface)
+    previous <- c(n_vertex, seq_len(n_vertex - 1L))
+    following <- c(seq.int(2L, n_vertex), 1L)
+    coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
+    incoming <- coordinates - coordinates[previous, , drop = FALSE]
+    outgoing <- coordinates[following, , drop = FALSE] - coordinates
+
+    incoming_length <- sqrt(rowSums(incoming ^ 2))
+    outgoing_length <- sqrt(rowSums(outgoing ^ 2))
+    cross_product <- cbind(
+        incoming[, 2L] * outgoing[, 3L] - incoming[, 3L] * outgoing[, 2L],
+        incoming[, 3L] * outgoing[, 1L] - incoming[, 1L] * outgoing[, 3L],
+        incoming[, 1L] * outgoing[, 2L] - incoming[, 2L] * outgoing[, 1L]
+    )
+    incoming_length <= tolerance |
+        outgoing_length <= tolerance |
+        (
+            sqrt(rowSums(cross_product ^ 2)) <=
+                tolerance * pmax(1, incoming_length * outgoing_length) &
+            rowSums(incoming * outgoing) > 0
+        )
+}
+
+# Triangulate a simple planar polygon with ear clipping while retaining every
+# protected boundary junction. Each triangle is a valid EnergyPlus base surface
+# without collinear vertices, and paired faces reuse the same part numbering.
+destep_triangulate_surface_polygon <- function(surface, tolerance = 1e-10) {
+    surface <- data.table::copy(surface)
+    normal <- destep_surface_normal(surface)
+    projection <- setdiff(1:3, which.max(abs(normal)))
+    xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
+    signed_area <- sum(
+        xy[, 1L] * xy[c(2:nrow(xy), 1L), 2L] -
+            xy[c(2:nrow(xy), 1L), 1L] * xy[, 2L]
+    ) / 2.0
+    if (signed_area < 0.0) {
+        surface <- surface[nrow(surface):1L]
+        xy <- xy[nrow(xy):1L, , drop = FALSE]
+    }
+
+    cross_2d <- function(a, b, c) {
+        (b[[1L]] - a[[1L]]) * (c[[2L]] - a[[2L]]) -
+            (b[[2L]] - a[[2L]]) * (c[[1L]] - a[[1L]])
+    }
+    inside_triangle <- function(point, a, b, c) {
+        cross_2d(a, b, point) >= -tolerance &&
+            cross_2d(b, c, point) >= -tolerance &&
+            cross_2d(c, a, point) >= -tolerance
+    }
+
+    remaining <- seq_len(nrow(surface))
+    triangle <- list()
+    while (length(remaining) > 3L) {
+        found <- FALSE
+        for (position in seq_along(remaining)) {
+            previous <- remaining[(position - 2L) %% length(remaining) + 1L]
+            current <- remaining[[position]]
+            following <- remaining[position %% length(remaining) + 1L]
+            if (cross_2d(xy[previous, ], xy[current, ], xy[following, ]) <= tolerance) {
+                next
+            }
+            other <- setdiff(remaining, c(previous, current, following))
+            contains <- vapply(other, function(index) {
+                inside_triangle(
+                    xy[index, ], xy[previous, ], xy[current, ], xy[following, ]
+                )
+            }, logical(1L))
+            if (any(contains)) next
+
+            triangle[[length(triangle) + 1L]] <- c(previous, current, following)
+            remaining <- remaining[-position]
+            found <- TRUE
+            break
+        }
+        if (!found) stop("Could not triangulate a DeST surface polygon.")
+    }
+    triangle[[length(triangle) + 1L]] <- remaining
+
+    data.table::rbindlist(lapply(seq_along(triangle), function(part) {
+        value <- data.table::copy(surface[triangle[[part]]])
+        value[, `:=`(PART = part, POINT_NO = 0:2)]
+        value
+    }))
+}
+
 # Remove redundant vertices from one ordered DeST surface polygon while
 # retaining turns and at least the three vertices needed for a valid face.
 destep_simplify_surface_polygon <- function(surface, tolerance = 1e-8) {
@@ -196,28 +560,10 @@ destep_simplify_surface_polygon <- function(surface, tolerance = 1e-8) {
         n_vertex <- nrow(surface)
         if (n_vertex <= 3L) break
 
-        previous <- c(n_vertex, seq_len(n_vertex - 1L))
-        following <- c(seq.int(2L, n_vertex), 1L)
-        coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
-        incoming <- coordinates - coordinates[previous, , drop = FALSE]
-        outgoing <- coordinates[following, , drop = FALSE] - coordinates
-
-        incoming_length <- sqrt(rowSums(incoming ^ 2))
-        outgoing_length <- sqrt(rowSums(outgoing ^ 2))
-        cross_product <- cbind(
-            incoming[, 2L] * outgoing[, 3L] - incoming[, 3L] * outgoing[, 2L],
-            incoming[, 3L] * outgoing[, 1L] - incoming[, 1L] * outgoing[, 3L],
-            incoming[, 1L] * outgoing[, 2L] - incoming[, 2L] * outgoing[, 1L]
-        )
-        # A vertex is redundant only when the path continues straight through
-        # it. A collinear reversal is retained because it changes the polygon.
-        redundant <- incoming_length <= tolerance |
-            outgoing_length <= tolerance |
-            (
-                sqrt(rowSums(cross_product ^ 2)) <=
-                    tolerance * pmax(1, incoming_length * outgoing_length) &
-                rowSums(incoming * outgoing) > 0
-            )
+        redundant <- destep_redundant_surface_vertices(surface, tolerance)
+        if ("PROTECTED" %in% names(surface)) {
+            redundant <- redundant & !surface$PROTECTED
+        }
 
         if (!any(redundant) || n_vertex - sum(redundant) < 3L) break
         surface <- surface[!redundant]
