@@ -16,6 +16,10 @@ destep_conv_surface <- function(dest, ep) {
             S.NAME                                         AS NAME,
             E.KIND                                         AS KIND_ENCLOSURE,
             S.TYPE                                         AS TYPE_SURFACE,
+            -- KIND describes the construction role, but KIND 5 is a shared
+            -- floor/ceiling construction whose room-side role depends on its
+            -- DeST direction sentinel. KIND 6 is an exposed floor and must not
+            -- be treated as a roof, otherwise its normal is forced upward.
             CASE
                 WHEN E.KIND = 1 OR E.KIND = 2 THEN 'Wall'
                 WHEN E.KIND = 3               THEN 'Roof'
@@ -27,6 +31,9 @@ destep_conv_surface <- function(dest, ep) {
             E.SIDE                                         AS SIDE,
             E.CONSTRUCTION                                 AS CONSTRUCTION,
             COALESCE(ROOM.NAME, OUTSIDE.NAME, GROUND.NAME) AS ROOM,
+            -- DeST represents outdoors and ground as peer pseudo-surfaces
+            -- (TYPE 1 and 2). Only a peer that is another room surface maps to
+            -- EnergyPlus's Surface boundary condition and needs a peer name.
             CASE
                 WHEN PEER.TYPE = 1 THEN 'Outdoors'
                 WHEN PEER.TYPE = 2 THEN 'Ground'
@@ -35,6 +42,8 @@ destep_conv_surface <- function(dest, ep) {
             CASE
                 WHEN PEER.TYPE NOT IN (1, 2) THEN PEER.NAME
             END                                            AS BOUNDARY_OBJECT,
+            -- Keep the source direction metadata so vertex winding is derived
+            -- from DeST geometry instead of assuming SIDE 1 or SIDE 2 is out.
             S.AZIMUTH                                      AS AZIMUTH,
             S.TILT                                         AS TILT,
             L.POINT_NO                                     AS POINT_NO,
@@ -196,6 +205,8 @@ destep_conv_surface <- function(dest, ep) {
 destep_south_direction <- function(dest) {
     if (!"ENVIRONMENT" %in% DBI::dbListTables(dest) ||
         !destep_table_has_fields(dest, "ENVIRONMENT", "SOUTH_DIRECTION")) {
+        # DeST's standard 270-degree setting places drawing north on +Y. Use it
+        # only for legacy or synthetic databases that lack ENVIRONMENT metadata.
         return(270.0)
     }
 
@@ -205,6 +216,8 @@ destep_south_direction <- function(dest) {
     )$SOUTH_DIRECTION
     if (length(direction) == 0L) return(270.0)
     if (length(direction) > 1L) {
+        # One EnergyPlus Building object has only one North Axis, so silently
+        # choosing one of several DeST orientations would rotate some geometry.
         stop("Multiple DeST south directions cannot be represented in one EnergyPlus model.")
     }
 
@@ -214,6 +227,9 @@ destep_south_direction <- function(dest) {
 # Translate the DeST drawing south-vector angle to EnergyPlus's clockwise
 # rotation from true north to the model +Y axis.
 destep_north_axis <- function(dest) {
+    # Drawing +Y is 90 degrees counterclockwise from +X. Offsetting DeST's
+    # south-vector angle by 90 degrees gives EnergyPlus's clockwise rotation
+    # from true north to the model +Y axis.
     (destep_south_direction(dest) + 90.0) %% 360.0
 }
 
@@ -225,11 +241,17 @@ destep_expected_surface_normal <- function(azimuth, tilt, south_direction) {
         is.na(azimuth) || is.na(tilt)) {
         stop("A DeST surface must have one azimuth and tilt to determine its orientation.")
     }
+    # The +/-999 values are DeST sentinels rather than compass azimuths: +999
+    # denotes a downward horizontal face and -999 an upward horizontal face.
     if (azimuth == 999.0) return(c(0.0, 0.0, -1.0))
     if (azimuth == -999.0) return(c(0.0, 0.0, 1.0))
 
+    # DeST azimuth increases clockwise from drawing north. Drawing north is
+    # opposite SOUTH_DIRECTION, so clockwise azimuth is subtracted here.
     direction <- (south_direction - 180.0 - azimuth) * pi / 180.0
     inclination <- tilt * pi / 180.0
+    # TILT is measured from the horizontal: sin(TILT) is the horizontal normal
+    # magnitude and cos(TILT) is its vertical component.
     c(
         cos(direction) * sin(inclination),
         sin(direction) * sin(inclination),
@@ -240,7 +262,11 @@ destep_expected_surface_normal <- function(azimuth, tilt, south_direction) {
 # Calculate a polygon normal with Newell's method so concave planar DeST faces
 # can be oriented without assuming a particular starting vertex.
 destep_surface_normal <- function(surface) {
+    # Wrap the final vertex back to the first so each Newell term represents
+    # one ordered polygon edge without requiring a particular starting corner.
     following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
+    # Newell's accumulated vector remains stable for the concave, planar floor
+    # polygons found in DeST, where a three-point cross product is insufficient.
     normal <- c(
         sum((surface$POINT_Y - surface$POINT_Y[following]) *
             (surface$POINT_Z + surface$POINT_Z[following])),
@@ -251,6 +277,8 @@ destep_surface_normal <- function(surface) {
     )
     magnitude <- sqrt(sum(normal ^ 2))
     if (!is.finite(magnitude) || magnitude <= 1e-12) {
+        # A zero normal means EnergyPlus cannot determine an outside face, so
+        # fail before emitting a geometrically ambiguous surface.
         name <- if ("NAME" %in% names(surface)) surface$NAME[[1L]] else "<unknown>"
         stop(sprintf("DeST surface '%s' has a degenerate polygon.", name))
     }
@@ -266,6 +294,8 @@ destep_orient_surface_polygon <- function(surface, south_direction, tolerance = 
     expected <- destep_expected_surface_normal(
         surface$AZIMUTH[[1L]], surface$TILT[[1L]], south_direction
     )
+    # The dot product tests only direction, independent of polygon area. A
+    # near-zero value means the coordinates contradict the DeST direction data.
     alignment <- sum(destep_surface_normal(surface) * expected)
     if (abs(alignment) <= tolerance) {
         stop(sprintf(
@@ -273,6 +303,8 @@ destep_orient_surface_polygon <- function(surface, south_direction, tolerance = 
             surface$NAME[[1L]]
         ))
     }
+    # Reversing the complete sequence changes only winding; coordinates, area,
+    # and the canonical set of shared-edge vertices remain unchanged.
     if (alignment < 0.0) surface <- surface[nrow(surface):1L]
     data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
     surface
@@ -283,10 +315,14 @@ destep_orient_surface_polygon <- function(surface, south_direction, tolerance = 
 # is protected while redundant vertices private to the plane are removed.
 destep_normalize_surface_topology <- function(surface, window_surface = integer()) {
     coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+    # Separate per-surface metadata from middle-plane coordinates so a shared
+    # polygon is normalized once and then copied consistently to both rooms.
     metadata <- unique(
         surface[, setdiff(names(surface), coordinate_columns), with = FALSE],
         by = "ID"
     )
+    # Window parents need a stable unsuffixed part name because every
+    # FenestrationSurface:Detailed object references exactly one base surface.
     window_plane <- unique(metadata[ID %in% window_surface, PLANE])
     point <- unique(
         surface[, c("PLANE", coordinate_columns), with = FALSE],
@@ -310,9 +346,17 @@ destep_normalize_surface_topology <- function(surface, window_surface = integer(
     point[, COORDINATE_KEY := sprintf(
         "%.3f|%.3f|%.3f", POINT_X, POINT_Y, POINT_Z
     )]
+    # A coordinate appearing on more than one plane is a zone-topology
+    # junction. Removing it as merely collinear would reopen a shared edge.
     point[, PROTECTED := data.table::uniqueN(PLANE) > 1L, by = "COORDINATE_KEY"]
+    # Private collinear points can be removed safely before surface copies are
+    # oriented, which also prevents peer vertex-count differences in EnergyPlus.
     point <- point[, destep_simplify_surface_polygon(.SD), by = "PLANE"]
     point <- point[, {
+        # EnergyPlus may independently remove a protected collinear point. Make
+        # each such junction a true part boundary instead: minimally partition
+        # window hosts, and triangulate other polygons with identical part IDs
+        # on both sides of an interzone construction.
         split <- any(destep_redundant_surface_vertices(.SD) & PROTECTED)
         if (split && .BY$PLANE %in% window_plane) {
             destep_partition_window_surface_polygon(.SD)
@@ -329,6 +373,8 @@ destep_normalize_surface_topology <- function(surface, window_surface = integer(
 
     surface <- merge(metadata, point, by = "PLANE", allow.cartesian = TRUE)
     surface[, ORIGINAL_NAME := NAME]
+    # Part 1 of a window host keeps the original name used by the window. Other
+    # parts receive deterministic suffixes, mirrored in reciprocal references.
     surface[, PRESERVE_BASE_NAME := PLANE %in% window_plane & PART == 1L]
     surface[PART_COUNT > 1L & !PRESERVE_BASE_NAME,
         NAME := sprintf("%s [%d]", NAME, PART)]
