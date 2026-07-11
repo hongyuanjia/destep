@@ -389,9 +389,11 @@ destep_normalize_surface_topology <- function(surface, window_surface = integer(
     surface
 }
 
-# Insert zone-local junction coordinates that lie in the interior of a
-# polygon edge. The operation changes only segmentation, never face area or
-# position, and is performed before protected-vertex simplification.
+# Insert zone-local junction coordinates that lie in the interior of a polygon
+# edge. This does not detect duplicate polygons; it only gives incident faces
+# the same edge segmentation. Candidate points are limited to incident rooms
+# and tested with vectorized projection, so the work is O(edges * candidates)
+# per middle plane instead of comparing every point in the building.
 destep_split_surface_edges <- function(surface, all_coordinates, tolerance = 1e-8) {
     surface <- data.table::copy(surface)
     coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
@@ -407,8 +409,13 @@ destep_split_surface_edges <- function(surface, all_coordinates, tolerance = 1e-
             stop("A DeST surface polygon contains a zero-length edge.")
         }
 
+        # For edge start A, direction d, and candidate P, the scalar projection
+        # t = ((P - A) dot d) / (d dot d) locates P along the infinite edge line.
+        # A point is strictly inside the segment when 0 < t < 1.
         relative <- sweep(candidates, 2L, start, "-")
         position <- as.vector(relative %*% difference / length_squared)
+        # The residual (P - A) - t*d is the component perpendicular to the
+        # edge. Its norm must be within tolerance for P to be collinear.
         projected <- relative - position * rep(difference, each = nrow(relative))
         on_segment <- position > tolerance & position < 1.0 - tolerance &
             sqrt(rowSums(projected ^ 2)) <= tolerance
@@ -435,12 +442,15 @@ destep_split_surface_edges <- function(surface, all_coordinates, tolerance = 1e-
 }
 
 # Partition a window-bearing polygon only as far as needed to eliminate its
-# protected collinear junctions. Small ears adjacent to each junction become
-# separate surfaces, while part 1 remains the largest window-hosting polygon
-# and retains the original base-surface name.
+# protected collinear junctions. This routine runs only for window hosts that
+# actually need splitting; it clips small ears next to junctions instead of
+# triangulating the whole wall, so part 1 remains the largest window-hosting
+# polygon and retains the original base-surface name.
 destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) {
     surface <- data.table::copy(surface)
     normal <- destep_surface_normal(surface)
+    # Drop the coordinate aligned most strongly with the face normal. The
+    # remaining two coordinates preserve the planar polygon for 2-D ear tests.
     projection <- setdiff(1:3, which.max(abs(normal)))
     xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
     signed_area <- sum(
@@ -448,6 +458,8 @@ destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) 
             xy[c(2:nrow(xy), 1L), 1L] * xy[, 2L]
     ) / 2.0
     if (signed_area < 0.0) {
+        # Ear clipping below assumes counterclockwise order, where a positive
+        # 2-D cross product identifies a convex candidate ear.
         surface <- surface[nrow(surface):1L]
         xy <- xy[nrow(xy):1L, , drop = FALSE]
     }
@@ -466,6 +478,8 @@ destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) 
         current <- remaining[[position]]
         following <- remaining[position %% length(remaining) + 1L]
         area <- cross_2d(xy[previous, ], xy[current, ], xy[following, ])
+        # A valid ear must be convex and its triangle must contain no other
+        # polygon vertex; otherwise clipping it could cross a concavity.
         if (area <= tolerance) return(NULL)
         other <- setdiff(remaining, c(previous, current, following))
         contains <- vapply(other, function(index) {
@@ -487,6 +501,9 @@ destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) 
         if (length(redundant) == 0L) break
 
         junction <- redundant[[1L]]
+        # Clip one of the two convex ears adjacent to the straight-through
+        # junction. Choosing the smaller valid ear preserves the largest
+        # possible remainder for the window base surface.
         candidates <- unique(c(
             (junction - 2L) %% length(remaining) + 1L,
             junction %% length(remaining) + 1L
@@ -512,9 +529,11 @@ destep_partition_window_surface_polygon <- function(surface, tolerance = 1e-10) 
     }))
 }
 
-# Mark duplicate or straight-through vertices in one ordered polygon. Keeping
-# this calculation separate ensures topology splitting and simplification use
-# exactly the same geometric tolerance.
+# Mark redundant vertices inside one ordered polygon; this function does not
+# decide whether two complete polygons are duplicates. A vertex is redundant
+# when it coincides with either neighbor, or when the incoming and outgoing
+# edges continue in the same straight direction. Keeping this calculation
+# separate ensures topology splitting and simplification use the same tolerance.
 destep_redundant_surface_vertices <- function(surface, tolerance = 1e-8) {
     n_vertex <- nrow(surface)
     previous <- c(n_vertex, seq_len(n_vertex - 1L))
@@ -530,6 +549,10 @@ destep_redundant_surface_vertices <- function(surface, tolerance = 1e-8) {
         incoming[, 3L] * outgoing[, 1L] - incoming[, 1L] * outgoing[, 3L],
         incoming[, 1L] * outgoing[, 2L] - incoming[, 2L] * outgoing[, 1L]
     )
+    # A near-zero adjacent edge means the current vertex duplicates its previous
+    # or next coordinate. For non-zero edges, |incoming x outgoing| close to zero
+    # means collinear; the positive dot product requires straight continuation
+    # and deliberately retains a collinear reversal or backtracking edge.
     incoming_length <= tolerance |
         outgoing_length <= tolerance |
         (
@@ -540,11 +563,16 @@ destep_redundant_surface_vertices <- function(surface, tolerance = 1e-8) {
 }
 
 # Triangulate a simple planar polygon with ear clipping while retaining every
-# protected boundary junction. Each triangle is a valid EnergyPlus base surface
-# without collinear vertices, and paired faces reuse the same part numbering.
+# protected boundary junction. It is called only for planes that still contain
+# required collinear junctions after simplification, not for every surface.
+# This dependency-free R implementation is cubic in the worst case because each
+# candidate ear checks remaining vertices, but surface polygons are processed
+# independently and normally contain few vertices. Each resulting triangle is a
+# valid EnergyPlus base surface, and peer faces reuse identical part numbering.
 destep_triangulate_surface_polygon <- function(surface, tolerance = 1e-10) {
     surface <- data.table::copy(surface)
     normal <- destep_surface_normal(surface)
+    # Project the planar 3-D face onto its most stable 2-D coordinate pair.
     projection <- setdiff(1:3, which.max(abs(normal)))
     xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
     signed_area <- sum(
@@ -552,6 +580,8 @@ destep_triangulate_surface_polygon <- function(surface, tolerance = 1e-10) {
             xy[c(2:nrow(xy), 1L), 1L] * xy[, 2L]
     ) / 2.0
     if (signed_area < 0.0) {
+        # Normalize to counterclockwise order so positive cross products are
+        # convex turns throughout the ear-clipping loop.
         surface <- surface[nrow(surface):1L]
         xy <- xy[nrow(xy):1L, , drop = FALSE]
     }
@@ -574,6 +604,7 @@ destep_triangulate_surface_polygon <- function(surface, tolerance = 1e-10) {
             previous <- remaining[(position - 2L) %% length(remaining) + 1L]
             current <- remaining[[position]]
             following <- remaining[position %% length(remaining) + 1L]
+            # A non-positive turn is concave or collinear and cannot be an ear.
             if (cross_2d(xy[previous, ], xy[current, ], xy[following, ]) <= tolerance) {
                 next
             }
@@ -583,6 +614,8 @@ destep_triangulate_surface_polygon <- function(surface, tolerance = 1e-10) {
                     xy[index, ], xy[previous, ], xy[current, ], xy[following, ]
                 )
             }, logical(1L))
+            # The diagonal from previous to following stays inside a simple
+            # polygon only when no remaining vertex lies in the ear triangle.
             if (any(contains)) next
 
             triangle[[length(triangle) + 1L]] <- c(previous, current, following)
