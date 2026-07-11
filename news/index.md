@@ -2,6 +2,11 @@
 
 ## destep 0.0.0.9000
 
+- Preserved DeST aggregate window thermal and optical performance by
+  converting `WINDOW_TYPE_DATA` records to
+  `WindowMaterial:SimpleGlazingSystem` objects, with targeted
+  `SYS_WINDOW` fallback handling for unavailable or invalid type data
+  (#28).
 - Ignored missing and zero-valued DeST schedule references during
   conversion, preventing nullable reserved fields from producing invalid
   SQL (#26).
