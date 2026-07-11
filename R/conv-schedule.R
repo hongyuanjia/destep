@@ -230,7 +230,8 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
     data.table::set(map, NULL, "week", rep(c(rep(1L:52L, each = 7L), 53L), num_sch))
     data.table::set(map, NULL, "rleid_week", rep((seq_len(num_sch) - 1L) * 53L, each = 365L) + map$week)
 
-    # find the first monday that is the same as the one in the 53rd week
+    # Find an earlier week containing the same profile as the final calendar
+    # day so its complete set of day-type assignments can be reused.
     ind_53 <- collapse::whichv(map$week, 53L)
     mth_53 <- collapse::fmatch(
         list(rleid = map$rleid[ind_53], index_cur = map$index_cur[ind_53]),
@@ -238,23 +239,45 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
         nomatch = 0L
     )
 
-    # handle the case that there is no match for the 53rd week
-    # in this case, we have to create a didicated week schedule for the 53rd
-    # week
-    if (any(mth_53 == 0L)) {
-        stop("Not implemented yet")
-    }
-
     week_53 <- collapse::ss(map, ind_53, c("index_ori", "rleid", "week", "rleid_week"))
-    data.table::set(week_53, NULL, "week", map$week[-ind_53][mth_53])
-    map <- data.table::rbindlist(list(
-        collapse::ss(map, -ind_53),
-        data.table::set(collapse::join(
+    matched_53 <- mth_53 != 0L
+
+    # Reuse an earlier complete week when its daily profile already contains
+    # the final-day profile. This retains the existing object compression for
+    # ordinary schedules whose December 31 pattern repeats during the year.
+    reused_week_53 <- NULL
+    if (any(matched_53)) {
+        reused_week_53 <- collapse::ss(week_53, which(matched_53))
+        data.table::set(
+            reused_week_53, NULL, "week",
+            map$week[-ind_53][mth_53[matched_53]]
+        )
+        reused_week_53 <- data.table::set(collapse::join(
             collapse::ss(map, j = c("index_cur", "rleid", "week"), check = FALSE),
-            week_53,
+            reused_week_53,
             on = c("rleid", "week"), how = "right",
             verbose = FALSE, multiple = TRUE
         ), NULL, "week", 53L)
+    }
+
+    # Schedule:Year uses week 53 only for December 31. If that day has a unique
+    # profile, create a complete dedicated week whose ordinary day types all
+    # reference the final-day schedule. Using one profile for all seven types
+    # preserves December 31 independently of the simulation calendar weekday.
+    dedicated_week_53 <- NULL
+    if (any(!matched_53)) {
+        dedicated_week_53 <- data.table::as.data.table(
+            collapse::ss(map, ind_53[!matched_53])
+        )
+        dedicated_week_53 <- dedicated_week_53[
+            rep(seq_len(nrow(dedicated_week_53)), each = 7L)
+        ]
+    }
+
+    map <- data.table::rbindlist(list(
+        collapse::ss(map, -ind_53),
+        reused_week_53,
+        dedicated_week_53
     ), use.names = TRUE)
 
     spl_week <- collapse::gsplit(map$index_cur, map$rleid_week)

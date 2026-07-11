@@ -36,6 +36,61 @@ test_that("schedule conversion writes resolvable week day references", {
     expect_true(all(unique(week_day_names) %in% day_names))
 })
 
+test_that("schedule conversion creates a dedicated week for a unique final day", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    # Mix a reusable schedule with one whose 365 daily profiles are all unique
+    # so both the existing and dedicated week-53 paths run in one conversion.
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = c(10L, 20L),
+        NAME = c("Always On", "Daily Ramp"),
+        TYPE = c(1L, 4L),
+        DATA = I(list(
+            destep_test_schedule_blob(rep(1, 8760L)),
+            destep_test_schedule_blob(rep(as.double(1:365), each = 24L))
+        ))
+    ))
+    DBI::dbWriteTable(dest, "SCHEDULE_USAGE", data.frame(
+        ID = 1:2,
+        SCHEDULE_ID = c(10L, 20L)
+    ))
+
+    schedule <- destep_conv_schedule(dest, ep)
+    week <- schedule$value[class_name == "Schedule:Week:Compact"]
+    final_week <- week[
+        field_name == "Name" & value_chr == "Week-Daily Ramp (53)",
+        rleid
+    ]
+
+    expect_length(final_week, 1L)
+    expect_equal(
+        week[rleid == final_week & field_name == "DayType List 1", value_chr],
+        "For: AllDays"
+    )
+    final_day_name <- week[
+        rleid == final_week & field_name == "Schedule:Day Name 1",
+        value_chr
+    ]
+    final_day <- schedule$value[
+        class_name == "Schedule:Day:Interval" &
+            field_name == "Name" & value_chr == final_day_name,
+        rleid
+    ]
+    expect_equal(
+        schedule$value[
+            rleid == final_day & field_name == "Value Until Time 1",
+            value_num
+        ],
+        365
+    )
+    expect_true(any(
+        schedule$value$class_name == "Schedule:Year" &
+            schedule$value$value_chr == "Week-Daily Ramp (53)"
+    ))
+})
+
 test_that("schedule conversion ignores missing and zero references", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
