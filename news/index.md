@@ -2,6 +2,9 @@
 
 ## destep 0.0.0.9000
 
+- Added dedicated `Schedule:Week:Compact` generation when December 31
+  has a unique daily profile, allowing `destep_conv_schedule_week()` to
+  preserve schedules that cannot reuse one of the first 52 weeks (#30).
 - Preserved DeST aggregate window thermal and optical performance by
   converting `WINDOW_TYPE_DATA` records to
   `WindowMaterial:SimpleGlazingSystem` objects, with targeted
