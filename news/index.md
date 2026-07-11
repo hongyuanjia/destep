@@ -2,6 +2,9 @@
 
 ## destep 0.0.0.9000
 
+- Ignored missing and zero-valued DeST schedule references during
+  conversion, preventing nullable reserved fields from producing invalid
+  SQL (#26).
 - Preserved DeST enclosure geometry during EnergyPlus conversion by
   correcting surface types, outward normals, reciprocal boundary
   references, true-north rotation, EnergyPlus-tolerance vertex handling,
