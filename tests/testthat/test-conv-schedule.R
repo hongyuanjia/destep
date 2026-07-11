@@ -36,6 +36,55 @@ test_that("schedule conversion writes resolvable week day references", {
     expect_true(all(unique(week_day_names) %in% day_names))
 })
 
+test_that("schedule conversion ignores missing and zero references", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Always On",
+        TYPE = 1L,
+        DATA = I(list(destep_test_schedule_blob(rep(1, 8760L))))
+    ))
+    DBI::dbWriteTable(dest, "DOOR", data.frame(
+        ID = 1:2,
+        SCHEDULE = c(NA_integer_, NA_integer_)
+    ))
+    DBI::dbWriteTable(dest, "SCHEDULE_USAGE", data.frame(
+        ID = 1:3,
+        SCHEDULE_ID = c(10L, 0L, NA_integer_)
+    ))
+
+    schedule <- destep_conv_schedule(dest, ep)
+
+    expect_type(schedule, "list")
+    expect_equal(attr(schedule, "table")$SCHEDULE_ID, 10L)
+})
+
+test_that("schedule conversion returns null without valid references", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Always On",
+        TYPE = 1L,
+        DATA = I(list(destep_test_schedule_blob(rep(1, 8760L))))
+    ))
+    DBI::dbWriteTable(dest, "DOOR", data.frame(
+        ID = 1:2,
+        SCHEDULE = c(NA_integer_, NA_integer_)
+    ))
+    DBI::dbWriteTable(dest, "WINDOW", data.frame(
+        ID = 1L,
+        SCHEDULE = 0L
+    ))
+
+    expect_null(destep_conv_schedule(dest, ep))
+})
+
 test_that("real model schedule week and year references are resolvable", {
     skip_on_cran()
 

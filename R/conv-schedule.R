@@ -44,8 +44,11 @@ destep_conv_schedule <- function(dest, ep) {
             }
         }
     })))
-    # TODO: what is the value of the default schedule with ID = 0 for WINDOW table?
-    ids_ref <- ids_ref[ids_ref != 0L]
+    # NULL means that the optional reference is not assigned, while zero is
+    # DeST's sentinel for a default or unused schedule. Neither value names a
+    # SCHEDULE_YEAR row, and retaining NA would emit it as a SQL identifier.
+    ids_ref <- ids_ref[!is.na(ids_ref) & ids_ref != 0L]
+    if (length(ids_ref) == 0L) return(NULL)
 
     schedule <- data.table::setDT(DBI::dbGetQuery(
         dest,
