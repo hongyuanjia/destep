@@ -178,7 +178,6 @@ destep_split_window_by_surface <- function(window, surface = NULL) {
 }
 
 # TODO: handle window shading
-# TODO: handle window type
 # WINDOW -> FenestrationSurface:Detailed
 destep_conv_window <- function(dest, ep, surface = NULL) {
     if (!destep_has_rows(dest, "WINDOW")) return(NULL)
@@ -242,6 +241,21 @@ destep_conv_window <- function(dest, ep, surface = NULL) {
     )
 
     data.table::setDT(window)
+
+    # Replace the detailed SYS_WINDOW construction only when the referenced
+    # WINDOW_TYPE_DATA record supplies valid aggregate EnergyPlus inputs. The
+    # shared resolver preserves the same fallback decision used by construction
+    # conversion when type data are missing or invalid.
+    window_type <- destep_window_type_performance(dest)
+    valid_type <- window_type[TYPE_DATA_VALID == TRUE]
+    if (nrow(valid_type) > 0L) {
+        construction <- stats::setNames(
+            valid_type$TYPE_CONSTRUCTION_NAME,
+            valid_type$WINDOW_ID
+        )
+        matched <- window$ID %in% valid_type$WINDOW_ID
+        window[matched, CONSTRUCTION := construction[as.character(ID)]]
+    }
 
     # DeST stores one window polygon on an enclosure middle plane. An exterior
     # window belongs only to the room side, whereas an interzone window must be
