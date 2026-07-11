@@ -61,6 +61,21 @@ test_that("can convert 'WINDOW'", {
     expect_equal(unique(attr(window, "table")$CONSTRUCTION), "Double Window")
     expect_equal(attr(window, "table")$POINT_Z, c(3, 3, 1, 1))
 
+    # A valid aggregate window type replaces the detailed SYS_WINDOW reference
+    # while leaving the fenestration geometry and host assignment unchanged.
+    DBI::dbWriteTable(dest, "WINDOW_TYPE_DATA", data.frame(
+        ID = 35L,
+        NAME = "High Performance Window",
+        K = 2.0,
+        SC = 0.4022989,
+        LIGHT_TRANS_RATIO = 0.58
+    ))
+    typed <- destep_conv_window(dest, ep)
+    expect_equal(
+        unique(attr(typed, "table")$CONSTRUCTION),
+        "High Performance Window Simple Glazing Construction"
+    )
+
     # The same DeST middle-plane polygon represents both sides of an interzone
     # window, so conversion must create reciprocal EnergyPlus objects.
     DBI::dbExecute(dest, "UPDATE SURFACE SET TYPE = 0")

@@ -46,12 +46,11 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(zn, "table"), "data.table")
 
     # can convert 'Material', 'Construction'
-    expect_type(expect_message(const <- destep_conv_const(dest, ep)), "list")
+    expect_type(const <- destep_conv_const(dest, ep), "list")
     expect_named(const, c("object", "value"))
     expect_equal(unique(const$object$class_name),
         c(
-            "Material", "WindowMaterial:Glazing", "WindowMaterial:Gas",
-            "Construction"
+            "Material", "WindowMaterial:SimpleGlazingSystem", "Construction"
         )
     )
     expect_s3_class(attr(const, "table"), "data.table")
@@ -63,7 +62,7 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(surface, "table"), "data.table")
 
     # can convert a DeST model to a valid EnergyPlus model
-    expect_message(expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf"))
+    expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf")
     expect_true(idf$is_valid())
     # Request the raw field table because eplusr versions differ in the default
     # shape returned by `$to_table()` for a one-object class.

@@ -1,3 +1,114 @@
+# Resolve the aggregate thermal and optical properties of every DeST window.
+# The returned table is shared by construction and fenestration conversion so
+# both paths apply exactly the same validity checks and fallback decisions.
+destep_window_type_performance <- function(dest) {
+    window <- DBI::dbGetQuery(
+        dest,
+        "SELECT ID AS WINDOW_ID, TYPE AS TYPE_ID,
+                WINDOW_CONSTRUCTION AS DETAILED_CONSTRUCTION_ID
+         FROM WINDOW"
+    )
+    data.table::setDT(window)
+    if (nrow(window) == 0L) {
+        # Preserve a stable schema so models without windows can pass through
+        # the same downstream construction code without special-case branches.
+        window[, `:=`(
+            TYPE_NAME = character(), K = double(), SC = double(),
+            LIGHT_TRANS_RATIO = double(), TYPE_RECORD_FOUND = logical(),
+            SHGC = double(), TYPE_DATA_VALID = logical(),
+            SIMPLE_GLAZING_NAME = character(),
+            TYPE_CONSTRUCTION_NAME = character(),
+            FALLBACK_REASON = character()
+        )]
+        return(window)
+    }
+
+    # A zero construction reference means DeST expects the matching default.
+    # Resolve it here because invalid type records must fall back to the same
+    # detailed construction that the original window would have used.
+    if ("DEFAULT_SETTING" %in% DBI::dbListTables(dest) &&
+        destep_table_has_fields(
+            dest, "DEFAULT_SETTING",
+            c("TABLE_NAME", "FIELD_NAME", "TYPE", "LONG")
+        )) {
+        default <- DBI::dbGetQuery(
+            dest,
+            "SELECT DISTINCT LONG
+             FROM DEFAULT_SETTING
+             WHERE TABLE_NAME = 'WINDOW'
+               AND FIELD_NAME = 'WINDOW_CONSTRUCTION'
+               AND TYPE = 2
+               AND LONG IS NOT NULL"
+        )$LONG
+        if (length(default) > 1L) {
+            stop("Multiple default DeST window constructions were found.")
+        }
+        if (length(default) == 1L) {
+            window[DETAILED_CONSTRUCTION_ID == 0L,
+                DETAILED_CONSTRUCTION_ID := default[[1L]]]
+        }
+    }
+
+    required <- c("ID", "NAME", "K", "SC", "LIGHT_TRANS_RATIO")
+    has_type_data <- "WINDOW_TYPE_DATA" %in% DBI::dbListTables(dest) &&
+        destep_table_has_fields(dest, "WINDOW_TYPE_DATA", required)
+    if (has_type_data) {
+        type <- DBI::dbGetQuery(
+            dest,
+            "SELECT ID AS TYPE_ID, NAME AS TYPE_NAME, K, SC,
+                    LIGHT_TRANS_RATIO
+             FROM WINDOW_TYPE_DATA"
+        )
+        data.table::setDT(type)
+        type[, TYPE_RECORD_FOUND := TRUE]
+        window <- merge(window, type, by = "TYPE_ID", all.x = TRUE, sort = FALSE)
+        window[is.na(TYPE_RECORD_FOUND), TYPE_RECORD_FOUND := FALSE]
+    } else {
+        window[, `:=`(
+            TYPE_NAME = NA_character_, K = NA_real_, SC = NA_real_,
+            LIGHT_TRANS_RATIO = NA_real_, TYPE_RECORD_FOUND = FALSE
+        )]
+    }
+
+    # SQLite/Access drivers can expose numeric columns using different R
+    # storage modes, so normalize them before applying physical bounds.
+    for (column in c("K", "SC", "LIGHT_TRANS_RATIO")) {
+        data.table::set(window, NULL, column, as.double(window[[column]]))
+    }
+    window[, SHGC := 0.87 * SC]
+    window[, TYPE_DATA_VALID :=
+        is.finite(K) & K > 0.0 & is.finite(SHGC) & SHGC > 0.0 & SHGC <= 1.0]
+    window[!is.finite(LIGHT_TRANS_RATIO) |
+        LIGHT_TRANS_RATIO <= 0.0 | LIGHT_TRANS_RATIO > 1.0,
+        LIGHT_TRANS_RATIO := NA_real_]
+
+    # EnergyPlus object names are derived from the stable, normalized DeST
+    # type name. The suffixes also keep them distinct from SYS_WINDOW objects.
+    window[is.na(TYPE_NAME) | !nzchar(TYPE_NAME),
+        TYPE_NAME := sprintf("Window Type Data %s", TYPE_ID)]
+    window[, `:=`(
+        SIMPLE_GLAZING_NAME = sprintf("%s Simple Glazing", TYPE_NAME),
+        TYPE_CONSTRUCTION_NAME = sprintf(
+            "%s Simple Glazing Construction", TYPE_NAME
+        )
+    )]
+    if (!has_type_data) {
+        window[, FALLBACK_REASON :=
+            "missing WINDOW_TYPE_DATA table or required fields"]
+    } else {
+        window[, FALLBACK_REASON := data.table::fcase(
+            !TYPE_RECORD_FOUND,
+                "missing WINDOW_TYPE_DATA record",
+            !is.finite(K) | K <= 0.0,
+                "invalid K value",
+            !is.finite(SHGC) | SHGC <= 0.0 | SHGC > 1.0,
+                "invalid SC value",
+            default = NA_character_
+        )]
+    }
+    window
+}
+
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
 destep_conv_const <- function(dest, ep) {
     if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
@@ -86,8 +197,12 @@ destep_conv_const <- function(dest, ep) {
         "
     )
 
+    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
+    # Detailed layers are now retained only for windows that require fallback.
+    window_type <- destep_window_type_performance(dest)
+
     # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
-    # TODO: handle 'TYPE' and 'SHADING' in 'WINDOW' table
+    # TODO: handle 'SHADING' in 'WINDOW' table
     window <- DBI::dbGetQuery(dest,
         "
         WITH WIN AS (
@@ -220,6 +335,37 @@ destep_conv_const <- function(dest, ep) {
     data.table::setDT(window)
     data.table::setDT(door)
 
+    # Valid WINDOW_TYPE_DATA records replace the whole detailed glazing stack,
+    # so only load SYS_WINDOW objects still referenced by fallback windows.
+    fallback_construction <- unique(
+        window_type[TYPE_DATA_VALID == FALSE, DETAILED_CONSTRUCTION_ID]
+    )
+    fallback_construction <- fallback_construction[
+        !is.na(fallback_construction) & fallback_construction != 0L
+    ]
+    window <- window[ID %in% fallback_construction]
+
+    fallback <- unique(
+        window_type[
+            TYPE_DATA_VALID == FALSE,
+            .(WINDOW_ID, TYPE_ID, FALLBACK_REASON)
+        ]
+    )
+    if (nrow(fallback) > 0L) {
+        # Include the affected window and type identifiers so users can repair
+        # the source data instead of receiving one blanket optical warning.
+        warning(sprintf(
+            paste0(
+                "Using detailed SYS_WINDOW fallback properties for DeST ",
+                "window(s): %s."
+            ),
+            paste(sprintf(
+                "%s (type %s: %s)", fallback$WINDOW_ID, fallback$TYPE_ID,
+                fallback$FALLBACK_REASON
+            ), collapse = "; ")
+        ))
+    }
+
     # check if there are air layer in window constructions
     if (any(is_air <- window$MATERIAL_ID == 0L)) {
         data.table::set(window, which(is_air), "MATERIAL_NAME", "Air")
@@ -262,6 +408,13 @@ destep_conv_const <- function(dest, ep) {
     win_glaze <- list()
     win_air <- list()
 
+    # aggregate window-type construction
+    win_type_const <- list()
+    win_type_glazing <- unique(
+        window_type[TYPE_DATA_VALID == TRUE],
+        by = "TYPE_ID"
+    )
+
     # door construction
     door_const <- list()
     door_glaze <- list()
@@ -299,6 +452,23 @@ destep_conv_const <- function(dest, ep) {
         )
     }
 
+    if (nrow(win_type_glazing) > 0L) {
+        assert_unique_name(
+            win_type_glazing$TYPE_CONSTRUCTION_NAME,
+            "window type construction"
+        )
+        assert_unique_name(
+            win_type_glazing$SIMPLE_GLAZING_NAME,
+            "simple glazing material"
+        )
+        win_type_const <- win_type_glazing[, list(
+            ID = TYPE_ID,
+            KIND = -3L,
+            name = TYPE_CONSTRUCTION_NAME,
+            value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
+        )]
+    }
+
     if (nrow(door) > 0L) {
         # construct normal Material input
         door_const <- door[, by = "ID",
@@ -318,7 +488,9 @@ destep_conv_const <- function(dest, ep) {
     }
 
     dt_const <- unique(
-        data.table::rbindlist(list(norm_const, win_const, door_const), TRUE),
+        data.table::rbindlist(
+            list(norm_const, win_const, win_type_const, door_const), TRUE
+        ),
         by = c("ID", "KIND", "name")
     )
     dt_mat   <- unique(
@@ -329,7 +501,8 @@ destep_conv_const <- function(dest, ep) {
         data.table::rbindlist(list(win_glaze, door_glaze), TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
-    dt_air   <- unique(win_air, by = "LENGTH")
+    dt_air <- data.table::rbindlist(list(win_air), fill = TRUE)
+    if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
 
     out <- eval(as.call(c(
         destep_add, dest, ep,
@@ -352,6 +525,21 @@ destep_conv_const <- function(dest, ep) {
                 visible_absorptance = 0.7
             )
         ),
+
+        # WINDOW_TYPE_DATA describes whole-window performance rather than
+        # individual panes. Emit one equivalent simple glazing system per type.
+        lapply(seq_len(nrow(win_type_glazing)), function(index) {
+            glazing <- win_type_glazing[index]
+            value <- list(
+                name = glazing$SIMPLE_GLAZING_NAME,
+                u_factor = glazing$K,
+                solar_heat_gain_coefficient = glazing$SHGC,
+                visible_transmittance = if (!is.na(glazing$LIGHT_TRANS_RATIO)) {
+                    glazing$LIGHT_TRANS_RATIO
+                }
+            )
+            bquote("WindowMaterial:SimpleGlazingSystem" := .(value))
+        }),
 
         if (nrow(dt_glaze) > 0L) {
             # NOTE: It is not an one-to-one match between the glazing optical
@@ -411,7 +599,9 @@ destep_conv_const <- function(dest, ep) {
     )))
 
     # always attach the table to the output in case it is useful later
-    attr(out, "table") <- data.table::rbindlist(list(const, window, door), fill = TRUE)
+    attr(out, "table") <- data.table::rbindlist(
+        list(const, window, win_type_glazing, door), fill = TRUE
+    )
 
     out
 }
