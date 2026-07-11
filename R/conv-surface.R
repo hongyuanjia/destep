@@ -353,8 +353,12 @@ destep_normalize_surface_topology <- function(surface, window_surface = integer(
     # oriented, which also prevents peer vertex-count differences in EnergyPlus.
     point <- point[, destep_simplify_surface_polygon(.SD), by = "PLANE"]
     point <- point[, {
-        # EnergyPlus may independently remove a protected collinear point. Make
-        # each such junction a true part boundary instead: minimally partition
+        # EnergyPlus does not rewrite the IDF, but its GetSurfaceData path copies
+        # input vertices into an in-memory SurfaceTmp and CheckConvexity removes
+        # collinear vertices from that working copy. With reversed peer winding,
+        # EnergyPlus 23.1 removed different counts from some complex peer faces,
+        # causing a vertex-size-mismatch fatal error. Encode each protected
+        # junction as a true part boundary before export: minimally partition
         # window hosts, and triangulate other polygons with identical part IDs
         # on both sides of an interzone construction.
         split <- any(destep_redundant_surface_vertices(.SD) & PROTECTED)
