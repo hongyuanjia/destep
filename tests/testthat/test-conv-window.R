@@ -12,7 +12,9 @@ test_that("can convert 'WINDOW'", {
     DBI::dbWriteTable(dest, "SURFACE", data.frame(
         SURFACE_ID = c(10L, 20L),
         NAME = c("Outside Face", "Room Wall"),
-        TYPE = c(1L, 0L)
+        TYPE = c(1L, 0L),
+        AZIMUTH = c(180, 0),
+        TILT = c(90, 90)
     ))
     DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
         ID = 100L,
@@ -84,6 +86,7 @@ test_that("can convert windows from a real DeST model", {
     RSQLite::sqliteCopyDatabase(src, dest)
     destep_update_name(dest)
 
+    surface <- attr(destep_conv_surface(dest, ep), "table")
     window <- destep_conv_window(dest, ep)
     tab <- attr(window, "table")
 
@@ -92,4 +95,14 @@ test_that("can convert windows from a real DeST model", {
     expect_false(anyNA(tab$SURFACE_NAME))
     expect_false(anyNA(tab$CONSTRUCTION))
     expect_true(all(tab$POINT_NO %in% 0:3))
+
+    window_normal <- tab[, as.list(destep_surface_normal(.SD)), by = .(ID, SURFACE_NAME)]
+    surface_normal <- surface[, as.list(destep_surface_normal(.SD)), by = .(OUTPUT_ID, NAME)]
+    parent <- match(window_normal$SURFACE_NAME, surface_normal$NAME)
+    expect_false(anyNA(parent))
+    expect_true(all(
+        window_normal$V1 * surface_normal$V1[parent] +
+            window_normal$V2 * surface_normal$V2[parent] +
+            window_normal$V3 * surface_normal$V3[parent] > 1.0 - 1e-6
+    ))
 })

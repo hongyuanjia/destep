@@ -69,6 +69,19 @@ test_that("to_eplus() works", {
     # shape returned by `$to_table()` for a one-object class.
     run_period <- idf$to_table(class = "RunPeriod", all = TRUE)
     expect_equal(run_period$value[run_period$field == "Name"], "Annual")
+    geometry_rules <- idf$to_table(class = "GlobalGeometryRules", all = TRUE)
+    expect_equal(
+        geometry_rules$value[
+            geometry_rules$field == "Coordinate System"
+        ],
+        "Relative"
+    )
+    zone_geometry <- idf$to_table(class = "Zone", all = TRUE)
+    expect_true(all(zone_geometry$value[
+        zone_geometry$field %in% c(
+            "Direction of Relative North", "X Origin", "Y Origin", "Z Origin"
+        )
+    ] == 0))
 
     validity <- idf$validate()
     issue_count <- vapply(validity, function(issue) {
