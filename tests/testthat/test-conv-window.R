@@ -12,7 +12,9 @@ test_that("can convert 'WINDOW'", {
     DBI::dbWriteTable(dest, "SURFACE", data.frame(
         SURFACE_ID = c(10L, 20L),
         NAME = c("Outside Face", "Room Wall"),
-        TYPE = c(1L, 0L)
+        TYPE = c(1L, 0L),
+        AZIMUTH = c(180, 0),
+        TILT = c(90, 90)
     ))
     DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
         ID = 100L,
@@ -58,6 +60,27 @@ test_that("can convert 'WINDOW'", {
     expect_equal(unique(attr(window, "table")$SURFACE_NAME), "Room Wall")
     expect_equal(unique(attr(window, "table")$CONSTRUCTION), "Double Window")
     expect_equal(attr(window, "table")$POINT_Z, c(3, 3, 1, 1))
+
+    # The same DeST middle-plane polygon represents both sides of an interzone
+    # window, so conversion must create reciprocal EnergyPlus objects.
+    DBI::dbExecute(dest, "UPDATE SURFACE SET TYPE = 0")
+    DBI::dbExecute(dest, "UPDATE SURFACE SET NAME = 'Room A Wall' WHERE SURFACE_ID = 10")
+    DBI::dbExecute(dest, "UPDATE SURFACE SET NAME = 'Room B Wall' WHERE SURFACE_ID = 20")
+    pair <- destep_conv_window(dest, ep)
+    pair_table <- attr(pair, "table")
+    pair_object <- unique(pair_table[, .(
+        OUTPUT_PART_ID, NAME, BOUNDARY_OBJECT, SURFACE_NAME
+    )])
+
+    expect_equal(nrow(pair$object), 2L)
+    expect_setequal(pair_object$NAME, c("Window A [1]", "Window A [2]"))
+    expect_equal(
+        pair_object$BOUNDARY_OBJECT[match(
+            c("Window A [1]", "Window A [2]"), pair_object$NAME
+        )],
+        c("Window A [2]", "Window A [1]")
+    )
+    expect_setequal(pair_object$SURFACE_NAME, c("Room A Wall", "Room B Wall"))
 })
 
 test_that("skips window conversion without WINDOW records", {
@@ -84,12 +107,35 @@ test_that("can convert windows from a real DeST model", {
     RSQLite::sqliteCopyDatabase(src, dest)
     destep_update_name(dest)
 
+    surface <- attr(destep_conv_surface(dest, ep), "table")
     window <- destep_conv_window(dest, ep)
     tab <- attr(window, "table")
 
     expect_equal(unique(window$object$class_name), "FenestrationSurface:Detailed")
-    expect_equal(nrow(window$object), DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM WINDOW")$N)
+    expected <- DBI::dbGetQuery(dest, "
+        SELECT SUM(CASE
+            WHEN S1.TYPE NOT IN (1, 2) AND S2.TYPE NOT IN (1, 2) THEN 2
+            ELSE 1
+        END) AS N
+        FROM WINDOW W
+        INNER JOIN MAIN_ENCLOSURE E ON W.OF_ENCLOSURE = E.ID
+        LEFT JOIN SURFACE S1 ON E.SIDE1 = S1.SURFACE_ID
+        LEFT JOIN SURFACE S2 ON E.SIDE2 = S2.SURFACE_ID
+    ")$N
+    expect_equal(data.table::uniqueN(tab$OUTPUT_ID), expected)
     expect_false(anyNA(tab$SURFACE_NAME))
     expect_false(anyNA(tab$CONSTRUCTION))
     expect_true(all(tab$POINT_NO %in% 0:3))
+
+    window_normal <- tab[
+        , as.list(destep_surface_normal(.SD)), by = .(OUTPUT_PART_ID, SURFACE_NAME)
+    ]
+    surface_normal <- surface[, as.list(destep_surface_normal(.SD)), by = .(OUTPUT_ID, NAME)]
+    parent <- match(window_normal$SURFACE_NAME, surface_normal$NAME)
+    expect_false(anyNA(parent))
+    expect_true(all(
+        window_normal$V1 * surface_normal$V1[parent] +
+            window_normal$V2 * surface_normal$V2[parent] +
+            window_normal$V3 * surface_normal$V3[parent] > 1.0 - 1e-6
+    ))
 })

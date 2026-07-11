@@ -29,7 +29,14 @@ destep_conv_building <- function(dest, ep, which = NULL) {
         }
     }
 
-    out <- destep_add(dest, ep, "Building" := list(name = bld$NAME))
+    # EnergyPlus measures Building North Axis clockwise from true north to the
+    # model +Y axis. DeST stores the drawing-space south-vector angle from +X,
+    # which gives the equivalent rotation after a 90-degree offset.
+    north_axis <- destep_north_axis(dest)
+    out <- destep_add(dest, ep, "Building" := list(
+        name = bld$NAME,
+        north_axis = north_axis
+    ))
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- bld
