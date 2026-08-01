@@ -267,15 +267,9 @@ window__expand_side <- function(window, side) {
     value
 }
 
-# TODO: handle window shading
-# WINDOW -> FenestrationSurface:Detailed
-window__convert <- function(
-    dest, ep, surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
-) {
-    if (!db_has_rows(dest, "WINDOW")) return(NULL)
-
-    # TODO: Does DeST support polygon windows other than rectangles?
+# Read DeST window geometry and resolve the same detailed or aggregate
+# construction fallback used by the construction converter.
+window__source_table <- function(dest) {
     window <- DBI::dbGetQuery(
         dest,
         "
@@ -350,35 +344,13 @@ window__convert <- function(
         window[matched, CONSTRUCTION := construction[as.character(ID)]]
     }
 
-    # DeST stores one window polygon on an enclosure middle plane. An exterior
-    # window belongs only to the room side, whereas an interzone window must be
-    # emitted once for each room and the two EnergyPlus objects must reference
-    # each other explicitly.
-    side1 <- window__expand_side(window, 1L)
-    side2 <- window__expand_side(window, 2L)
-    window <- data.table::rbindlist(list(side1, side2), fill = TRUE)
-    window[, OUTPUT_ID := sprintf("%s-%d", ID, SIDE)]
-    # DeST window layers follow the same SIDE1-to-SIDE2 direction as their
-    # enclosure. SIDE1 therefore references the explicit reversed stack.
-    window[SIDE == 1L, CONSTRUCTION := sprintf("%s [Reverse]", CONSTRUCTION)]
-    data.table::setorderv(window, c("OUTPUT_ID", "POINT_NO"))
-    # Use the same DeST direction metadata as the parent surface so a window
-    # cannot silently face into its zone when enclosure side ordering varies.
-    south_direction <- geom__south_direction(dest)
-    window <- window[
-        , geom__orient_surface_polygon(
-            .SD, south_direction, geometry_profile
-        ), by = "OUTPUT_ID"
-    ]
-    window <- window__split_by_surface(window, surface, geometry_profile)
-    window <- window[
-        , geom__orient_surface_polygon(
-            .SD, south_direction, geometry_profile
-        ), by = "OUTPUT_PART_ID"
-    ]
-    assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
+    window
+}
 
-    value <- window[,
+# Convert one row group for each final window part into the ordered fields
+# expected by FenestrationSurface:Detailed.
+window__object_values <- function(window) {
+    window[,
         by = "OUTPUT_PART_ID",
         list(value = list(c(
             list(
@@ -407,6 +379,48 @@ window__convert <- function(
             geom__eplus_vertex_values(.SD)
         )))
     ]$value
+}
+
+# TODO: handle window shading
+# WINDOW -> FenestrationSurface:Detailed
+window__convert <- function(
+    dest, ep, surface = NULL,
+    geometry_profile = eplus_geom__profile(ep$version())
+) {
+    if (!db_has_rows(dest, "WINDOW")) return(NULL)
+
+    # TODO: Does DeST support polygon windows other than rectangles?
+    window <- window__source_table(dest)
+
+    # DeST stores one window polygon on an enclosure middle plane. An exterior
+    # window belongs only to the room side, whereas an interzone window must be
+    # emitted once for each room and the two EnergyPlus objects must reference
+    # each other explicitly.
+    side1 <- window__expand_side(window, 1L)
+    side2 <- window__expand_side(window, 2L)
+    window <- data.table::rbindlist(list(side1, side2), fill = TRUE)
+    window[, OUTPUT_ID := sprintf("%s-%d", ID, SIDE)]
+    # DeST window layers follow the same SIDE1-to-SIDE2 direction as their
+    # enclosure. SIDE1 therefore references the explicit reversed stack.
+    window[SIDE == 1L, CONSTRUCTION := sprintf("%s [Reverse]", CONSTRUCTION)]
+    data.table::setorderv(window, c("OUTPUT_ID", "POINT_NO"))
+    # Use the same DeST direction metadata as the parent surface so a window
+    # cannot silently face into its zone when enclosure side ordering varies.
+    south_direction <- geom__south_direction(dest)
+    window <- window[
+        , geom__orient_surface_polygon(
+            .SD, south_direction, geometry_profile
+        ), by = "OUTPUT_ID"
+    ]
+    window <- window__split_by_surface(window, surface, geometry_profile)
+    window <- window[
+        , geom__orient_surface_polygon(
+            .SD, south_direction, geometry_profile
+        ), by = "OUTPUT_PART_ID"
+    ]
+    assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
+
+    value <- window__object_values(window)
 
     out <- conv__add_objects(
         dest, ep, "FenestrationSurface:Detailed", value
