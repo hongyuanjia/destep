@@ -366,7 +366,9 @@ schedule__lookup_names <- function(ids, lookup, object_class) {
     lookup$name[matched]
 }
 
-schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
+# Map each annual schedule onto 53 calendar-week slots, preserving a unique
+# December 31 profile when it cannot reuse an earlier complete week.
+schedule__week_map <- function(schedule, days, prefix = "Week-") {
     num_sch <- nrow(schedule)
     map <- data.table::copy(days$map)
 
@@ -433,7 +435,11 @@ schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix
 
     week_name <- paste0(prefix, name__make_unique(rep(schedule$NAME, each = 53L)[changed]))
 
-    # create the day types for each week schedule
+    list(map = map, changed = changed, name = week_name)
+}
+
+# Expand each changed week to the ordinary and special EnergyPlus day types.
+schedule__week_daytypes <- function(map, changed) {
     week_daytype <- collapse::ss(
         map,
         collapse::fmatch(map$rleid_week, which(changed), nomatch = 0L) != 0L,
@@ -477,7 +483,12 @@ schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix
     data.table::setorderv(week_daytype, c("rleid_week", "daytype"))
     data.table::setnames(week_daytype, "rleid_week", "rleid")
 
-    # compress the day types
+    week_daytype
+}
+
+# Compress day types that reference the same day schedule while keeping the
+# paired schedule identifier aligned with every reordered day-type group.
+schedule__compact_week_daytypes <- function(week_daytype) {
     other_days <- ENUM_SCH_DAYTYPE[c("Holiday", "CustomDay1", "CustomDay2")]
     grp_rleid <- collapse::groupv(week_daytype$rleid, starts = TRUE)
 
@@ -576,6 +587,11 @@ schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix
     )
     week_daytype <- data.table::rbindlist(pairs)
 
+    week_daytype
+}
+
+# Build the Schedule:Week:Compact field table from compressed day-type groups.
+schedule__week_fields <- function(dest, ep, days, week_name, week_daytype) {
     num_fld <- attr(collapse::groupv(
         week_daytype$rleid,
         group.sizes = TRUE
@@ -604,7 +620,17 @@ schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix
         c(fld_daytype, fld_day)[collapse::radixorderv(rep(seq_along(fld_daytype), 2L))]
     )
 
-    list(map = map, changed = changed, data = sch_week)
+    sch_week
+}
+
+# Coordinate week mapping, day-type expansion, compression, and field assembly.
+schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
+    week <- schedule__week_map(schedule, days, prefix)
+    daytypes <- schedule__week_daytypes(week$map, week$changed)
+    daytypes <- schedule__compact_week_daytypes(daytypes)
+    data <- schedule__week_fields(dest, ep, days, week$name, daytypes)
+
+    list(map = week$map, changed = week$changed, data = data)
 }
 
 schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
