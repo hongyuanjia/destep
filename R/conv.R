@@ -634,9 +634,7 @@ conv__update_names <- function(dest, tables = NULL) {
             )
 
             # skip empty table
-            if (DBI::dbGetQuery(dest, sprintf("SELECT COUNT(*) AS N FROM `%s`", table))$N == 0L) {
-                DBI::dbBreak()
-            }
+            if (!db_has_rows(dest, table)) DBI::dbBreak()
 
             conv__fill_missing_names(dest, table, input)
 

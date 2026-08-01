@@ -587,9 +587,7 @@ const__object_tables <- function(source) {
 
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
 const__convert <- function(dest, ep) {
-    if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
-        return(NULL)
-    }
+    if (!db_has_rows(dest, "MAIN_ENCLOSURE")) return(NULL)
 
     source <- const__prepare_layers(dest)
     object <- const__object_tables(source)
