@@ -3,7 +3,7 @@
 # condition is Ground, so DeST's hourly user-defined ground temperatures are
 # reduced to the 12 monthly values required by the IDD.
 ground_temperature__convert <- function(dest, ep) {
-    if (!db__has_rows(dest, "GROUND_DATA")) return(NULL)
+    if (!db_has_rows(dest, "GROUND_DATA")) return(NULL)
 
     ground <- ground_temperature__table(dest)
     monthly <- ground_temperature__monthly(ground)
@@ -41,7 +41,7 @@ ground_temperature__table <- function(dest) {
         )
     )
     data.table::setDT(ground)
-    data__force_numeric(ground, c("ID", "HOUR", "T"))
+    dt_force_numeric(ground, c("ID", "HOUR", "T"))
     ground_temperature__validate_table(ground, ground_id)
 
     ground
@@ -83,8 +83,8 @@ ground_temperature__resolve_city_data_ids <- function(dest) {
     if (!all(c("ENVIRONMENT", "SYS_CITY", "GROUND_DATA") %in% DBI::dbListTables(dest))) {
         return(numeric())
     }
-    if (!db__has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !db__has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
+    if (!db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+        !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
         return(numeric())
     }
 
@@ -127,19 +127,19 @@ ground_temperature__validate_table <- function(ground, ground_id) {
         if (length(missing_hours)) {
             issues <- c(issues, sprintf(
                 "missing HOUR value(s): %s",
-                data__format_integer_sample(missing_hours)
+                fmt_integer_sample(missing_hours)
             ))
         }
         if (length(duplicate_hours)) {
             issues <- c(issues, sprintf(
                 "duplicate HOUR value(s): %s",
-                data__format_integer_sample(duplicate_hours)
+                fmt_integer_sample(duplicate_hours)
             ))
         }
         if (length(unexpected_hours)) {
             issues <- c(issues, sprintf(
                 "unexpected HOUR value(s): %s",
-                data__format_integer_sample(unexpected_hours)
+                fmt_integer_sample(unexpected_hours)
             ))
         }
     }

@@ -32,7 +32,7 @@ schedule__convert <- function(dest, ep) {
     tbls <- DBI::dbListTables(dest)
 
     # find tables that reference schedules
-    ids_ref <- unique(list__flatten(recursive = TRUE, lapply(tbls[tbls != "SCHEDULE_YEAR"], function(tbl) {
+    ids_ref <- unique(un_list(recursive = TRUE, lapply(tbls[tbls != "SCHEDULE_YEAR"], function(tbl) {
         # get the number of rows in the table
         n <- DBI::dbGetQuery(dest, sprintf("SELECT COUNT(*) as n FROM '%s'", tbl))$n
         if (n > 0L) {
@@ -88,10 +88,10 @@ schedule__relative_humidity_ids <- function(dest) {
     )
     columns <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
 
-    ids <- list__flatten(lapply(tables, function(table) {
+    ids <- un_list(lapply(tables, function(table) {
         fields <- intersect(columns, DBI::dbListFields(dest, table))
-        if (length(fields) == 0L || !db__has_rows(dest, table)) return(NULL)
-        list__flatten(DBI::dbGetQuery(
+        if (length(fields) == 0L || !db_has_rows(dest, table)) return(NULL)
+        un_list(DBI::dbGetQuery(
             dest,
             sprintf(
                 "SELECT DISTINCT %s FROM `%s`",
@@ -107,10 +107,10 @@ schedule__relative_humidity_ids <- function(dest) {
 # Collect every schedule reference except the two humidity-limit fields. A
 # shared ID would make in-place unit conversion ambiguous and must fail loudly.
 schedule__nonhumidity_reference_ids <- function(dest) {
-    ids <- list__flatten(recursive = TRUE, lapply(
+    ids <- un_list(recursive = TRUE, lapply(
         setdiff(DBI::dbListTables(dest), "SCHEDULE_YEAR"),
         function(table) {
-            if (!db__has_rows(dest, table)) return(NULL)
+            if (!db_has_rows(dest, table)) return(NULL)
             fields <- grep("SCHEDULE", DBI::dbListFields(dest, table), value = TRUE)
             fields <- setdiff(fields, c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE"))
             if (length(fields) == 0L) return(NULL)
@@ -188,7 +188,7 @@ schedule__assert_relative_humidity_bounds <- function(dest, schedule) {
     if (!"ROOM_GROUP" %in% DBI::dbListTables(dest)) return(invisible(NULL))
     fields <- DBI::dbListFields(dest, "ROOM_GROUP")
     required <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
-    if (!all(required %in% fields) || !db__has_rows(dest, "ROOM_GROUP")) {
+    if (!all(required %in% fields) || !db_has_rows(dest, "ROOM_GROUP")) {
         return(invisible(NULL))
     }
 
@@ -258,7 +258,7 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
         rleid = rep(1L:(365L * num_sch), each = 24L),
         type = rep(schedule$TYPE, each = 365L * 24L),
         until = rep((1L:24L) * 60L, 365L * num_sch),
-        value = list__flatten(schedule$DATA)
+        value = un_list(schedule$DATA)
     )
     day_value <- schedule__unique_value(full_value)
 
@@ -277,7 +277,7 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
     day_name <- rep(schedule$NAME, 365L * 24L)[
         map_week$index_ori[attr(grp_day, "starts", exact = TRUE)]
     ]
-    day_name <- paste0(prefix, name__make_unique(day_name))
+    day_name <- paste0(prefix, make_unique_name(day_name))
 
     type_day <- collapse::funique.data.frame(collapse::ss(day_value, j = c("rleid", "type")))
     data.table::setnames(type_day, "rleid", "id")
@@ -433,7 +433,7 @@ schedule__week_map <- function(schedule, days, prefix = "Week-") {
     changed <- collapse::flag.default(changed, n = -1L, g = grp_rleid)
     collapse::replace_na(changed, TRUE, set = TRUE)
 
-    week_name <- paste0(prefix, name__make_unique(rep(schedule$NAME, each = 53L)[changed]))
+    week_name <- paste0(prefix, make_unique_name(rep(schedule$NAME, each = 53L)[changed]))
 
     list(map = map, changed = changed, name = week_name)
 }
@@ -574,7 +574,7 @@ schedule__compact_week_daytypes <- function(week_daytype) {
             len_daytype <- collapse::vlengths(compacted, use.names = FALSE)
             list(
                 rleid = rep(rleid, sum(len_daytype)),
-                daytype = list__flatten(compacted),
+                daytype = un_list(compacted),
                 rleid_day = rep(rleid_day, len_daytype)
             )
         },
@@ -666,7 +666,7 @@ schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
     )
 
     # make unique names for each year schedule
-    year_name <- name__make_unique(schedule$NAME)
+    year_name <- make_unique_name(schedule$NAME)
 
     grp_week <- collapse::groupv(year_span$rleid, group.sizes = TRUE, starts = TRUE)
     num_fld <- attr(grp_week, "group.sizes", exact = TRUE)
@@ -732,7 +732,7 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
             input <- list(...)
             # transpose and combine
             trans <- lapply(input[-1L], data.table::transpose)
-            pair <- list__flatten(trans)
+            pair <- un_list(trans)
 
             # get the group id
             grp <- collapse::groupv(pair, starts = TRUE)
@@ -753,7 +753,7 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
 
                 offset <- 0L
                 for (col in col_data) {
-                    out[[col]] <- list__flatten(data.table::transpose(
+                    out[[col]] <- un_list(data.table::transpose(
                         collapse::fsubset.default(pair, seq_along(trans[[col]]) + offset)
                     ))
                     offset <- offset + length(trans[[col]])
@@ -772,8 +772,8 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
     )
 
     map <- data.table::data.table(
-        index_ori = list__flatten(lapply(paired, .subset2, "index")),
-        index_cur = list__flatten(.mapply(
+        index_ori = un_list(lapply(paired, .subset2, "index")),
+        index_cur = un_list(.mapply(
             function(group, offset) group + offset,
             list(group = lapply(paired, .subset2, "group"), offset = offset),
             NULL
@@ -786,14 +786,14 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
 
     value <- data.table::setDT(c(
         list(
-            rleid = list__flatten(.mapply(
+            rleid = un_list(.mapply(
                 function(rleid, offset) rleid + offset,
                 list(rleid = lapply(paired, .subset2, "rleid"), offset = offset),
                 NULL
             ))
         ),
         data.table::setattr(lapply(col_data, function(col) {
-            list__flatten(lapply(paired, .subset2, col))
+            un_list(lapply(paired, .subset2, col))
         }), "names", col_data)
     ))
     data.table::setattr(value, "map", map)

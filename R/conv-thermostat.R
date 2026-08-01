@@ -2,7 +2,7 @@
 # Each EnergyPlus zone needs its own control object, but rooms with identical
 # heating/cooling schedule IDs can share the same DualSetpoint object.
 thermostat__convert <- function(dest, ep) {
-    if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "ROOM_GROUP")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
@@ -33,7 +33,7 @@ thermostat__convert <- function(dest, ep) {
     )
     data.table::set(
         thermostat, NULL, "ENERGYPLUS_ZONE_CONTROL_NAME",
-        name__make_unique(paste(thermostat$ROOM_NAME, "Thermostat"))
+        make_unique_name(paste(thermostat$ROOM_NAME, "Thermostat"))
     )
 
     if (any(!thermostat$CAN_CONVERT)) {

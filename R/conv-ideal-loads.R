@@ -3,7 +3,7 @@
 # supply-air state fields live in AC_SYS, and the current real fixture has no
 # AC_SYS rows, so fixed EnergyPlus IdealLoads defaults are used here.
 ideal_loads__convert <- function(dest, ep) {
-    if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "ROOM_GROUP")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
@@ -171,31 +171,31 @@ ideal_loads__assert_schedules <- function(ideal) {
 ideal_loads__add_names <- function(ideal) {
     data.table::set(
         ideal, NULL, "ENERGYPLUS_IDEAL_LOADS_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads"))
     )
     data.table::set(
         ideal, NULL, "ENERGYPLUS_EQUIPMENT_LIST_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Equipment"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Equipment"))
     )
     data.table::set(
         ideal, NULL, "ENERGYPLUS_HUMIDISTAT_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Humidistat"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Humidistat"))
     )
     data.table::set(
         ideal, NULL, "ZONE_SUPPLY_AIR_NODE_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads Supply Node"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads Supply Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_EXHAUST_AIR_NODE_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads Exhaust Node"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads Exhaust Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_AIR_NODE_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Zone Air Node"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Zone Air Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_RETURN_AIR_NODE_NAME",
-        name__make_unique(paste(ideal$ROOM_NAME, "Zone Return Air Node"))
+        make_unique_name(paste(ideal$ROOM_NAME, "Zone Return Air Node"))
     )
     ideal
 }

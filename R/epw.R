@@ -57,7 +57,7 @@ epw__connection <- function(dest) {
 
 # Select and validate the single complete non-leap CLIMATE_DATA series.
 epw__climate_data <- function(dest) {
-    if (!db__has_rows(dest, "CLIMATE_DATA")) {
+    if (!db_has_rows(dest, "CLIMATE_DATA")) {
         stop("No CLIMATE_DATA rows found in the DeST model.", call. = FALSE)
     }
     required <- c(
@@ -85,7 +85,7 @@ epw__climate_data <- function(dest) {
         )
     )
     data.table::setDT(climate)
-    data__force_numeric(climate, names(climate))
+    dt_force_numeric(climate, names(climate))
     epw__validate_climate(climate, climate_id)
     climate
 }
@@ -123,8 +123,8 @@ epw__resolved_city_climate_ids <- function(dest) {
     if (!all(c("ENVIRONMENT", "SYS_CITY", "CLIMATE_DATA") %in% tables)) {
         return(numeric())
     }
-    if (!db__has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !db__has_fields(dest, "SYS_CITY", c("CITY_ID", "CLIMATE_ID"))) {
+    if (!db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+        !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "CLIMATE_ID"))) {
         return(numeric())
     }
 
@@ -156,19 +156,19 @@ epw__validate_climate <- function(climate, climate_id) {
         if (length(missing_hour)) {
             issues <- c(issues, sprintf(
                 "missing HOUR value(s): %s",
-                data__format_integer_sample(missing_hour)
+                fmt_integer_sample(missing_hour)
             ))
         }
         if (length(duplicate_hour)) {
             issues <- c(issues, sprintf(
                 "duplicate HOUR value(s): %s",
-                data__format_integer_sample(duplicate_hour)
+                fmt_integer_sample(duplicate_hour)
             ))
         }
         if (length(unexpected_hour)) {
             issues <- c(issues, sprintf(
                 "unexpected HOUR value(s): %s",
-                data__format_integer_sample(unexpected_hour)
+                fmt_integer_sample(unexpected_hour)
             ))
         }
     }
@@ -218,7 +218,7 @@ epw__validate_climate <- function(climate, climate_id) {
 
 # Read the unique site metadata row required by the EPW LOCATION header.
 epw__environment <- function(dest) {
-    if (!db__has_rows(dest, "ENVIRONMENT")) {
+    if (!db_has_rows(dest, "ENVIRONMENT")) {
         stop("No ENVIRONMENT rows found in the DeST model.", call. = FALSE)
     }
     required <- c(
@@ -245,7 +245,7 @@ epw__environment <- function(dest) {
             nrow(environment)
         ), call. = FALSE)
     }
-    data__force_numeric(environment, c(
+    dt_force_numeric(environment, c(
         "CITY_ID", "LATITUDE", "LONGITUDE", "ELEVATION", "PROPERTY"
     ))
     if (is.na(environment$LATITUDE) || abs(environment$LATITUDE) > 90 ||

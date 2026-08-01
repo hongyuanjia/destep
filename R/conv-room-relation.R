@@ -4,7 +4,7 @@
 # those hourly schedule values are treated as hourly ACH values. VENT_SET_MAX is
 # retained in the diagnostic table until its unit is confirmed from DeST.
 ventilation__convert <- function(dest, ep) {
-    if (!db__has_rows(dest, "ROOM_RELATION")) return(NULL)
+    if (!db_has_rows(dest, "ROOM_RELATION")) return(NULL)
 
     relation <- DBI::dbGetQuery(
         dest,
@@ -81,7 +81,7 @@ ventilation__names <- function(relation) {
     raw_name[use_room_name] <- paste(relation$ROOM_NAME[use_room_name], "Outdoor Ventilation")
     raw_name[is.na(raw_name)] <- paste("ROOM_RELATION", relation$ID[is.na(raw_name)])
 
-    name__make_unique(raw_name)
+    make_unique_name(raw_name)
 }
 
 # Create the EnergyPlus ventilation object value list for one external

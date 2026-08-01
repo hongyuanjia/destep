@@ -35,7 +35,7 @@ outdoor_air__occupant_table <- function(dest) {
     )
     data.table::setcolorder(empty, cols)
 
-    if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "OCCUPANT_GAINS")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "OCCUPANT_GAINS")) {
         return(empty)
     }
 
@@ -64,7 +64,7 @@ outdoor_air__occupant_table <- function(dest) {
     outdoor_air <- unique(
         outdoor_air[, .(ROOM_ID, ROOM_NAME, MIN_REQUIRE_FRESH_AIR)]
     )
-    data__force_numeric(outdoor_air, "MIN_REQUIRE_FRESH_AIR")
+    dt_force_numeric(outdoor_air, "MIN_REQUIRE_FRESH_AIR")
 
     # Convert from DeST's m3/h-person to EnergyPlus' m3/s-person.
     data.table::set(
@@ -73,7 +73,7 @@ outdoor_air__occupant_table <- function(dest) {
     )
     data.table::set(
         outdoor_air, NULL, "ENERGYPLUS_OUTDOOR_AIR_NAME",
-        name__make_unique(paste(outdoor_air$ROOM_NAME, "Outdoor Air"))
+        make_unique_name(paste(outdoor_air$ROOM_NAME, "Outdoor Air"))
     )
     data.table::setcolorder(outdoor_air, cols)
 

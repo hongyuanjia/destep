@@ -16,7 +16,7 @@ zone__convert <- function(dest, ep) {
         ON R.OF_STOREY = S.ID
         "
     )
-    name__assert_unique(room$NAME, "room")
+    assert_unique_name(room$NAME, "room")
     data.table::setDT(room)
 
     #  construct ZoneList input

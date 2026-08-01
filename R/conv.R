@@ -179,7 +179,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     # update Version comments
     ver <- conv__version_comment(tmpdb, ep)
-    ep$Version$comment(list__flatten(ver$object$comment))
+    ep$Version$comment(un_list(ver$object$comment))
 
     # Surface part geometry must be available when a window crosses a topology
     # split, because each clipped window piece references exactly one host part.
@@ -207,7 +207,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     if (any(vapply(
         c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
-        db__has_rows, logical(1L), dest = tmpdb
+        db_has_rows, logical(1L), dest = tmpdb
     ))) {
         conv$internal_gains <- internal_gains__convert(tmpdb, ep)
     }
@@ -302,6 +302,39 @@ conv__add_objects <- function(dest, ep, class, values) {
     # arguments, which avoids evaluating dynamically constructed `:=` calls.
     objects <- stats::setNames(values, rep(class, length(values)))
     do.call(conv__add, c(list(dest, ep), objects))
+}
+
+# Combine partial EnergyPlus expansion results and rebase their object ids so
+# independently generated sections can be appended without collisions.
+conv__combine_outputs <- function(outputs, table = NULL) {
+    outputs <- Filter(Negate(is.null), outputs)
+    if (length(outputs) == 0L) return(NULL)
+
+    num_obj <- 0L
+    for (i in seq_along(outputs)) {
+        data.table::set(outputs[[i]]$object, NULL, "rleid", outputs[[i]]$object$rleid + num_obj)
+        data.table::set(outputs[[i]]$value, NULL, "rleid", outputs[[i]]$value$rleid + num_obj)
+        num_obj <- max(outputs[[i]]$object$rleid)
+    }
+
+    out <- list(
+        object = data.table::rbindlist(lapply(outputs, .subset2, "object")),
+        value = data.table::rbindlist(lapply(outputs, .subset2, "value"))
+    )
+
+    if (is.null(table)) {
+        table <- data.table::rbindlist(
+            lapply(names(outputs), function(name) {
+                tbl <- attr(outputs[[name]], "table")
+                if (is.null(tbl)) return(NULL)
+                data.table::set(data.table::copy(tbl), NULL, "SOURCE_TABLE", name)
+            }),
+            fill = TRUE
+        )
+    }
+    # Preserve the source snapshot for diagnostics and downstream converters.
+    attr(out, "table") <- table
+    out
 }
 
 conv__load <- function(dest, ep, ..., .env = parent.frame()) {

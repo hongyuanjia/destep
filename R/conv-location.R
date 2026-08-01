@@ -10,7 +10,7 @@ location__convert <- function(dest, ep) {
             round(ELEVATION, 2) AS ELEVATION
         FROM ENVIRONMENT"
     )
-    name__assert_unique(loc$NAME, "environment")
+    assert_unique_name(loc$NAME, "environment")
     data.table::setDT(loc)
 
     out <- conv__add(dest, ep,

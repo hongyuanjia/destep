@@ -273,7 +273,7 @@ window__convert <- function(
     dest, ep, surface = NULL,
     geometry_profile = eplus_geom__profile(ep$version())
 ) {
-    if (!db__has_rows(dest, "WINDOW")) return(NULL)
+    if (!db_has_rows(dest, "WINDOW")) return(NULL)
 
     # TODO: Does DeST support polygon windows other than rectangles?
     window <- DBI::dbGetQuery(
@@ -376,7 +376,7 @@ window__convert <- function(
             .SD, south_direction, geometry_profile
         ), by = "OUTPUT_PART_ID"
     ]
-    name__assert_unique(window$NAME[window$POINT_NO == 0L], "window")
+    assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
 
     value <- window[,
         by = "OUTPUT_PART_ID",

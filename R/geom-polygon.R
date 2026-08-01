@@ -230,7 +230,7 @@ geom__eplus_vertex_values <- function(value) {
 # azimuths. Legacy databases without ENVIRONMENT use DeST's standard direction.
 geom__south_direction <- function(dest) {
     if (!"ENVIRONMENT" %in% DBI::dbListTables(dest) ||
-        !db__has_fields(dest, "ENVIRONMENT", "SOUTH_DIRECTION")) {
+        !db_has_fields(dest, "ENVIRONMENT", "SOUTH_DIRECTION")) {
         return(270.0)
     }
 
