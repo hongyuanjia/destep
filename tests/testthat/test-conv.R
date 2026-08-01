@@ -1,3 +1,40 @@
+test_that("destep_update_name respects table dependencies", {
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "BUILDING", data.frame(
+        BUILDING_ID = 1L, NAME = "Building"
+    ))
+    DBI::dbWriteTable(dest, "ROOM", data.frame(
+        ID = 1:2, NAME = c(".", ".")
+    ))
+    DBI::dbWriteTable(dest, "SURFACE", data.frame(
+        SURFACE_ID = 11:12, NAME = c(".", "."),
+        OF_ROOM = 1:2, TYPE = 0L
+    ))
+    DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
+        SIDE1 = 11:12, SIDE2 = c(NA_integer_, NA_integer_), KIND = 1L
+    ))
+    DBI::dbWriteTable(dest, "OUTSIDE", data.frame(
+        OUTSIDE_ID = integer(), NAME = character()
+    ))
+    DBI::dbWriteTable(dest, "GROUND", data.frame(
+        GROUND_ID = integer(), NAME = character()
+    ))
+    DBI::dbWriteTable(dest, "SHADING", data.frame(
+        ID = integer(), NAME = character()
+    ))
+
+    # The caller order is intentionally reversed; dependencies must win.
+    destep_update_name(dest, c("SURFACE", "ROOM"))
+
+    expect_equal(DBI::dbReadTable(dest, "ROOM")$NAME, c("Room", "Room 1"))
+    expect_equal(
+        DBI::dbReadTable(dest, "SURFACE")$NAME,
+        c("Room Wall", "Room 1 Wall")
+    )
+})
+
 test_that("to_eplus() works", {
     skip_on_cran()
     eplusr::use_idd(23.1, "auto")

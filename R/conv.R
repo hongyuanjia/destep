@@ -377,7 +377,9 @@ destep_update_name <- function(dest, tables = NULL) {
     # 2. ROOM
     # 3. SURFACE
     tbls <- intersect(c("OUTSIDE", "GROUND", "ROOM", "SURFACE"), names(tables))
-    tables[match(tbls, names(tables), 0L)] <- tables[tbls]
+    # Put dependency-bearing tables first even when callers supplied a
+    # different order; assigning them back to their old positions is a no-op.
+    tables <- c(tables[tbls], tables[setdiff(names(tables), tbls)])
     for (i in seq_along(tables)) {
         table <- names(tables)[[i]]
         input <- tables[[i]]
