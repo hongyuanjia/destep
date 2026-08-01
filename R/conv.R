@@ -287,6 +287,23 @@ destep_add <- function(dest, ep, ..., .env = parent.frame()) {
     )
 }
 
+# Expand a list of value records into objects of one EnergyPlus class. This is
+# the shared boundary for converters that previously rebuilt the same NSE call.
+conv__add_objects <- function(dest, ep, class, values) {
+    if (!is_string(class)) {
+        stop("'class' should be a single character string.", call. = FALSE)
+    }
+    if (!is.list(values)) {
+        stop("'values' should be a list of EnergyPlus value records.", call. = FALSE)
+    }
+    if (length(values) == 0L) return(NULL)
+
+    # expand_idf_dots_value() accepts repeated class names as ordinary named
+    # arguments, which avoids evaluating dynamically constructed `:=` calls.
+    objects <- stats::setNames(values, rep(class, length(values)))
+    do.call(destep_add, c(list(dest, ep), objects))
+}
+
 destep_load <- function(dest, ep, ..., .env = parent.frame()) {
     .env <- force(.env)
     eplusr::expand_idf_dots_literal(

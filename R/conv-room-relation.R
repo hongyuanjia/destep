@@ -64,10 +64,9 @@ destep_conv_room_ventilation <- function(dest, ep) {
     values <- lapply(seq_len(nrow(ventilation)), function(i) {
         destep_room_ventilation_value(ventilation, i)
     })
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneVentilation:DesignFlowRate" := .(val)))
-    )))
+    out <- conv__add_objects(
+        dest, ep, "ZoneVentilation:DesignFlowRate", values
+    )
 
     attr(out, "table") <- relation
 

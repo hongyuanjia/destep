@@ -154,10 +154,7 @@ destep_conv_people <- function(dest, ep) {
     # NOTE: In EnergyPlus, the people activity level can be changed via
     # schedules. However, in DeST, it is a fixed value. So here we create a
     # constant activity-level schedule for each distinct activity level.
-    parts$people <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(people_objects, function(val) bquote("People" := .(val)))
-    )))
+    parts$people <- conv__add_objects(dest, ep, "People", people_objects)
 
     destep_combine_outputs(parts, table = people)
 }
@@ -269,10 +266,7 @@ destep_conv_lights <- function(dest, ep) {
         )
     }
 
-    parts$lights <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(light_objects, function(val) bquote("Lights" := .(val)))
-    )))
+    parts$lights <- conv__add_objects(dest, ep, "Lights", light_objects)
 
     destep_combine_outputs(parts, table = lights)
 }
@@ -381,10 +375,9 @@ destep_conv_electric_equipment <- function(dest, ep) {
         )
     }
 
-    parts$equipment <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(equipment_objects, function(val) bquote("ElectricEquipment" := .(val)))
-    )))
+    parts$equipment <- conv__add_objects(
+        dest, ep, "ElectricEquipment", equipment_objects
+    )
 
     destep_combine_outputs(parts, table = equipment)
 }

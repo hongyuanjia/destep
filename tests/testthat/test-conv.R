@@ -35,6 +35,26 @@ test_that("destep_update_name respects table dependencies", {
     )
 })
 
+test_that("conv__add_objects expands one EnergyPlus class", {
+    ep <- ensure_empty_idf()
+    values <- list(
+        list(name = "First", hourly_value = 1),
+        list(name = "Second", hourly_value = 2)
+    )
+
+    out <- conv__add_objects(NULL, ep, "Schedule:Constant", values)
+
+    expect_equal(out$object$class_name, rep("Schedule:Constant", 2L))
+    expect_equal(
+        out$value[
+            field_name == "Name",
+            value_chr
+        ],
+        c("First", "Second")
+    )
+    expect_null(conv__add_objects(NULL, ep, "Schedule:Constant", list()))
+})
+
 test_that("to_eplus() works", {
     skip_on_cran()
     eplusr::use_idd(23.1, "auto")

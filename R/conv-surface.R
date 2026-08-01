@@ -207,10 +207,7 @@ surface__convert <- function(
         }
     }
 
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(value, function(val) bquote("BuildingSurface:Detailed" := .(val)))
-    )))
+    out <- conv__add_objects(dest, ep, "BuildingSurface:Detailed", value)
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- surface

@@ -163,10 +163,7 @@ destep_thermostat_setpoint_objects <- function(dest, ep, setpoint) {
         destep_thermostat_setpoint_value(setpoint, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ThermostatSetpoint:DualSetpoint" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ThermostatSetpoint:DualSetpoint", values)
 }
 
 # Build the DualSetpoint value list for one distinct schedule pair.
@@ -185,10 +182,7 @@ destep_thermostat_control_objects <- function(dest, ep, thermostat) {
         destep_thermostat_control_value(thermostat, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneControl:Thermostat" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneControl:Thermostat", values)
 }
 
 # Build the ZoneControl object value list for one converted room.

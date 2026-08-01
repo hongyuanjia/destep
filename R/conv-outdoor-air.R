@@ -10,10 +10,9 @@ destep_conv_design_specification_outdoor_air <- function(dest, ep) {
         destep_outdoor_air_value(outdoor_air, i)
     })
 
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("DesignSpecification:OutdoorAir" := .(val)))
-    )))
+    out <- conv__add_objects(
+        dest, ep, "DesignSpecification:OutdoorAir", values
+    )
     attr(out, "table") <- outdoor_air
 
     out

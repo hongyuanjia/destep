@@ -408,10 +408,9 @@ window__convert <- function(
         )))
     ]$value
 
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(value, function(val) bquote("FenestrationSurface:Detailed" := .(val)))
-    )))
+    out <- conv__add_objects(
+        dest, ep, "FenestrationSurface:Detailed", value
+    )
 
     attr(out, "table") <- window
 

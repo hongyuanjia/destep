@@ -208,10 +208,7 @@ ideal_loads__humidistat_objects <- function(dest, ep, ideal) {
         ideal_loads__humidistat_value(ideal, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneControl:Humidistat" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneControl:Humidistat", values)
 }
 
 # Build the EnergyPlus humidistat value list for one converted DeST room group.
@@ -233,10 +230,7 @@ destep_ideal_loads_objects <- function(dest, ep, ideal) {
         destep_ideal_loads_value(ideal, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneHVAC:IdealLoadsAirSystem" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneHVAC:IdealLoadsAirSystem", values)
 }
 
 # Build one ZoneHVAC:IdealLoadsAirSystem value list.
@@ -299,10 +293,7 @@ destep_ideal_loads_equipment_lists <- function(dest, ep, ideal) {
         destep_ideal_loads_equipment_list_value(ideal, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneHVAC:EquipmentList" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneHVAC:EquipmentList", values)
 }
 
 # Build one ZoneHVAC:EquipmentList value list.
@@ -326,10 +317,7 @@ destep_ideal_loads_equipment_connections <- function(dest, ep, ideal) {
         destep_ideal_loads_equipment_connection_value(ideal, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneHVAC:EquipmentConnections" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneHVAC:EquipmentConnections", values)
 }
 
 # Build one ZoneHVAC:EquipmentConnections value list.
