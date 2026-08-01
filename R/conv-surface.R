@@ -221,12 +221,12 @@ surface__convert <- function(
 # partition the same footprint differently. Source faces remain traceable by
 # ID and plane, while cut faces in adjacent non-multiplied storeys become
 # self-referenced adiabatic surfaces.
-surface__apply_typical_storey_boundaries <- function(
+# Prepare the source metadata and select the horizontal faces that participate
+# in typical-storey rewiring.
+surface__prepare_typical_storey <- function(
     surface, window = data.table::data.table(),
     profile = eplus_geom__profile()
 ) {
-    tolerance <- profile$plane_distance
-    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
     surface[, `:=`(
         SOURCE_TYPE = TYPE,
@@ -243,7 +243,9 @@ surface__apply_typical_storey_boundaries <- function(
     target <- surface[
         STOREY_MULTIPLIER > 1L & AZIMUTH %in% c(-999.0, 999.0)
     ]
-    if (nrow(target) == 0L) return(surface)
+    if (nrow(target) == 0L) {
+        return(list(surface = surface, target = target))
+    }
 
     if (nrow(window) > 0L && any(target$PLANE %in% window$PLANE)) {
         stop(paste(
@@ -252,86 +254,75 @@ surface__apply_typical_storey_boundaries <- function(
         ))
     }
 
-    # Return the construction name without the explicit reverse-stack suffix.
-    construction_base <- function(value) {
-        sub(" \\[Reverse\\]$", "", value)
-    }
+    list(surface = surface, target = target)
+}
 
-    # Reconstruct one source face from the exterior edges of any triangles or
-    # convex parts created by the earlier EnergyPlus topology normalization.
-    # Each internal mesh edge occurs twice, so retaining one-occurrence edges
-    # removes auxiliary diagonals exactly before the two regions are intersected.
-    polygon_region <- function(value) {
-        edge <- data.table::rbindlist(lapply(unique(value$OUTPUT_ID), function(output_id) {
-            part <- value[OUTPUT_ID == output_id]
-            following <- seq_len(nrow(part)) %% nrow(part) + 1L
-            data.table::data.table(
-                START = sprintf("%.12f|%.12f", part$POINT_X, part$POINT_Y),
-                END = sprintf(
-                    "%.12f|%.12f",
-                    part$POINT_X[following], part$POINT_Y[following]
-                ),
-                START_X = part$POINT_X,
-                START_Y = part$POINT_Y,
-                END_X = part$POINT_X[following],
-                END_Y = part$POINT_Y[following]
+# Return the construction name without the explicit reverse-stack suffix.
+surface__construction_base <- function(value) {
+    sub(" \\[Reverse\\]$", "", value)
+}
+
+# Reconstruct one source face from the exterior edges of any triangles or
+# convex parts created by the earlier EnergyPlus topology normalization. Each
+# internal mesh edge occurs twice, so one-occurrence edges remove diagonals.
+surface__polygon_region <- function(value) {
+    edge <- data.table::rbindlist(lapply(unique(value$OUTPUT_ID), function(output_id) {
+        part <- value[OUTPUT_ID == output_id]
+        following <- seq_len(nrow(part)) %% nrow(part) + 1L
+        data.table::data.table(
+            START = sprintf("%.12f|%.12f", part$POINT_X, part$POINT_Y),
+            END = sprintf(
+                "%.12f|%.12f",
+                part$POINT_X[following], part$POINT_Y[following]
+            ),
+            START_X = part$POINT_X,
+            START_Y = part$POINT_Y,
+            END_X = part$POINT_X[following],
+            END_Y = part$POINT_Y[following]
+        )
+    }))
+    edge[, EDGE := geom__edge_key(START, END)]
+    count <- edge[, .N, by = "EDGE"]
+    boundary <- edge[count[N == 1L], on = "EDGE", nomatch = 0L]
+    coordinate <- unique(data.table::rbindlist(list(
+        boundary[, .(KEY = START, X = START_X, Y = START_Y)],
+        boundary[, .(KEY = END, X = END_X, Y = END_Y)]
+    )), by = "KEY")
+
+    region <- list()
+    while (nrow(boundary) > 0L) {
+        start <- boundary$START[[1L]]
+        current <- boundary$END[[1L]]
+        path <- c(start, current)
+        boundary <- boundary[-1L]
+        while (current != start) {
+            incident <- which(
+                boundary$START == current | boundary$END == current
             )
-        }))
-        edge[, EDGE := geom__edge_key(START, END)]
-        count <- edge[, .N, by = "EDGE"]
-        boundary <- edge[count[N == 1L], on = "EDGE", nomatch = 0L]
-        coordinate <- unique(data.table::rbindlist(list(
-            boundary[, .(KEY = START, X = START_X, Y = START_Y)],
-            boundary[, .(KEY = END, X = END_X, Y = END_Y)]
-        )), by = "KEY")
-
-        region <- list()
-        while (nrow(boundary) > 0L) {
-            start <- boundary$START[[1L]]
-            current <- boundary$END[[1L]]
-            path <- c(start, current)
-            boundary <- boundary[-1L]
-            while (current != start) {
-                incident <- which(
-                    boundary$START == current | boundary$END == current
-                )
-                if (length(incident) != 1L) {
-                    stop("A normalized DeST surface does not have a simple boundary cycle.")
-                }
-                selected <- incident[[1L]]
-                following <- if (boundary$START[[selected]] == current) {
-                    boundary$END[[selected]]
-                } else {
-                    boundary$START[[selected]]
-                }
-                boundary <- boundary[-selected]
-                current <- following
-                if (current != start) path <- c(path, current)
+            if (length(incident) != 1L) {
+                stop("A normalized DeST surface does not have a simple boundary cycle.")
             }
-            point <- coordinate[match(path, coordinate$KEY)]
-            region[[length(region) + 1L]] <- list(x = point$X, y = point$Y)
+            selected <- incident[[1L]]
+            following <- if (boundary$START[[selected]] == current) {
+                boundary$END[[selected]]
+            } else {
+                boundary$START[[selected]]
+            }
+            boundary <- boundary[-selected]
+            current <- following
+            if (current != start) path <- c(path, current)
         }
-        region
+        point <- coordinate[match(path, coordinate$KEY)]
+        region[[length(region) + 1L]] <- list(x = point$X, y = point$Y)
     }
+    region
+}
 
+# Build paired floor and ceiling polygons from the complete planar overlap of
+# each multiplied storey's horizontal faces.
+surface__rebuild_typical_storeys <- function(target, profile) {
+    tolerance <- profile$plane_distance
     coordinate_columns <- geom__coordinate_columns()
-    target_output <- unique(target$OUTPUT_ID)
-    counterpart <- unique(target[
-        BOUNDARY == "Surface" & !is.na(BOUNDARY_OBJECT), BOUNDARY_OBJECT
-    ])
-
-    # The neighboring first/top-storey faces can no longer reference a surface
-    # that has been repurposed as a cyclic typical-floor boundary. Self
-    # references retain their thermal mass while enforcing zero through-flow.
-    cut <- surface[
-        NAME %in% counterpart & !OUTPUT_ID %in% target_output, unique(OUTPUT_ID)
-    ]
-    surface[OUTPUT_ID %in% cut, `:=`(
-        BOUNDARY = "Surface",
-        BOUNDARY_OBJECT = NAME,
-        BOUNDARY_MODE = "typical_cut_adiabatic"
-    )]
-
     rebuilt <- list()
     pair_index <- 0L
     storey_ids <- sort(unique(target$STOREY_ID))
@@ -349,7 +340,7 @@ surface__apply_typical_storey_boundaries <- function(
         # A unique middle-floor construction is the only defensible fallback
         # for portions whose source boundary was Roof or exposed Floor. Local
         # middle-floor faces still take precedence when they are available.
-        default_construction <- unique(construction_base(
+        default_construction <- unique(surface__construction_base(
             storey[KIND_ENCLOSURE == 5L, CONSTRUCTION]
         ))
         default_construction <- default_construction[!is.na(default_construction)]
@@ -378,12 +369,12 @@ surface__apply_typical_storey_boundaries <- function(
                 # all auxiliary triangulation diagonals. Keeping those diagonals
                 # would create millimetre-scale slivers at their crossings.
                 overlap <- polyclip::polyclip(
-                    polygon_region(down), polygon_region(up),
+                    surface__polygon_region(down), surface__polygon_region(up),
                     op = "intersection", eps = profile$intersection
                 )
                 if (length(overlap) == 0L) next
 
-                local_construction <- unique(construction_base(c(
+                local_construction <- unique(surface__construction_base(c(
                     down[KIND_ENCLOSURE == 5L, CONSTRUCTION],
                     up[KIND_ENCLOSURE == 5L, CONSTRUCTION]
                 )))
@@ -492,9 +483,12 @@ surface__apply_typical_storey_boundaries <- function(
     if (nrow(rebuilt) == 0L) {
         stop("Typical-storey floor and ceiling footprints do not overlap.")
     }
+    rebuilt
+}
 
-    # Every original source face must be exactly covered by the common overlay.
-    # This catches gaps and overlaps before an incomplete storey is written.
+# Check that the common overlay covers every original source face exactly once.
+surface__validate_typical_storey_area <- function(target, rebuilt, profile) {
+    tolerance <- profile$plane_distance
     source_area <- target[, .(
         PART_AREA = geom__polygon_area(.SD)
     ), by = .(ID, OUTPUT_ID)][, .(
@@ -524,9 +518,12 @@ surface__apply_typical_storey_boundaries <- function(
             failure$REBUILT_AREA, failure$ERROR
         ))
     }
+    invisible(rebuilt)
+}
 
-    # Rebuild deterministic part identifiers and names for source faces split
-    # by the overlay. Names are assigned before reciprocal boundary references.
+# Assign deterministic part identifiers, names, and reciprocal pair references
+# to source faces split by the typical-storey overlay.
+surface__name_typical_storey_parts <- function(rebuilt) {
     data.table::setorderv(rebuilt, c(
         "STOREY_ID", "SOURCE_ID", "TYPICAL_PAIR_ID", "POINT_NO"
     ))
@@ -555,6 +552,40 @@ surface__apply_typical_storey_boundaries <- function(
     rebuilt[pair_name, on = "TYPICAL_PAIR_ID", BOUNDARY_OBJECT := ifelse(
         TYPE == "Floor", i.CEILING_NAME, i.FLOOR_NAME
     )]
+    rebuilt
+}
+
+# Replace every multiplied-storey horizontal boundary with a cyclic paired
+# floor and ceiling overlay while keeping adjacent cut faces adiabatic.
+surface__apply_typical_storey_boundaries <- function(
+    surface, window = data.table::data.table(),
+    profile = eplus_geom__profile()
+) {
+    prepared <- surface__prepare_typical_storey(surface, window, profile)
+    surface <- prepared$surface
+    target <- prepared$target
+    if (nrow(target) == 0L) return(surface)
+
+    target_output <- unique(target$OUTPUT_ID)
+    counterpart <- unique(target[
+        BOUNDARY == "Surface" & !is.na(BOUNDARY_OBJECT), BOUNDARY_OBJECT
+    ])
+    # A neighboring first/top-storey face cannot reference a source face that
+    # is repurposed as a cyclic typical boundary; self-reference makes it
+    # adiabatic while retaining its thermal mass.
+    cut <- surface[
+        NAME %in% counterpart & !OUTPUT_ID %in% target_output,
+        unique(OUTPUT_ID)
+    ]
+    surface[OUTPUT_ID %in% cut, `:=`(
+        BOUNDARY = "Surface",
+        BOUNDARY_OBJECT = NAME,
+        BOUNDARY_MODE = "typical_cut_adiabatic"
+    )]
+
+    rebuilt <- surface__rebuild_typical_storeys(target, profile)
+    surface__validate_typical_storey_area(target, rebuilt, profile)
+    rebuilt <- surface__name_typical_storey_parts(rebuilt)
 
     surface <- data.table::rbindlist(list(
         surface[!OUTPUT_ID %in% target_output],
