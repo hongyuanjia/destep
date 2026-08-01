@@ -75,6 +75,33 @@ test_that("keeps every distinct non-default door construction", {
     expect_equal(opaque$LENGTH, c(120, 180))
 })
 
+test_that("resolves transparent door materials through APP_ID", {
+    dest <- const_test__door_db(
+        door_construction = 10L,
+        enclosure = 100L,
+        material = 62L,
+        app_id = 1L,
+        app_flag = 1L
+    )
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    DBI::dbWriteTable(dest, "SYS_APP_MATERIAL", data.frame(
+        APP_MATERIAL_ID = 1L,
+        CNAME = "3mm Clear Glass",
+        THICK = 3,
+        CONDUCTIVITY = 0.9,
+        DENSITY = 2500,
+        SPECIFIC_HEAT = 750
+    ), overwrite = TRUE)
+
+    door <- const__door_layers(dest)
+    glazing <- door[door$LAYER_NO == 1L, ]
+
+    expect_equal(glazing$MATERIAL_ID, 1L)
+    expect_equal(glazing$MATERIAL_NAME, "3mm Clear Glass")
+    expect_equal(glazing$LENGTH, 3)
+    expect_equal(glazing$MATERIAL_CONDUCTIVITY, 0.9)
+})
+
 test_that("resolves aggregate window type performance and fallbacks", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)

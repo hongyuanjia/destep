@@ -192,7 +192,9 @@ const__door_layers <- function(dest) {
             LEFT JOIN SYS_DOOR S
             ON D.DOOR_CONSTRUCTION = S.DOOR_ID AND S.APP_ID != 0 AND S.APP_FLAG = 1
             LEFT JOIN SYS_APP_MATERIAL M
-            ON S.MATERIAL_ID = M.APP_MATERIAL_ID
+            -- APP_ID identifies the transparent material; MATERIAL_ID is the
+            -- separate opaque door-body material.
+            ON S.APP_ID = M.APP_MATERIAL_ID
         ) WHERE ID IS NOT NULL -- in case there are no glaze layers
         "
     )
