@@ -106,17 +106,17 @@ MAP_ID_NAME <- list(
 #' @export
 # TODO: How about STOREY_GROUP?
 to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
-    if (is_string(dest) && file.exists(dest)) {
+    if (arg__is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
     } else if (!inherits(dest, "DBIConnection")) {
         stop("'dest' should be a path to a DeST model file or a DBIConnection object.")
     }
 
-    if (!is_flag(copy)) {
+    if (!arg__is_flag(copy)) {
         stop("'copy' should be a single logical value of 'TRUE' or 'FALSE'")
     }
-    if (!is_flag(verbose)) {
+    if (!arg__is_flag(verbose)) {
         stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 
@@ -175,10 +175,10 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ))
 
     # update object names and make sure all names are unique
-    destep_update_name(tmpdb)
+    conv__update_names(tmpdb)
 
     # update Version comments
-    ver <- destep_comment_version(tmpdb, ep)
+    ver <- conv__version_comment(tmpdb, ep)
     ep$Version$comment(list__flatten(ver$object$comment))
 
     # Surface part geometry must be available when a window crosses a topology
@@ -191,25 +191,25 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
-        location = destep_conv_location(tmpdb, ep),
-        ground_temperature = destep_conv_ground_temperature(tmpdb, ep),
-        building = destep_conv_building(tmpdb, ep),
-        zone     = destep_conv_zone(tmpdb, ep),
+        location = location__convert(tmpdb, ep),
+        ground_temperature = ground_temperature__convert(tmpdb, ep),
+        building = building__convert(tmpdb, ep),
+        zone     = zone__convert(tmpdb, ep),
         surface  = surface,
         window   = window,
-        const    = destep_conv_const(tmpdb, ep),
-        schedule = destep_conv_schedule(tmpdb, ep),
-        thermostat = destep_conv_thermostat(tmpdb, ep),
-        outdoor_air = destep_conv_design_specification_outdoor_air(tmpdb, ep),
-        ideal_loads = destep_conv_ideal_loads(tmpdb, ep),
-        ventilation = destep_conv_room_ventilation(tmpdb, ep)
+        const    = const__convert(tmpdb, ep),
+        schedule = schedule__convert(tmpdb, ep),
+        thermostat = thermostat__convert(tmpdb, ep),
+        outdoor_air = outdoor_air__convert(tmpdb, ep),
+        ideal_loads = ideal_loads__convert(tmpdb, ep),
+        ventilation = ventilation__convert(tmpdb, ep)
     )
 
     if (any(vapply(
         c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
         db__has_rows, logical(1L), dest = tmpdb
     ))) {
-        conv$internal_gains <- destep_conv_internal_gains(tmpdb, ep)
+        conv$internal_gains <- internal_gains__convert(tmpdb, ep)
     }
     conv <- Filter(Negate(is.null), conv)
 
@@ -243,7 +243,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ep
 }
 
-destep_comment <- function(dest, ep, class = NULL, object = NULL, comment) {
+conv__comment <- function(dest, ep, class = NULL, object = NULL, comment) {
     obj <- eplusr::get_idf_object(
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
@@ -275,7 +275,7 @@ destep_comment <- function(dest, ep, class = NULL, object = NULL, comment) {
     list(object = obj, value = val)
 }
 
-destep_add <- function(dest, ep, ..., .env = parent.frame()) {
+conv__add <- function(dest, ep, ..., .env = parent.frame()) {
     .env <- force(.env)
     eplusr::expand_idf_dots_value(
         eplusr::get_priv_env(ep)$idd_env(),
@@ -290,7 +290,7 @@ destep_add <- function(dest, ep, ..., .env = parent.frame()) {
 # Expand a list of value records into objects of one EnergyPlus class. This is
 # the shared boundary for converters that previously rebuilt the same NSE call.
 conv__add_objects <- function(dest, ep, class, values) {
-    if (!is_string(class)) {
+    if (!arg__is_string(class)) {
         stop("'class' should be a single character string.", call. = FALSE)
     }
     if (!is.list(values)) {
@@ -301,10 +301,10 @@ conv__add_objects <- function(dest, ep, class, values) {
     # expand_idf_dots_value() accepts repeated class names as ordinary named
     # arguments, which avoids evaluating dynamically constructed `:=` calls.
     objects <- stats::setNames(values, rep(class, length(values)))
-    do.call(destep_add, c(list(dest, ep), objects))
+    do.call(conv__add, c(list(dest, ep), objects))
 }
 
-destep_load <- function(dest, ep, ..., .env = parent.frame()) {
+conv__load <- function(dest, ep, ..., .env = parent.frame()) {
     .env <- force(.env)
     eplusr::expand_idf_dots_literal(
         eplusr::get_priv_env(ep)$idd_env(),
@@ -315,7 +315,7 @@ destep_load <- function(dest, ep, ..., .env = parent.frame()) {
     )
 }
 
-destep_field <- function(dest, ep, class, num_fields) {
+conv__field <- function(dest, ep, class, num_fields) {
     fields <- utils::getFromNamespace("get_idd_field", "eplusr")(
         eplusr::get_priv_env(ep)$idd_env(),
         class = rep(class, length(num_fields)),
@@ -327,7 +327,7 @@ destep_field <- function(dest, ep, class, num_fields) {
     fields
 }
 
-destep_idd_field_name <- function(ep, class, field) {
+conv__idd_field_name <- function(ep, class, field) {
     fields <- utils::getFromNamespace("get_idd_field", "eplusr")(
         eplusr::get_priv_env(ep)$idd_env(),
         class = class,
@@ -360,12 +360,12 @@ destep_idd_field_name <- function(ep, class, field) {
 #' @return \[DBIConnection\] The same database connection object.
 #'
 #' @keywords internal
-destep_update_name <- function(dest, tables = NULL) {
+conv__update_names <- function(dest, tables = NULL) {
     if (is.null(tables)) {
         # it is possible that some tables are not in the database
         tables <- MAP_ID_NAME[names(MAP_ID_NAME) %in% DBI::dbListTables(dest)]
     } else {
-        if (!is_character(tables)) {
+        if (!arg__is_character(tables)) {
             stop(sprintf(
                 "'tables' should be NULL or a character vector but found '%s'",
                 class(tables)[1L]
@@ -605,9 +605,9 @@ destep_update_name <- function(dest, tables = NULL) {
 }
 
 # add comment about the DeST version to be converted
-destep_comment_version <- function(dest, ep) {
+conv__version_comment <- function(dest, ep) {
     ver <- DBI::dbGetQuery(dest, "SELECT MAJOR, MINOR FROM VERSION_CONTROL")
-    destep_comment(dest, ep, "Version",
+    conv__comment(dest, ep, "Version",
         comment = sprintf("Converted from DeST v%i.%i", ver$MAJOR, ver$MINOR)
     )
 }

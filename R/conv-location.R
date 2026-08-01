@@ -1,6 +1,6 @@
 # ENVIRONMENT -> Site:Location
 # TODO: add time zone
-destep_conv_location <- function(dest, ep) {
+location__convert <- function(dest, ep) {
     loc <- DBI::dbGetQuery(dest,
         "SELECT
             ENVIRONMENT_ID       AS ID,
@@ -13,7 +13,7 @@ destep_conv_location <- function(dest, ep) {
     name__assert_unique(loc$NAME, "environment")
     data.table::setDT(loc)
 
-    out <- destep_add(dest, ep,
+    out <- conv__add(dest, ep,
         "Site:Location" := list(
             name      = loc$NAME,
             latitude  = loc$LATITUDE,

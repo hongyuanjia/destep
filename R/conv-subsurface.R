@@ -339,7 +339,7 @@ window__convert <- function(
     # WINDOW_TYPE_DATA record supplies valid aggregate EnergyPlus inputs. The
     # shared resolver preserves the same fallback decision used by construction
     # conversion when type data are missing or invalid.
-    window_type <- destep_window_type_performance(dest)
+    window_type <- const__window_type_performance(dest)
     valid_type <- window_type[TYPE_DATA_VALID == TRUE]
     if (nrow(valid_type) > 0L) {
         construction <- stats::setNames(

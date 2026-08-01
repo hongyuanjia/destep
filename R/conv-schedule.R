@@ -10,7 +10,7 @@ ENUM_SCH_DAYTYPE_WEEKEND <- c(ENUM_SCH_DAYTYPE["Saturday"], ENUM_SCH_DAYTYPE["Su
 ENUM_SCH_DAYTYPE_WEEKDAY <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE["Monday"]:ENUM_SCH_DAYTYPE["Friday"]]
 
 # SCHEDULE_YEAR -> Schedule:Year -> Schedule:Week:Compact -> Schedule:Day:Interval -> ScheduleTypeLimits
-destep_conv_schedule <- function(dest, ep) {
+schedule__convert <- function(dest, ep) {
     # currently, schedules are used in the tables below:
     # - DOOR
     # - ENERGY_DEVICE
@@ -58,17 +58,17 @@ destep_conv_schedule <- function(dest, ep) {
     data.table::set(schedule, NULL, "DATA", lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L))
     schedule <- schedule__scale_relative_humidity(dest, schedule)
 
-    type_limits <- destep_conv_schedule_type_limits(dest, ep, schedule)
-    days <- destep_conv_schedule_day(dest, ep, schedule, type_limits)
-    weeks <- destep_conv_schedule_week(dest, ep, schedule, type_limits, days)
-    years <- destep_conv_schedule_year(dest, ep, schedule, type_limits, weeks)
+    type_limits <- schedule__convert_type_limits(dest, ep, schedule)
+    days <- schedule__convert_day(dest, ep, schedule, type_limits)
+    weeks <- schedule__convert_week(dest, ep, schedule, type_limits, days)
+    years <- schedule__convert_year(dest, ep, schedule, type_limits, weeks)
 
     # combine all data and load
     data.table::set(type_limits, NULL, "id", data.table::rleid(type_limits$id))
     data.table::set(days$data, NULL, "id", data.table::rleid(days$data$id) + type_limits$id[nrow(type_limits)])
     data.table::set(weeks$data, NULL, "id", data.table::rleid(weeks$data$id) + days$data$id[nrow(days$data)])
     data.table::set(years, NULL, "id", data.table::rleid(years$id) + weeks$data$id[nrow(weeks$data)])
-    out <- destep_load(
+    out <- conv__load(
         dest, ep,
         data.table::rbindlist(list(type_limits, days$data, weeks$data, years), use.names = TRUE)
     )
@@ -222,7 +222,7 @@ schedule__assert_relative_humidity_bounds <- function(dest, schedule) {
     invisible(NULL)
 }
 
-destep_conv_schedule_type_limits <- function(dest, ep, schedule) {
+schedule__convert_type_limits <- function(dest, ep, schedule) {
     types <- schedule$TYPE
     types[types == 5L] <- 4L
     types <- unique.default(types)
@@ -249,7 +249,7 @@ destep_conv_schedule_type_limits <- function(dest, ep, schedule) {
     type_limits
 }
 
-destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "Day-") {
+schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day-") {
     # the number of schedules to extract
     num_sch <- nrow(schedule)
 
@@ -260,7 +260,7 @@ destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "
         until = rep((1L:24L) * 60L, 365L * num_sch),
         value = list__flatten(schedule$DATA)
     )
-    day_value <- unique_value(full_value)
+    day_value <- schedule__unique_value(full_value)
 
     map_week <- data.table::setDT(attr(day_value, "map"))
 
@@ -288,7 +288,7 @@ destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "
     # +3 for name, type limits, interpolate
     num_fld <- num_val * 2L + 3L
 
-    sch_day <- destep_field(dest, ep, "Schedule:Day:Interval", num_fld)
+    sch_day <- conv__field(dest, ep, "Schedule:Day:Interval", num_fld)
     data.table::set(sch_day, NULL, "name", rep(day_name, num_fld))
 
     # field 1: name
@@ -306,7 +306,7 @@ destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "
     # field-sets
     data.table::set(
         sch_day, which(sch_day$index > 3L), "value",
-        c(format_time(day_value$until), as.character(day_value$value))[
+        c(schedule__format_time(day_value$until), as.character(day_value$value))[
             collapse::radixorderv(rep(seq_along(day_value$until), 2L))
         ]
     )
@@ -314,14 +314,14 @@ destep_conv_schedule_day <- function(dest, ep, schedule, type_limits, prefix = "
     list(map = map_week, data = sch_day)
 }
 
-# `destep_field()` stores one row per EnergyPlus field, but schedule references
+# `conv__field()` stores one row per EnergyPlus field, but schedule references
 # need a stable object-level map. Collapse field rows back to one id/name pair
 # per generated schedule object before resolving Day/Week references.
-destep_schedule_object_lookup <- function(fields, object_class) {
+schedule__object_lookup <- function(fields, object_class) {
     required <- c("id", "name", "index")
     missing <- setdiff(required, names(fields))
     if (length(missing) > 0L) {
-        abort(sprintf(
+        condition__abort(sprintf(
             "Cannot build %s schedule lookup. Missing column(s): [%s].",
             object_class, paste(missing, collapse = ", ")
         ))
@@ -336,14 +336,14 @@ destep_schedule_object_lookup <- function(fields, object_class) {
     lookup <- data.table::as.data.table(unique(lookup))
 
     if (anyDuplicated(lookup$id)) {
-        abort(sprintf(
+        condition__abort(sprintf(
             "Cannot build %s schedule lookup because object ids are not unique: [%s].",
             object_class, paste(unique(lookup$id[duplicated(lookup$id)]), collapse = ", ")
         ))
     }
 
     if (anyNA(lookup$id) || anyNA(lookup$name) || any(!nzchar(lookup$name))) {
-        abort(sprintf(
+        condition__abort(sprintf(
             "Cannot build %s schedule lookup because at least one object id or name is missing.",
             object_class
         ))
@@ -354,10 +354,10 @@ destep_schedule_object_lookup <- function(fields, object_class) {
 
 # Resolve object ids through an explicit schedule lookup so missing references
 # fail before invalid IDF objects with blank Schedule names are created.
-destep_schedule_lookup_names <- function(ids, lookup, object_class) {
+schedule__lookup_names <- function(ids, lookup, object_class) {
     matched <- collapse::fmatch(ids, lookup$id)
     if (anyNA(matched)) {
-        abort(sprintf(
+        condition__abort(sprintf(
             "Cannot resolve %s schedule reference id(s): [%s].",
             object_class, paste(unique(ids[is.na(matched)]), collapse = ", ")
         ))
@@ -366,7 +366,7 @@ destep_schedule_lookup_names <- function(ids, lookup, object_class) {
     lookup$name[matched]
 }
 
-destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
+schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
     num_sch <- nrow(schedule)
     map <- data.table::copy(days$map)
 
@@ -584,14 +584,14 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
 
     fld_daytype <- paste("For:", names(ENUM_SCH_DAYTYPE)[week_daytype$daytype])
 
-    day_lookup <- destep_schedule_object_lookup(days$data, "Schedule:Day:Interval")
-    fld_day <- destep_schedule_lookup_names(
+    day_lookup <- schedule__object_lookup(days$data, "Schedule:Day:Interval")
+    fld_day <- schedule__lookup_names(
         week_daytype$rleid_day,
         day_lookup,
         "Schedule:Day:Interval"
     )
 
-    sch_week <- destep_field(dest, ep, "Schedule:Week:Compact", num_fld)
+    sch_week <- conv__field(dest, ep, "Schedule:Week:Compact", num_fld)
     data.table::set(sch_week, NULL, "name", rep(week_name, num_fld))
     # keep the original rleid
     data.table::set(sch_week, NULL, "id", rep(unique(week_daytype$rleid), num_fld))
@@ -607,7 +607,7 @@ destep_conv_schedule_week <- function(dest, ep, schedule, type_limits, days, pre
     list(map = map, changed = changed, data = sch_week)
 }
 
-destep_conv_schedule_year <- function(dest, ep, schedule, type_limits, weeks) {
+schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
     num_sch <- nrow(schedule)
 
     grp_rleid <- collapse::groupv(rep(seq_len(num_sch), each = 53L))
@@ -648,7 +648,7 @@ destep_conv_schedule_year <- function(dest, ep, schedule, type_limits, weeks) {
     # +2 for name, type limits
     num_fld <- num_fld * 5L + 2L
 
-    sch_year <- destep_field(dest, ep, "Schedule:Year", num_fld)
+    sch_year <- conv__field(dest, ep, "Schedule:Year", num_fld)
     data.table::set(sch_year, NULL, "name", rep(year_name, num_fld))
 
     # field 1: name
@@ -660,13 +660,13 @@ destep_conv_schedule_year <- function(dest, ep, schedule, type_limits, weeks) {
         type_limits$name[collapse::fmatch(schedule$TYPE, type_limits$id)]
     )
 
-    week_lookup <- destep_schedule_object_lookup(weeks$data, "Schedule:Week:Compact")
+    week_lookup <- schedule__object_lookup(weeks$data, "Schedule:Week:Compact")
 
     # field-sets
     data.table::set(
         sch_year, which(sch_year$index > 2L), "value",
         c(
-            destep_schedule_lookup_names(
+            schedule__lookup_names(
                 year_span$rleid_week,
                 week_lookup,
                 "Schedule:Week:Compact"
@@ -681,7 +681,7 @@ destep_conv_schedule_year <- function(dest, ep, schedule, type_limits, weeks) {
     sch_year
 }
 
-unique_value <- function(value, cols = NULL, full = TRUE) {
+schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
     len <- collapse::groupv(value$rleid, starts = TRUE, group.sizes = TRUE)
     grp_len <- collapse::groupv(attr(len, "group.sizes", exact = TRUE))
     if (is.null(cols)) {
@@ -775,7 +775,7 @@ unique_value <- function(value, cols = NULL, full = TRUE) {
     value
 }
 
-format_time <- function(x) {
+schedule__format_time <- function(x) {
     hours <- x %/% 60L
     mins <- x - hours * 60L
     sprintf("%02i:%02i", hours, mins)

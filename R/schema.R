@@ -19,19 +19,19 @@
 #' }
 #' @export
 destep_schema_coverage <- function(dest) {
-    conn <- destep_schema_connection(dest)
+    conn <- schema__connection(dest)
     con <- conn$con
     if (isTRUE(conn$disconnect)) {
         on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
 
     list(
-        tables = destep_schema_coverage_tables(con),
-        fields = destep_schema_coverage_fields(con)
+        tables = schema__coverage_tables(con),
+        fields = schema__coverage_fields(con)
     )
 }
 
-destep_schema_path <- function(file = NULL) {
+schema__path <- function(file = NULL) {
     if (is.null(file)) {
         return(system.file("schema", package = "destep", mustWork = TRUE))
     }
@@ -39,29 +39,29 @@ destep_schema_path <- function(file = NULL) {
     system.file("schema", file, package = "destep", mustWork = TRUE)
 }
 
-destep_schema_catalog <- function() {
+schema__catalog <- function() {
     list(
-        tables = destep_schema_tables(),
-        fields = destep_schema_fields(),
-        observations = destep_schema_observations()
+        tables = schema__tables(),
+        fields = schema__fields(),
+        observations = schema__observations()
     )
 }
 
-destep_schema_tables <- function() {
-    destep_read_schema_tsv("tables.tsv")
+schema__tables <- function() {
+    schema__read_tsv("tables.tsv")
 }
 
-destep_schema_fields <- function() {
-    destep_read_schema_tsv("fields.tsv")
+schema__fields <- function() {
+    schema__read_tsv("fields.tsv")
 }
 
-destep_schema_observations <- function() {
-    destep_read_schema_tsv("observations.tsv")
+schema__observations <- function() {
+    schema__read_tsv("observations.tsv")
 }
 
-destep_read_schema_tsv <- function(file) {
+schema__read_tsv <- function(file) {
     tsv <- utils::read.delim(
-        destep_schema_path(file),
+        schema__path(file),
         sep = "\t",
         quote = "",
         comment.char = "",
@@ -78,7 +78,7 @@ destep_read_schema_tsv <- function(file) {
     tsv
 }
 
-destep_schema_connection <- function(dest) {
+schema__connection <- function(dest) {
     if (inherits(dest, "DBIConnection")) {
         if (!DBI::dbIsValid(dest)) {
             stop("`dest` is not a valid DBI connection.", call. = FALSE)
@@ -112,12 +112,12 @@ destep_schema_connection <- function(dest) {
     list(con = DBI::dbConnect(RSQLite::SQLite(), dest), disconnect = TRUE)
 }
 
-destep_schema_coverage_tables <- function(con) {
-    catalog_tables <- destep_schema_tables()
+schema__coverage_tables <- function(con) {
+    catalog_tables <- schema__tables()
     db_tables <- sort(DBI::dbListTables(con))
     db_rows <- vapply(
         db_tables,
-        function(table) destep_schema_count_rows(con, table),
+        function(table) schema__count_rows(con, table),
         integer(1)
     )
 
@@ -156,11 +156,11 @@ destep_schema_coverage_tables <- function(con) {
     coverage
 }
 
-destep_schema_coverage_fields <- function(con) {
-    catalog_fields <- destep_schema_fields()
+schema__coverage_fields <- function(con) {
+    catalog_fields <- schema__fields()
     catalog_fields$ordinal <- as.integer(catalog_fields$ordinal)
 
-    db_fields <- destep_schema_database_fields(con)
+    db_fields <- schema__database_fields(con)
     field_key <- unique(rbind(
         catalog_fields[c("table", "field")],
         db_fields[c("table", "field")]
@@ -181,10 +181,10 @@ destep_schema_coverage_fields <- function(con) {
         sort = FALSE
     )
 
-    coverage$in_database <- destep_schema_field_key(coverage) %in%
-        destep_schema_field_key(db_fields)
-    coverage$in_catalog <- destep_schema_field_key(coverage) %in%
-        destep_schema_field_key(catalog_fields)
+    coverage$in_database <- schema__field_key(coverage) %in%
+        schema__field_key(db_fields)
+    coverage$in_catalog <- schema__field_key(coverage) %in%
+        schema__field_key(catalog_fields)
     coverage$ordinal <- ifelse(
         !is.na(coverage$ordinal),
         coverage$ordinal,
@@ -205,14 +205,14 @@ destep_schema_coverage_fields <- function(con) {
     coverage
 }
 
-destep_schema_count_rows <- function(con, table) {
+schema__count_rows <- function(con, table) {
     table <- as.character(DBI::dbQuoteIdentifier(con, table))
     as.integer(DBI::dbGetQuery(con, paste0(
         "SELECT COUNT(*) AS N FROM ", table
     ))$N[[1L]])
 }
 
-destep_schema_database_fields <- function(con) {
+schema__database_fields <- function(con) {
     db_tables <- sort(DBI::dbListTables(con))
     fields <- lapply(db_tables, function(table) {
         names <- DBI::dbListFields(con, table)
@@ -246,6 +246,6 @@ destep_schema_database_fields <- function(con) {
     do.call(rbind, fields)
 }
 
-destep_schema_field_key <- function(x) {
+schema__field_key <- function(x) {
     paste(x$table, x$field, sep = "\r")
 }

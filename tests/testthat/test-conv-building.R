@@ -8,12 +8,12 @@ test_that("can convert 'Building'", {
     dest <- read_dest(path, verbose = TRUE)
 
     # can convert 'Building'
-    expect_type(bld <- destep_conv_building(dest, ep), "list")
+    expect_type(bld <- building__convert(dest, ep), "list")
     expect_named(bld, c("object", "value"))
     expect_s3_class(attr(bld, "table"), "data.table")
     # can specify which building to extract
-    expect_error(destep_conv_building(dest, ep, TRUE), "integer or character")
-    expect_equal(destep_conv_building(dest, ep, 1), destep_conv_building(dest, ep, "国管局1#"))
+    expect_error(building__convert(dest, ep, TRUE), "integer or character")
+    expect_equal(building__convert(dest, ep, 1), building__convert(dest, ep, "国管局1#"))
 })
 
 test_that("DeST south direction maps to EnergyPlus north axis", {

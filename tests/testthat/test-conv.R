@@ -1,4 +1,4 @@
-test_that("destep_update_name respects table dependencies", {
+test_that("conv__update_names respects table dependencies", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -26,7 +26,7 @@ test_that("destep_update_name respects table dependencies", {
     ))
 
     # The caller order is intentionally reversed; dependencies must win.
-    destep_update_name(dest, c("SURFACE", "ROOM"))
+    conv__update_names(dest, c("SURFACE", "ROOM"))
 
     expect_equal(DBI::dbReadTable(dest, "ROOM")$NAME, c("Room", "Room 1"))
     expect_equal(
@@ -66,12 +66,12 @@ test_that("to_eplus() works", {
 
     # can insert a comment about the original DeST version in `Version` comment
     expect_equal(
-        destep_comment_version(dest, ep)$object$comment[[1]],
+        conv__version_comment(dest, ep)$object$comment[[1]],
         "Converted from DeST v2.6"
     )
 
     # can update all necessary names before conversion
-    destep_update_name(dest)
+    conv__update_names(dest)
     expect_equal(DBI::dbReadTable(dest, "STOREY")$NAME, paste("Storey", 1:3))
     expect_true(any(grepl("3-N-1 Wall", DBI::dbReadTable(dest, "SURFACE")$NAME)))
     expect_true(any(grepl("DefaultOutside Wall", DBI::dbReadTable(dest, "SURFACE")$NAME)))
@@ -83,27 +83,27 @@ test_that("to_eplus() works", {
     expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_MIDDLEFLOOR")$CNAME, "Ceiling - ")))
 
     # can convert 'Building'
-    expect_type(bld <- destep_conv_building(dest, ep), "list")
+    expect_type(bld <- building__convert(dest, ep), "list")
     expect_named(bld, c("object", "value"))
     expect_s3_class(attr(bld, "table"), "data.table")
     # can specify which building to extract
-    expect_error(destep_conv_building(dest, ep, TRUE), "integer or character")
-    expect_equal(destep_conv_building(dest, ep, 1), destep_conv_building(dest, ep, "国管局1#"))
+    expect_error(building__convert(dest, ep, TRUE), "integer or character")
+    expect_equal(building__convert(dest, ep, 1), building__convert(dest, ep, "国管局1#"))
 
     # can convert 'Site:Location'
-    expect_type(loc <- destep_conv_location(dest, ep), "list")
+    expect_type(loc <- location__convert(dest, ep), "list")
     expect_named(loc, c("object", "value"))
     expect_s3_class(attr(loc, "table"), "data.table")
     expect_equal(loc$value$value_chr[[1L]], "DefaultEnvironment")
 
     # can convert 'Zone', 'ZoneList', 'ZoneGroup'
-    expect_type(zn <- destep_conv_zone(dest, ep), "list")
+    expect_type(zn <- zone__convert(dest, ep), "list")
     expect_named(zn, c("object", "value"))
     expect_equal(unique(zn$object$class_name), c("Zone", "ZoneList", "ZoneGroup"))
     expect_s3_class(attr(zn, "table"), "data.table")
 
     # can convert 'Material', 'Construction'
-    expect_type(const <- destep_conv_const(dest, ep), "list")
+    expect_type(const <- const__convert(dest, ep), "list")
     expect_named(const, c("object", "value"))
     expect_equal(unique(const$object$class_name),
         c(

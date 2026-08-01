@@ -37,7 +37,7 @@ test_that("can convert ROOM_GROUP ideal loads for air-conditioned rooms", {
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     expect_warning(
-        ideal <- destep_conv_ideal_loads(dest, ep),
+        ideal <- ideal_loads__convert(dest, ep),
         NA
     )
     tab <- attr(ideal, "table")
@@ -119,7 +119,7 @@ test_that("ideal loads disable synthetic latent control without humidity setpoin
         SET SET_RH_MIN_SCHEDULE = 0, SET_RH_MAX_SCHEDULE = 0
     ")
 
-    ideal <- destep_conv_ideal_loads(dest, ep)
+    ideal <- ideal_loads__convert(dest, ep)
     value <- ideal$value
 
     expect_false(any(ideal$object$class_name == "ZoneControl:Humidistat"))
@@ -148,7 +148,7 @@ test_that("ideal loads reference occupant outdoor-air requirements", {
         MIN_REQUIRE_FRESH_AIR = c(25, 10, 15)
     ))
 
-    ideal <- destep_conv_ideal_loads(dest, ep)
+    ideal <- ideal_loads__convert(dest, ep)
     value <- ideal$value
 
     expect_equal(
@@ -187,7 +187,7 @@ test_that("stops when ROOM_GROUP AC schedules cannot be resolved", {
     ))
 
     expect_error(
-        destep_conv_ideal_loads(dest, ep),
+        ideal_loads__convert(dest, ep),
         "Cannot resolve ROOM_GROUP ideal-loads schedule"
     )
 })
@@ -203,7 +203,7 @@ test_that("stops on incomplete or dangling ROOM_GROUP humidity schedules", {
         WHERE ROOM_GROUP_ID = 10
     ")
     expect_error(
-        destep_conv_ideal_loads(dest, ep),
+        ideal_loads__convert(dest, ep),
         "Cannot resolve complete ROOM_GROUP humidity schedule pair"
     )
 
@@ -213,7 +213,7 @@ test_that("stops on incomplete or dangling ROOM_GROUP humidity schedules", {
         WHERE ROOM_GROUP_ID = 10
     ")
     expect_error(
-        destep_conv_ideal_loads(dest, ep),
+        ideal_loads__convert(dest, ep),
         "Cannot resolve complete ROOM_GROUP humidity schedule pair"
     )
 })
@@ -230,7 +230,7 @@ test_that("skips air-conditioned rooms without availability schedules", {
     ")
 
     expect_warning(
-        ideal <- destep_conv_ideal_loads(dest, ep),
+        ideal <- ideal_loads__convert(dest, ep),
         "Skipped 1 ROOM row"
     )
 
@@ -253,10 +253,10 @@ test_that("can convert ROOM_GROUP ideal loads from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     expect_warning(
-        ideal <- destep_conv_ideal_loads(dest, ep),
+        ideal <- ideal_loads__convert(dest, ep),
         NA
     )
     tab <- attr(ideal, "table")

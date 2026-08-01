@@ -2,13 +2,13 @@
 # This converter deliberately implements only the load-system shell: DeST
 # supply-air state fields live in AC_SYS, and the current real fixture has no
 # AC_SYS rows, so fixed EnergyPlus IdealLoads defaults are used here.
-destep_conv_ideal_loads <- function(dest, ep) {
+ideal_loads__convert <- function(dest, ep) {
     if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
-    ideal <- destep_room_group_ideal_loads_table(dest)
-    destep_assert_ideal_loads_schedules(ideal)
+    ideal <- ideal_loads__room_group_table(dest)
+    ideal_loads__assert_schedules(ideal)
     ideal_loads__assert_humidity_schedules(ideal)
 
     # Non-air-conditioned rooms stay in the diagnostic table but do not get
@@ -28,12 +28,12 @@ destep_conv_ideal_loads <- function(dest, ep) {
         ideal, NULL, "HUMIDITY_CONTROL",
         ideal$CAN_CONVERT & ideal_loads__has_humidity_setpoints(ideal)
     )
-    ideal <- destep_ideal_loads_add_names(ideal)
+    ideal <- ideal_loads__add_names(ideal)
 
     warning_skip <- !is.na(ideal$SKIP_REASON) &
         ideal$SKIP_REASON != "ROOM_GROUP.IS_AC_ROOM is zero"
     if (any(warning_skip)) {
-        warn(sprintf(
+        condition__warn(sprintf(
             "Skipped %i ROOM row(s) that do not describe supported ROOM_GROUP ideal loads.",
             sum(warning_skip)
         ))
@@ -46,10 +46,10 @@ destep_conv_ideal_loads <- function(dest, ep) {
         humidistat = ideal_loads__humidistat_objects(
             dest, ep, converted[converted$HUMIDITY_CONTROL]
         ),
-        ideal_loads = destep_ideal_loads_objects(dest, ep, converted),
-        sequential_fraction = destep_ideal_loads_sequential_fraction_schedule(dest, ep),
-        equipment_list = destep_ideal_loads_equipment_lists(dest, ep, converted),
-        equipment_connections = destep_ideal_loads_equipment_connections(dest, ep, converted)
+        ideal_loads = ideal_loads__objects(dest, ep, converted),
+        sequential_fraction = ideal_loads__sequential_fraction_schedule(dest, ep),
+        equipment_list = ideal_loads__equipment_lists(dest, ep, converted),
+        equipment_connections = ideal_loads__equipment_connections(dest, ep, converted)
     ), table = ideal)
 
     out
@@ -57,7 +57,7 @@ destep_conv_ideal_loads <- function(dest, ep) {
 
 # Collect room-group HVAC inputs and keep deferred DeST fields in the diagnostic
 # table so future AC_SYS or AC_T_* work can compare against this converter.
-destep_room_group_ideal_loads_table <- function(dest) {
+ideal_loads__room_group_table <- function(dest) {
     ideal <- DBI::dbGetQuery(
         dest,
         "
@@ -93,7 +93,7 @@ destep_room_group_ideal_loads_table <- function(dest) {
 
     # Reuse occupant-derived outdoor-air objects when they exist; rooms without
     # a positive people fresh-air requirement keep the IdealLoads field blank.
-    outdoor_air <- destep_occupant_outdoor_air_table(dest)
+    outdoor_air <- outdoor_air__occupant_table(dest)
     data.table::set(
         ideal, NULL, "ENERGYPLUS_OUTDOOR_AIR_NAME",
         outdoor_air$ENERGYPLUS_OUTDOOR_AIR_NAME[match(ideal$ROOM_ID, outdoor_air$ROOM_ID)]
@@ -144,7 +144,7 @@ ideal_loads__assert_humidity_schedules <- function(ideal) {
 
 # Air-conditioned room groups with a non-zero availability schedule must resolve
 # to SCHEDULE_YEAR; otherwise the generated IdealLoads objects would be invalid.
-destep_assert_ideal_loads_schedules <- function(ideal) {
+ideal_loads__assert_schedules <- function(ideal) {
     needs_schedule <- !is.na(ideal$IS_AC_ROOM) & ideal$IS_AC_ROOM != 0L &
         !is.na(ideal$AC_SCHEDULE_ID) & ideal$AC_SCHEDULE_ID != 0L
     unresolved <- needs_schedule & is.na(ideal$AC_SCHEDULE_NAME)
@@ -168,7 +168,7 @@ destep_assert_ideal_loads_schedules <- function(ideal) {
 
 # Generate stable, per-room node and object names required by the EnergyPlus
 # zone equipment loop objects.
-destep_ideal_loads_add_names <- function(ideal) {
+ideal_loads__add_names <- function(ideal) {
     data.table::set(
         ideal, NULL, "ENERGYPLUS_IDEAL_LOADS_NAME",
         name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads"))
@@ -225,16 +225,16 @@ ideal_loads__humidistat_value <- function(ideal, i) {
 
 # Create IdealLoads systems with explicit EnergyPlus default-style supply-air
 # limits; these are not inferred from DeST AC_T_* tolerance schedules.
-destep_ideal_loads_objects <- function(dest, ep, ideal) {
+ideal_loads__objects <- function(dest, ep, ideal) {
     values <- lapply(seq_len(nrow(ideal)), function(i) {
-        destep_ideal_loads_value(ideal, i)
+        ideal_loads__value(ideal, i)
     })
 
     conv__add_objects(dest, ep, "ZoneHVAC:IdealLoadsAirSystem", values)
 }
 
 # Build one ZoneHVAC:IdealLoadsAirSystem value list.
-destep_ideal_loads_value <- function(ideal, i) {
+ideal_loads__value <- function(ideal, i) {
     outdoor_air_name <- ideal$ENERGYPLUS_OUTDOOR_AIR_NAME[[i]]
     if (is.na(outdoor_air_name)) {
         outdoor_air_name <- NULL
@@ -275,8 +275,8 @@ destep_ideal_loads_value <- function(ideal, i) {
 # The EquipmentList extensible group is complete only when the sequential load
 # fraction schedule names are present, so a single constant-one schedule is
 # shared by every generated IdealLoads equipment list.
-destep_ideal_loads_sequential_fraction_schedule <- function(dest, ep) {
-    destep_add(
+ideal_loads__sequential_fraction_schedule <- function(dest, ep) {
+    conv__add(
         dest, ep,
         "Schedule:Constant" := list(
             name = "DeST Ideal Loads Sequential Fraction",
@@ -288,16 +288,16 @@ destep_ideal_loads_sequential_fraction_schedule <- function(dest, ep) {
 
 # Each conditioned zone gets a one-item equipment list that points to its own
 # IdealLoads system.
-destep_ideal_loads_equipment_lists <- function(dest, ep, ideal) {
+ideal_loads__equipment_lists <- function(dest, ep, ideal) {
     values <- lapply(seq_len(nrow(ideal)), function(i) {
-        destep_ideal_loads_equipment_list_value(ideal, i)
+        ideal_loads__equipment_list_value(ideal, i)
     })
 
     conv__add_objects(dest, ep, "ZoneHVAC:EquipmentList", values)
 }
 
 # Build one ZoneHVAC:EquipmentList value list.
-destep_ideal_loads_equipment_list_value <- function(ideal, i) {
+ideal_loads__equipment_list_value <- function(ideal, i) {
     list(
         name = ideal$ENERGYPLUS_EQUIPMENT_LIST_NAME[[i]],
         load_distribution_scheme = "SequentialLoad",
@@ -312,16 +312,16 @@ destep_ideal_loads_equipment_list_value <- function(ideal, i) {
 
 # ZoneHVAC:EquipmentConnections closes the loop between a Zone, its equipment
 # list, and the air nodes used by the IdealLoads system.
-destep_ideal_loads_equipment_connections <- function(dest, ep, ideal) {
+ideal_loads__equipment_connections <- function(dest, ep, ideal) {
     values <- lapply(seq_len(nrow(ideal)), function(i) {
-        destep_ideal_loads_equipment_connection_value(ideal, i)
+        ideal_loads__equipment_connection_value(ideal, i)
     })
 
     conv__add_objects(dest, ep, "ZoneHVAC:EquipmentConnections", values)
 }
 
 # Build one ZoneHVAC:EquipmentConnections value list.
-destep_ideal_loads_equipment_connection_value <- function(ideal, i) {
+ideal_loads__equipment_connection_value <- function(ideal, i) {
     list(
         zone_name = ideal$ROOM_NAME[[i]],
         zone_conditioning_equipment_list_name = ideal$ENERGYPLUS_EQUIPMENT_LIST_NAME[[i]],

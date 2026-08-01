@@ -1,8 +1,8 @@
-destep_conv_internal_gains <- function(dest, ep) {
+internal_gains__convert <- function(dest, ep) {
     conv <- Filter(Negate(is.null), list(
-        OCCUPANT_GAINS = destep_conv_people(dest, ep),
-        LIGHT_GAINS = destep_conv_lights(dest, ep),
-        EQUIPMENT_GAINS = destep_conv_electric_equipment(dest, ep)
+        OCCUPANT_GAINS = internal_gains__convert_people(dest, ep),
+        LIGHT_GAINS = internal_gains__convert_lights(dest, ep),
+        EQUIPMENT_GAINS = internal_gains__convert_electric_equipment(dest, ep)
     ))
 
     conv__combine_outputs(conv)
@@ -13,7 +13,7 @@ destep_conv_internal_gains <- function(dest, ep) {
 internal_gains__split_minimum <- function(
     gain, i, max_value, min_value, field, always_on, value_factory
 ) {
-    min_value <- destep_zero_if_na(min_value)
+    min_value <- internal_gains__zero_if_na(min_value)
     name <- gain$NAME[[i]]
     if (!is.finite(max_value) || !is.finite(min_value)) {
         stop(sprintf(
@@ -49,9 +49,9 @@ internal_gains__split_minimum <- function(
 
 # OCCUPANT_GAINS -> People
 # MIN_REQUIRE_FRESH_AIR is handled separately by
-# destep_conv_design_specification_outdoor_air() so People remains focused on
+# outdoor_air__convert() so People remains focused on
 # internal sensible/latent heat gains.
-destep_conv_people <- function(dest, ep) {
+internal_gains__convert_people <- function(dest, ep) {
     if (!db__has_rows(dest, "OCCUPANT_GAINS")) return(NULL)
 
     # NOTE: In DeST, the dehumidification load is calculated by the humidity
@@ -117,8 +117,8 @@ destep_conv_people <- function(dest, ep) {
 
     activity <- unique(people[, .(ACTIVITY_SCHEDULE_NAME, ACTIVITY_LEVEL)])
     has_min <- any(
-        destep_has_positive_minimum(people$MIN_NUMBER_OF_PEOPLE) |
-            destep_has_positive_minimum(people$MIN_PEOPLE_PER_AREA)
+        internal_gains__has_positive_minimum(people$MIN_NUMBER_OF_PEOPLE) |
+            internal_gains__has_positive_minimum(people$MIN_PEOPLE_PER_AREA)
     )
 
     # NOTE: In DeST, the actual people number is calculated via:
@@ -129,11 +129,11 @@ destep_conv_people <- function(dest, ep) {
     # objects: a constant minimum object plus a scheduled (max - min) object.
     always_on <- "Always On - DeST Minimum People"
     people_objects <- unlist(lapply(seq_len(nrow(people)), function(i) {
-        destep_people_values(people, i, always_on)
+        internal_gains__people_values(people, i, always_on)
     }), recursive = FALSE)
 
     parts <- list(
-        activity = destep_add(
+        activity = conv__add(
             dest, ep,
             # TODO: handle the case when a generated activity-level schedule
             #       name already exists in the converted model.
@@ -146,7 +146,7 @@ destep_conv_people <- function(dest, ep) {
     )
 
     if (has_min) {
-        parts$minimum_schedule <- destep_internal_gain_always_on(
+        parts$minimum_schedule <- internal_gains__always_on(
             dest, ep, always_on
         )
     }
@@ -159,7 +159,7 @@ destep_conv_people <- function(dest, ep) {
     conv__combine_outputs(parts, table = people)
 }
 
-destep_people_values <- function(people, i, always_on) {
+internal_gains__people_values <- function(people, i, always_on) {
     if (people$METHOD[[i]] == "People") {
         max_value <- people$NUMBER_OF_PEOPLE[[i]]
         min_value <- people$MIN_NUMBER_OF_PEOPLE[[i]]
@@ -172,11 +172,11 @@ destep_people_values <- function(people, i, always_on) {
 
     internal_gains__split_minimum(
         people, i, max_value, min_value, field, always_on,
-        destep_people_value
+        internal_gains__people_value
     )
 }
 
-destep_people_value <- function(people, i, name, schedule) {
+internal_gains__people_value <- function(people, i, name, schedule) {
     # NOTE: Older EnergyPlus versions used a shorter People field 2 name before
     # the Space concept was introduced. eplusr accepts the current canonical
     # field name for supported IDDs, so keep named fields instead of positional
@@ -196,7 +196,7 @@ destep_people_value <- function(people, i, name, schedule) {
 }
 
 # LIGHT_GAINS -> Lights
-destep_conv_lights <- function(dest, ep) {
+internal_gains__convert_lights <- function(dest, ep) {
     if (!db__has_rows(dest, "LIGHT_GAINS")) return(NULL)
 
     lights <- DBI::dbGetQuery(
@@ -244,10 +244,10 @@ destep_conv_lights <- function(dest, ep) {
         "LIGHTING_LEVEL", "WATTS_PER_AREA", "MIN_LIGHTING_LEVEL",
         "MIN_WATTS_PER_AREA", "FRACTION_RADIANT", "FRACTION_REPLACEABLE"
     ))
-    watts_per_area_field <- destep_idd_field_name(ep, "Lights", 6L)
+    watts_per_area_field <- conv__idd_field_name(ep, "Lights", 6L)
     has_min <- any(
-        destep_has_positive_minimum(lights$MIN_LIGHTING_LEVEL) |
-            destep_has_positive_minimum(lights$MIN_WATTS_PER_AREA)
+        internal_gains__has_positive_minimum(lights$MIN_LIGHTING_LEVEL) |
+            internal_gains__has_positive_minimum(lights$MIN_WATTS_PER_AREA)
     )
 
     # DeST light gains use the same min + schedule * (max - min) pattern as
@@ -255,12 +255,12 @@ destep_conv_lights <- function(dest, ep) {
     # object when MINPOWER is non-zero.
     always_on <- "Always On - DeST Minimum Lights"
     light_objects <- unlist(lapply(seq_len(nrow(lights)), function(i) {
-        destep_light_values(lights, i, watts_per_area_field, always_on)
+        internal_gains__light_values(lights, i, watts_per_area_field, always_on)
     }), recursive = FALSE)
 
     parts <- list()
     if (has_min) {
-        parts$minimum_schedule <- destep_internal_gain_always_on(
+        parts$minimum_schedule <- internal_gains__always_on(
             dest, ep,
             always_on
         )
@@ -271,7 +271,7 @@ destep_conv_lights <- function(dest, ep) {
     conv__combine_outputs(parts, table = lights)
 }
 
-destep_light_values <- function(lights, i, watts_per_area_field, always_on) {
+internal_gains__light_values <- function(lights, i, watts_per_area_field, always_on) {
     if (lights$METHOD[[i]] == "LightingLevel") {
         max_value <- lights$LIGHTING_LEVEL[[i]]
         min_value <- lights$MIN_LIGHTING_LEVEL[[i]]
@@ -284,11 +284,11 @@ destep_light_values <- function(lights, i, watts_per_area_field, always_on) {
 
     internal_gains__split_minimum(
         lights, i, max_value, min_value, field, always_on,
-        destep_light_value
+        internal_gains__light_value
     )
 }
 
-destep_light_value <- function(lights, i, name, schedule) {
+internal_gains__light_value <- function(lights, i, name, schedule) {
     list(
         name = name,
         zone_or_zonelist_or_space_or_spacelist_name = lights$ROOM_NAME[[i]],
@@ -305,7 +305,7 @@ destep_light_value <- function(lights, i, name, schedule) {
 }
 
 # EQUIPMENT_GAINS -> ElectricEquipment
-destep_conv_electric_equipment <- function(dest, ep) {
+internal_gains__convert_electric_equipment <- function(dest, ep) {
     if (!db__has_rows(dest, "EQUIPMENT_GAINS")) return(NULL)
 
     equipment <- DBI::dbGetQuery(
@@ -355,22 +355,22 @@ destep_conv_electric_equipment <- function(dest, ep) {
         "MIN_WATTS_PER_AREA", "MAX_HUM", "MIN_HUM", "FRACTION_RADIANT"
     ))
     equipment__assert_no_moisture(equipment)
-    watts_per_area_field <- destep_idd_field_name(ep, "ElectricEquipment", 6L)
+    watts_per_area_field <- conv__idd_field_name(ep, "ElectricEquipment", 6L)
     has_min <- any(
-        destep_has_positive_minimum(equipment$MIN_DESIGN_LEVEL) |
-            destep_has_positive_minimum(equipment$MIN_WATTS_PER_AREA)
+        internal_gains__has_positive_minimum(equipment$MIN_DESIGN_LEVEL) |
+            internal_gains__has_positive_minimum(equipment$MIN_WATTS_PER_AREA)
     )
 
     # DeST equipment gains also store MINPOWER/MAXPOWER. Use the same
     # minimum-plus-variable representation as people and lights.
     always_on <- "Always On - DeST Minimum Equipment"
     equipment_objects <- unlist(lapply(seq_len(nrow(equipment)), function(i) {
-        destep_equipment_values(equipment, i, watts_per_area_field, always_on)
+        internal_gains__equipment_values(equipment, i, watts_per_area_field, always_on)
     }), recursive = FALSE)
 
     parts <- list()
     if (has_min) {
-        parts$minimum_schedule <- destep_internal_gain_always_on(
+        parts$minimum_schedule <- internal_gains__always_on(
             dest, ep, always_on
         )
     }
@@ -406,7 +406,7 @@ equipment__assert_no_moisture <- function(equipment) {
     ), call. = FALSE)
 }
 
-destep_equipment_values <- function(equipment, i, watts_per_area_field, always_on) {
+internal_gains__equipment_values <- function(equipment, i, watts_per_area_field, always_on) {
     if (equipment$METHOD[[i]] == "EquipmentLevel") {
         max_value <- equipment$DESIGN_LEVEL[[i]]
         min_value <- equipment$MIN_DESIGN_LEVEL[[i]]
@@ -419,11 +419,11 @@ destep_equipment_values <- function(equipment, i, watts_per_area_field, always_o
 
     internal_gains__split_minimum(
         equipment, i, max_value, min_value, field, always_on,
-        destep_equipment_value
+        internal_gains__equipment_value
     )
 }
 
-destep_equipment_value <- function(equipment, i, name, schedule) {
+internal_gains__equipment_value <- function(equipment, i, name, schedule) {
     list(
         name = name,
         zone_or_zonelist_or_space_or_spacelist_name = equipment$ROOM_NAME[[i]],
@@ -438,16 +438,16 @@ destep_equipment_value <- function(equipment, i, name, schedule) {
     )
 }
 
-destep_has_positive_minimum <- function(x) {
+internal_gains__has_positive_minimum <- function(x) {
     !is.na(x) & x > 0
 }
 
-destep_zero_if_na <- function(x) {
+internal_gains__zero_if_na <- function(x) {
     if (is.na(x)) 0 else x
 }
 
-destep_internal_gain_always_on <- function(dest, ep, name) {
-    destep_add(
+internal_gains__always_on <- function(dest, ep, name) {
+    conv__add(
         dest, ep,
         "Schedule:Constant" := list(
             name = name,

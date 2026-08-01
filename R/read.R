@@ -2,7 +2,7 @@
 # and MDBTools backends, including exclusion of Microsoft system tables.
 read__normalize_tables <- function(tables) {
     if (!is.character(tables) || anyNA(tables)) {
-        abort(
+        condition__abort(
             "'tables' should be a character vector with no missing values",
             "error_invalid_table_names"
         )
@@ -17,7 +17,7 @@ read__normalize_tables <- function(tables) {
         "MSysRelationships",          "MSysResources"
     ))
     if (length(tables) == 0L) {
-        abort("No tables to convert", "error_no_tables_to_convert")
+        condition__abort("No tables to convert", "error_no_tables_to_convert")
     }
     tables
 }
@@ -91,31 +91,31 @@ read__with_sqlite_target <- function(sqlite, convert) {
 #' @export
 read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE, drop = TRUE) {
     # TODO: support DBIConnection input
-    if (!is_string(accdb)) {
-        abort("'accdb' should be a single file path string", "error_invalid_accdb_path")
+    if (!arg__is_string(accdb)) {
+        condition__abort("'accdb' should be a single file path string", "error_invalid_accdb_path")
     }
 
     # make sure that the file exists before attempting to connect
     if (!file.exists(accdb)) {
-        abort(sprintf("Input 'accdb' file '%s' did not exist", accdb), "error_accdb_file_not_found")
+        condition__abort(sprintf("Input 'accdb' file '%s' did not exist", accdb), "error_accdb_file_not_found")
     }
 
-    if (!is.null(tables) && !is_character(tables)) {
-        abort("'tables' should be a character vector", "error_invalid_argument")
+    if (!is.null(tables) && !arg__is_character(tables)) {
+        condition__abort("'tables' should be a character vector", "error_invalid_argument")
     }
 
-    if (!is_flag(drop)) {
-        abort("'drop' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
+    if (!arg__is_flag(drop)) {
+        condition__abort("'drop' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
     }
 
-    if (!is_flag(verbose)) {
-        abort("'verbose' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
+    if (!arg__is_flag(verbose)) {
+        condition__abort("'verbose' should be a single logical value of 'TRUE' or 'FALSE'", "error_invalid_argument")
     }
 
     # Try to use ODBC first
     if (.Platform$OS.type == "windows") {
         # On Windows, we only use ODBC
-        access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose)
+        read__access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose)
     } else {
         # On non-Windows, we try ODBC first, then MDBTools
         fall_back <- function(e) {
@@ -123,10 +123,10 @@ read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE
                 cli::cli_alert_warning(paste0("ODBC connection failed with error: ", e$message))
                 cli::cli_alert_info("Falling back to MDBTools command-line utilities...")
             }
-            access_to_sqlite_mdbtools(accdb, sqlite, tables, drop, verbose)
+            read__access_to_sqlite_mdbtools(accdb, sqlite, tables, drop, verbose)
         }
         tryCatch(
-            access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose),
+            read__access_to_sqlite_odbc(accdb, sqlite, tables, drop, verbose),
             error_odbc_driver_missing = fall_back,
             error_odbc_connection_failed = fall_back,
             error_list_tables_failed = fall_back,
@@ -140,7 +140,7 @@ read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE
 #' @inheritParams read_dest
 #'
 #' @keywords internal
-access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
+read__access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
     # check for available ODBC drivers
     odbc_drivers <- odbc::odbcListDrivers()
 
@@ -180,7 +180,7 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
                 msg <- paste(msg, "For Debian/Ubuntu:\n    sudo apt-get install odbc-mdbtools")
             }
         }
-        abort(msg, "error_odbc_driver_missing")
+        condition__abort(msg, "error_odbc_driver_missing")
     }
 
     if (verbose) cli::cli_alert_info(sprintf("Using ODBC driver: '%s'", driver[1L]))
@@ -190,7 +190,7 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
     conn_accdb <- tryCatch(
         DBI::dbConnect(odbc::odbc(), driver = driver[1L], dbq = accdb),
         error = function(e) {
-            abort(
+            condition__abort(
                 paste0("Failed to connect using ODBC: ", e$message),
                 class = "error_odbc_connection_failed"
             )
@@ -203,7 +203,7 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
         tables <- tryCatch(
             DBI::dbListTables(conn_accdb),
             error = function(e) {
-                abort(
+                condition__abort(
                     paste0("Failed to list tables from Access database: ", e$message),
                     class = "error_list_tables_failed"
                 )
@@ -240,7 +240,7 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
             }),
             error = function(e) {
                 if (grepl("Invalid attribute/option identifier", e$message)) {
-                    abort(
+                    condition__abort(
                         sprintf("Failed to convert Microsoft Access database to SQLite: %s", e$message),
                         "error_invalid_attribute_option_identifier"
                     )
@@ -258,15 +258,15 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
 #'
 #' @note This function requires 'mdbtools' installed and can be found in PATH,
 #'       which means that it only works on macOS and Linux. For Windows, use
-#'       [access_to_sqlite_odbc()] instead.
+#'       [read__access_to_sqlite_odbc()] instead.
 #'
 #' @keywords internal
-access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
+read__access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL, drop = TRUE, verbose = FALSE) {
     # use mdbtools on macOS and Linux
     mdbtools <- c(Sys.which("mdb-tables"), Sys.which("mdb-schema"), Sys.which("mdb-export"))
 
     if (any(miss <- mdbtools == "")) {
-        abort(sprintf(
+        condition__abort(sprintf(
             paste(
                 "'%s' executable was not found on system PATH.",
                 "Please install 'mdbtools' and try again."
@@ -282,7 +282,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
     # See: https://github.com/mdbtools/mdbtools/pull/402
     mdb_schema_ver <- system2(mdbtools["mdb-schema"], "--version", stdout = TRUE, stderr = TRUE)
     if (!is.null(attr(mdb_schema_ver, "status"))) {
-        abort("Failed to get the version of 'mdb-schema'.", "error_mdbtools_schema_version_failed")
+        condition__abort("Failed to get the version of 'mdb-schema'.", "error_mdbtools_schema_version_failed")
     }
     mdb_schema_ver <- numeric_version(sub("mdbtools v", "", mdb_schema_ver, fixed = TRUE))
     if (mdb_schema_ver > "1.0.0") {
@@ -314,7 +314,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
         )
 
         if (!is.null(attr(tables, "status"))) {
-            abort(sprintf("Failed to list tables from '%s': %s", accdb, tables), "error_mdb_tables_failed")
+            condition__abort(sprintf("Failed to list tables from '%s': %s", accdb, tables), "error_mdb_tables_failed")
         }
     }
     tables <- read__normalize_tables(tables)
@@ -351,7 +351,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
                     stdout = TRUE, stderr = TRUE
                 )
                 if (!is.null(attr(schema, "status"))) {
-                    abort(
+                    condition__abort(
                         sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema),
                         "error_mdb_schema_failed"
                     )
@@ -369,7 +369,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
                     stdout = TRUE, stderr = TRUE
                 )
                 if (!is.null(attr(data, "status"))) {
-                    abort(
+                    condition__abort(
                         sprintf("Failed to export data of table '%s' from '%s': %s", tbl, accdb, data),
                         "error_mdb_export_failed"
                     )

@@ -3,7 +3,7 @@ test_that("can convert 'BuildingSurface:Detailed'", {
 
     ep <- ensure_empty_idf()
     dest <- ensure_dest_sqlite_file(TRUE)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     # can convert 'BuildingSurface:Detailed'
     expect_type(surface <- surface__convert(dest, ep), "list")
@@ -360,7 +360,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     surface <- attr(surface__convert(dest, ensure_empty_idf()), "table")
     # Keep the fixture close to DeST's 560 SURFACE rows while allowing the

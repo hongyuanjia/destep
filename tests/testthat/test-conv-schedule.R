@@ -1,5 +1,5 @@
 # Store DeST hourly schedule data in the BLOB shape that readBin() expects when
-# `destep_conv_schedule()` reads SCHEDULE_YEAR.DATA from SQLite.
+# `schedule__convert()` reads SCHEDULE_YEAR.DATA from SQLite.
 destep_test_schedule_blob <- function(values) {
     writeBin(as.double(values), raw(), size = 8L)
 }
@@ -20,7 +20,7 @@ test_that("schedule conversion writes resolvable week day references", {
         SCHEDULE_ID = 10L
     ))
 
-    schedule <- destep_conv_schedule(dest, ep)
+    schedule <- schedule__convert(dest, ep)
     value <- schedule$value
 
     week_day_names <- value$value_chr[
@@ -58,7 +58,7 @@ test_that("schedule conversion preserves weekday and weekend profiles", {
         SCHEDULE_ID = 10L
     ))
 
-    schedule <- destep_conv_schedule(dest, ep)
+    schedule <- schedule__convert(dest, ep)
     week <- schedule$value[class_name == "Schedule:Week:Compact"]
     first_week <- week[rleid == unique(week$rleid)[[1L]]]
     day <- schedule$value[
@@ -98,7 +98,7 @@ test_that("schedule conversion creates a dedicated week for a unique final day",
         SCHEDULE_ID = c(10L, 20L)
     ))
 
-    schedule <- destep_conv_schedule(dest, ep)
+    schedule <- schedule__convert(dest, ep)
     week <- schedule$value[class_name == "Schedule:Week:Compact"]
     final_week <- week[
         field_name == "Name" & value_chr == "Week-Daily Ramp (53)",
@@ -152,7 +152,7 @@ test_that("schedule conversion ignores missing and zero references", {
         SCHEDULE_ID = c(10L, 0L, NA_integer_)
     ))
 
-    schedule <- destep_conv_schedule(dest, ep)
+    schedule <- schedule__convert(dest, ep)
 
     expect_type(schedule, "list")
     expect_equal(attr(schedule, "table")$SCHEDULE_ID, 10L)
@@ -178,7 +178,7 @@ test_that("relative-humidity schedules convert DeST fractions to percent", {
         SET_RH_MAX_SCHEDULE = 20L
     ))
 
-    schedule <- destep_conv_schedule(dest, ep)
+    schedule <- schedule__convert(dest, ep)
     table <- attr(schedule, "table")
 
     expect_equal(unique(table[SCHEDULE_ID == 10L]$DATA[[1L]]), 35)
@@ -204,7 +204,7 @@ test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
     ))
 
     expect_error(
-        destep_conv_schedule(dest, ep),
+        schedule__convert(dest, ep),
         "also referenced by non-humidity fields"
     )
 })
@@ -227,7 +227,7 @@ test_that("relative-humidity schedule conversion rejects unsupported units", {
     ))
 
     expect_error(
-        destep_conv_schedule(dest, ep),
+        schedule__convert(dest, ep),
         "fraction values in \\[0, 1\\]"
     )
 })
@@ -253,7 +253,7 @@ test_that("relative-humidity schedule conversion rejects inverted bounds", {
     ))
 
     expect_error(
-        destep_conv_schedule(dest, ep),
+        schedule__convert(dest, ep),
         "lower schedule 10 exceeds upper schedule 20"
     )
 })
@@ -278,7 +278,7 @@ test_that("schedule conversion returns null without valid references", {
         SCHEDULE = 0L
     ))
 
-    expect_null(destep_conv_schedule(dest, ep))
+    expect_null(schedule__convert(dest, ep))
 })
 
 test_that("real model schedule week and year references are resolvable", {

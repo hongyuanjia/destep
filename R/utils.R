@@ -1,21 +1,21 @@
-is_scalar <- function(x) {
+arg__is_scalar <- function(x) {
     length(x) == 1L
 }
 
-is_integerish <- function(x) {
+arg__is_integerish <- function(x) {
     (is.integer(x) || (is.double(x) && all(x %% 1 == 0))) && all(!is.na(x))
 }
 
-is_character <- function(x) {
+arg__is_character <- function(x) {
     is.character(x) && all(!is.na(x))
 }
 
-is_string <- function(x) {
-    is_scalar(x) && is_character(x)
+arg__is_string <- function(x) {
+    arg__is_scalar(x) && arg__is_character(x)
 }
 
-is_flag <- function(x) {
-    is_scalar(x) && is.logical(x) && !is.na(x)
+arg__is_flag <- function(x) {
+    arg__is_scalar(x) && is.logical(x) && !is.na(x)
 }
 
 # Test whether a DeST table exists and contains at least one row without
@@ -40,6 +40,15 @@ data__force_numeric <- function(dt, cols) {
         data.table::set(dt, NULL, col, as.numeric(dt[[col]]))
     }
     invisible(dt)
+}
+
+# Show a bounded sample of integer identifiers so validation errors remain
+# useful without becoming unreadably long.
+data__format_integer_sample <- function(x, n = 10L) {
+    x <- sort(unique(as.integer(x)))
+    out <- paste(utils::head(x, n), collapse = ", ")
+    if (length(x) > n) out <- paste0(out, ", ...")
+    out
 }
 
 # Reject duplicate EnergyPlus object names before object assembly obscures the
@@ -102,7 +111,7 @@ conv__combine_outputs <- function(outputs, table = NULL) {
     out
 }
 
-abort <- function(message, class = NULL, call = NULL, ...) {
+condition__abort <- function(message, class = NULL, call = NULL, ...) {
     ori <- getOption("warning.length")
     options(warning.length = 8170L)
     on.exit(options(warning.length = ori), add = TRUE)
@@ -110,7 +119,7 @@ abort <- function(message, class = NULL, call = NULL, ...) {
     stop(errorCondition(message, ..., class = class, call = call))
 }
 
-warn <- function(message, class = NULL, call = NULL, ...) {
+condition__warn <- function(message, class = NULL, call = NULL, ...) {
     ori <- getOption("warning.length")
     options(warning.length = 8170L)
     on.exit(options(warning.length = ori), add = TRUE)

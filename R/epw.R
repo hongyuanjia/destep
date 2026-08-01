@@ -156,19 +156,19 @@ epw__validate_climate <- function(climate, climate_id) {
         if (length(missing_hour)) {
             issues <- c(issues, sprintf(
                 "missing HOUR value(s): %s",
-                destep_format_integer_sample(missing_hour)
+                data__format_integer_sample(missing_hour)
             ))
         }
         if (length(duplicate_hour)) {
             issues <- c(issues, sprintf(
                 "duplicate HOUR value(s): %s",
-                destep_format_integer_sample(duplicate_hour)
+                data__format_integer_sample(duplicate_hour)
             ))
         }
         if (length(unexpected_hour)) {
             issues <- c(issues, sprintf(
                 "unexpected HOUR value(s): %s",
-                destep_format_integer_sample(unexpected_hour)
+                data__format_integer_sample(unexpected_hour)
             ))
         }
     }

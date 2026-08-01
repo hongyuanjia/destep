@@ -225,7 +225,7 @@ test_that("can convert windows from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     surface <- attr(surface__convert(dest, ep), "table")
     window <- window__convert(dest, ep, surface)

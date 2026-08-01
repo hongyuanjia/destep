@@ -29,7 +29,7 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
         EXT_PROPERTY = 0L
     ))
 
-    ventilation <- destep_conv_room_ventilation(dest, ep)
+    ventilation <- ventilation__convert(dest, ep)
 
     expect_type(ventilation, "list")
     expect_named(ventilation, c("object", "value"))
@@ -85,7 +85,7 @@ test_that("skips ROOM_RELATION rows that are not outdoor ventilation", {
     ))
 
     expect_warning(
-        expect_null(destep_conv_room_ventilation(dest, ep)),
+        expect_null(ventilation__convert(dest, ep)),
         "Skipped 1 ROOM_RELATION row"
     )
 })
@@ -104,9 +104,9 @@ test_that("can convert ROOM_RELATION from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    ventilation <- destep_conv_room_ventilation(dest, ep)
+    ventilation <- ventilation__convert(dest, ep)
     tab <- attr(ventilation, "table")
 
     expect_equal(unique(ventilation$object$class_name), "ZoneVentilation:DesignFlowRate")

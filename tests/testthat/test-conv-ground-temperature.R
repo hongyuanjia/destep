@@ -36,7 +36,7 @@ test_that("skips missing or empty ground data", {
     missing <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(missing), add = TRUE)
 
-    expect_null(destep_conv_ground_temperature(missing, ep))
+    expect_null(ground_temperature__convert(missing, ep))
 
     empty <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(empty), add = TRUE)
@@ -46,7 +46,7 @@ test_that("skips missing or empty ground data", {
         T = numeric()
     ))
 
-    expect_null(destep_conv_ground_temperature(empty, ep))
+    expect_null(ground_temperature__convert(empty, ep))
 })
 
 test_that("can convert hourly ground data to monthly BuildingSurface temperatures", {
@@ -54,7 +54,7 @@ test_that("can convert hourly ground data to monthly BuildingSurface temperature
     dest <- destep_test_ground_temperature_db(monthly = list(1:12))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    ground <- destep_conv_ground_temperature(dest, ep)
+    ground <- ground_temperature__convert(dest, ep)
 
     expect_equal(unique(ground$object$class_name), "Site:GroundTemperature:BuildingSurface")
     expect_equal(destep_test_ground_temperature_values(ground), as.numeric(1:12))
@@ -75,7 +75,7 @@ test_that("uses SYS_CITY.GROUND_ID when multiple ground data IDs exist", {
         GROUND_ID = 2L
     ))
 
-    ground <- destep_conv_ground_temperature(dest, ep)
+    ground <- ground_temperature__convert(dest, ep)
 
     expect_equal(destep_test_ground_temperature_values(ground), as.numeric(101:112))
     expect_equal(unique(attr(ground, "table")$GROUND_DATA_ID), 2)
@@ -86,7 +86,7 @@ test_that("falls back to the unique GROUND_DATA ID", {
     dest <- destep_test_ground_temperature_db(ids = 8L, monthly = list(11:22))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    ground <- destep_conv_ground_temperature(dest, ep)
+    ground <- ground_temperature__convert(dest, ep)
 
     expect_equal(destep_test_ground_temperature_values(ground), as.numeric(11:22))
     expect_equal(unique(attr(ground, "table")$GROUND_DATA_ID), 8)
@@ -101,7 +101,7 @@ test_that("stops when multiple ground data IDs cannot be selected", {
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     expect_error(
-        destep_conv_ground_temperature(dest, ep),
+        ground_temperature__convert(dest, ep),
         "Cannot choose GROUND_DATA ID"
     )
 })
@@ -113,7 +113,7 @@ test_that("stops on invalid hourly ground data", {
     on.exit(DBI::dbDisconnect(missing_hour), add = TRUE)
     DBI::dbExecute(missing_hour, "DELETE FROM GROUND_DATA WHERE HOUR = 8759")
     expect_error(
-        destep_conv_ground_temperature(missing_hour, ep),
+        ground_temperature__convert(missing_hour, ep),
         "missing HOUR"
     )
 
@@ -124,7 +124,7 @@ test_that("stops on invalid hourly ground data", {
         VALUES (2, 0, 99)
     ")
     expect_error(
-        destep_conv_ground_temperature(duplicate_hour, ep),
+        ground_temperature__convert(duplicate_hour, ep),
         "duplicate HOUR"
     )
 
@@ -136,7 +136,7 @@ test_that("stops on invalid hourly ground data", {
         WHERE HOUR = 0
     ")
     expect_error(
-        destep_conv_ground_temperature(missing_temperature, ep),
+        ground_temperature__convert(missing_temperature, ep),
         "T contains missing values"
     )
 })
@@ -148,7 +148,7 @@ test_that("can convert ground temperatures from a real DeST model", {
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
-    ground <- destep_conv_ground_temperature(src, ep)
+    ground <- ground_temperature__convert(src, ep)
     table <- attr(ground, "table")
     raw <- DBI::dbGetQuery(src, "
         SELECT HOUR, T

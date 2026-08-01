@@ -52,7 +52,7 @@ test_that("can convert internal gains", {
         DIST_MODE = 4L
     ))
 
-    gains <- destep_conv_internal_gains(dest, ep)
+    gains <- internal_gains__convert(dest, ep)
 
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
@@ -137,15 +137,15 @@ test_that("rejects internal gain minimum values above their maximum", {
     )
 
     expect_error(
-        destep_people_values(people, 1L, "Minimum"),
+        internal_gains__people_values(people, 1L, "Minimum"),
         "Invalid People.*minimum.*exceeds maximum"
     )
     expect_error(
-        destep_light_values(lights, 1L, "watts_per_floor_area", "Minimum"),
+        internal_gains__light_values(lights, 1L, "watts_per_floor_area", "Minimum"),
         "Invalid Lights.*minimum.*exceeds maximum"
     )
     expect_error(
-        destep_equipment_values(
+        internal_gains__equipment_values(
             equipment, 1L, "watts_per_floor_area", "Minimum"
         ),
         "Invalid Equipment.*minimum.*exceeds maximum"
@@ -183,7 +183,7 @@ test_that("nonzero equipment moisture is rejected until it can be mapped", {
     ))
 
     expect_error(
-        destep_conv_electric_equipment(dest, ep),
+        internal_gains__convert_electric_equipment(dest, ep),
         "Cannot convert nonzero EQUIPMENT_GAINS moisture generation"
     )
 })
@@ -202,9 +202,9 @@ test_that("can convert internal gains from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    gains <- destep_conv_internal_gains(dest, ep)
+    gains <- internal_gains__convert(dest, ep)
     expected <- DBI::dbGetQuery(
         dest,
         "

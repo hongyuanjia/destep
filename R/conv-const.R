@@ -1,7 +1,7 @@
 # Resolve the aggregate thermal and optical properties of every DeST window.
 # The returned table is shared by construction and fenestration conversion so
 # both paths apply exactly the same validity checks and fallback decisions.
-destep_window_type_performance <- function(dest) {
+const__window_type_performance <- function(dest) {
     window <- DBI::dbGetQuery(
         dest,
         "SELECT ID AS WINDOW_ID, TYPE AS TYPE_ID,
@@ -201,7 +201,7 @@ const__door_layers <- function(dest) {
 }
 
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-destep_conv_const <- function(dest, ep) {
+const__convert <- function(dest, ep) {
     if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
         return(NULL)
     }
@@ -290,7 +290,7 @@ destep_conv_const <- function(dest, ep) {
 
     # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
     # Detailed layers are now retained only for windows that require fallback.
-    window_type <- destep_window_type_performance(dest)
+    window_type <- const__window_type_performance(dest)
 
     # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
     # TODO: handle 'SHADING' in 'WINDOW' table
@@ -390,7 +390,7 @@ destep_conv_const <- function(dest, ep) {
     # each material binds to a specific thickness. During conversion, we have to
     # create a new material with each thickness. Appending the thickness to the
     # material name should make them unique, since duplicated names have been
-    # handled by 'destep_update_name()'
+    # handled by 'conv__update_names()'
     if (nrow(const) > 0L) {
         data.table::set(const, NULL, "MATERIAL_NAME",
             with(const, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
@@ -561,7 +561,7 @@ destep_conv_const <- function(dest, ep) {
     if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
 
     out <- eval(as.call(c(
-        destep_add, dest, ep,
+        conv__add, dest, ep,
 
         # Material
         bquote(

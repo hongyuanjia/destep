@@ -1,12 +1,12 @@
 # BUILDING -> Building
 # TODO: one IDF per BUILDING?
-destep_conv_building <- function(dest, ep, which = NULL) {
+building__convert <- function(dest, ep, which = NULL) {
     bld <- DBI::dbGetQuery(dest, "SELECT BUILDING_ID AS ID, NAME FROM BUILDING")
     name__assert_unique(bld$NAME, "building")
     data.table::setDT(bld)
 
     if (!is.null(which)) {
-        if (is_integerish(which)) {
+        if (arg__is_integerish(which)) {
             # check if the index is out of bound
             if (any(which < 1L) || any(which > nrow(bld))) {
                 stop(sprintf(
@@ -15,7 +15,7 @@ destep_conv_building <- function(dest, ep, which = NULL) {
                 ))
             }
             bld <- bld[unique(which)]
-        } else if (is_character(which)) {
+        } else if (arg__is_character(which)) {
             # check if which is valid building name
             if (any(!which %in% bld$NAME)) {
                 stop(sprintf(
@@ -33,7 +33,7 @@ destep_conv_building <- function(dest, ep, which = NULL) {
     # model +Y axis. DeST stores the drawing-space south-vector angle from +X,
     # which gives the equivalent rotation after a 90-degree offset.
     north_axis <- geom__north_axis(dest)
-    out <- destep_add(dest, ep, "Building" := list(
+    out <- conv__add(dest, ep, "Building" := list(
         name = bld$NAME,
         north_axis = north_axis
     ))

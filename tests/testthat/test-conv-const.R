@@ -125,7 +125,7 @@ test_that("resolves aggregate window type performance and fallbacks", {
         LIGHT_TRANS_RATIO = c(0.78, 0.58, 1.2)
     ))
 
-    type <- destep_window_type_performance(dest)
+    type <- const__window_type_performance(dest)
     expect_equal(type[WINDOW_ID == 1L, SHGC], 0.517, tolerance = 1e-7)
     expect_true(type[WINDOW_ID == 1L, TYPE_DATA_VALID])
     expect_equal(type[WINDOW_ID == 2L, DETAILED_CONSTRUCTION_ID], 9L)
@@ -144,7 +144,7 @@ test_that("returns a stable aggregate window type schema without windows", {
         ID = integer(), TYPE = integer(), WINDOW_CONSTRUCTION = integer()
     ))
 
-    type <- destep_window_type_performance(dest)
+    type <- const__window_type_performance(dest)
     expect_equal(nrow(type), 0L)
     expect_true(all(c(
         "TYPE_DATA_VALID", "TYPE_CONSTRUCTION_NAME", "FALLBACK_REASON"
@@ -159,10 +159,10 @@ test_that("can convert 'Construction' and 'Material'", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path, verbose = TRUE)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     # can convert 'Material', 'Construction'
-    expect_type(const <- destep_conv_const(dest, ep), "list")
+    expect_type(const <- const__convert(dest, ep), "list")
     expect_named(const, c("object", "value"))
     expect_equal(
         unique(const$object$class_name),
