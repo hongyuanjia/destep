@@ -321,7 +321,7 @@ schedule__object_lookup <- function(fields, object_class) {
     required <- c("id", "name", "index")
     missing <- setdiff(required, names(fields))
     if (length(missing) > 0L) {
-        condition__abort(sprintf(
+        abort(sprintf(
             "Cannot build %s schedule lookup. Missing column(s): [%s].",
             object_class, paste(missing, collapse = ", ")
         ))
@@ -336,14 +336,14 @@ schedule__object_lookup <- function(fields, object_class) {
     lookup <- data.table::as.data.table(unique(lookup))
 
     if (anyDuplicated(lookup$id)) {
-        condition__abort(sprintf(
+        abort(sprintf(
             "Cannot build %s schedule lookup because object ids are not unique: [%s].",
             object_class, paste(unique(lookup$id[duplicated(lookup$id)]), collapse = ", ")
         ))
     }
 
     if (anyNA(lookup$id) || anyNA(lookup$name) || any(!nzchar(lookup$name))) {
-        condition__abort(sprintf(
+        abort(sprintf(
             "Cannot build %s schedule lookup because at least one object id or name is missing.",
             object_class
         ))
@@ -357,7 +357,7 @@ schedule__object_lookup <- function(fields, object_class) {
 schedule__lookup_names <- function(ids, lookup, object_class) {
     matched <- collapse::fmatch(ids, lookup$id)
     if (anyNA(matched)) {
-        condition__abort(sprintf(
+        abort(sprintf(
             "Cannot resolve %s schedule reference id(s): [%s].",
             object_class, paste(unique(ids[is.na(matched)]), collapse = ", ")
         ))

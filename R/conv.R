@@ -106,17 +106,17 @@ MAP_ID_NAME <- list(
 #' @export
 # TODO: How about STOREY_GROUP?
 to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
-    if (arg__is_string(dest) && file.exists(dest)) {
+    if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
     } else if (!inherits(dest, "DBIConnection")) {
         stop("'dest' should be a path to a DeST model file or a DBIConnection object.")
     }
 
-    if (!arg__is_flag(copy)) {
+    if (!is_flag(copy)) {
         stop("'copy' should be a single logical value of 'TRUE' or 'FALSE'")
     }
-    if (!arg__is_flag(verbose)) {
+    if (!is_flag(verbose)) {
         stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 
@@ -290,7 +290,7 @@ conv__add <- function(dest, ep, ..., .env = parent.frame()) {
 # Expand a list of value records into objects of one EnergyPlus class. This is
 # the shared boundary for converters that previously rebuilt the same NSE call.
 conv__add_objects <- function(dest, ep, class, values) {
-    if (!arg__is_string(class)) {
+    if (!is_string(class)) {
         stop("'class' should be a single character string.", call. = FALSE)
     }
     if (!is.list(values)) {
@@ -365,7 +365,7 @@ conv__update_names <- function(dest, tables = NULL) {
         # it is possible that some tables are not in the database
         tables <- MAP_ID_NAME[names(MAP_ID_NAME) %in% DBI::dbListTables(dest)]
     } else {
-        if (!arg__is_character(tables)) {
+        if (!is_character(tables)) {
             stop(sprintf(
                 "'tables' should be NULL or a character vector but found '%s'",
                 class(tables)[1L]

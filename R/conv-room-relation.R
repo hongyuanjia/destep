@@ -52,7 +52,7 @@ ventilation__convert <- function(dest, ep) {
     data.table::set(relation, NULL, "ENERGYPLUS_NAME", ventilation__names(relation))
 
     if (any(!relation$CAN_CONVERT)) {
-        condition__warn(sprintf(
+        warn(sprintf(
             "Skipped %i ROOM_RELATION row(s) that do not describe supported outdoor ventilation.",
             sum(!relation$CAN_CONVERT)
         ))

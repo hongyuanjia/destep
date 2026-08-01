@@ -33,7 +33,7 @@ ideal_loads__convert <- function(dest, ep) {
     warning_skip <- !is.na(ideal$SKIP_REASON) &
         ideal$SKIP_REASON != "ROOM_GROUP.IS_AC_ROOM is zero"
     if (any(warning_skip)) {
-        condition__warn(sprintf(
+        warn(sprintf(
             "Skipped %i ROOM row(s) that do not describe supported ROOM_GROUP ideal loads.",
             sum(warning_skip)
         ))

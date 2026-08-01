@@ -37,7 +37,7 @@ thermostat__convert <- function(dest, ep) {
     )
 
     if (any(!thermostat$CAN_CONVERT)) {
-        condition__warn(sprintf(
+        warn(sprintf(
             "Skipped %i ROOM row(s) that do not describe supported controlled zones.",
             sum(!thermostat$CAN_CONVERT)
         ))

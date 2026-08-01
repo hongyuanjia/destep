@@ -6,7 +6,7 @@ building__convert <- function(dest, ep, which = NULL) {
     data.table::setDT(bld)
 
     if (!is.null(which)) {
-        if (arg__is_integerish(which)) {
+        if (is_integerish(which)) {
             # check if the index is out of bound
             if (any(which < 1L) || any(which > nrow(bld))) {
                 stop(sprintf(
@@ -15,7 +15,7 @@ building__convert <- function(dest, ep, which = NULL) {
                 ))
             }
             bld <- bld[unique(which)]
-        } else if (arg__is_character(which)) {
+        } else if (is_character(which)) {
             # check if which is valid building name
             if (any(!which %in% bld$NAME)) {
                 stop(sprintf(
