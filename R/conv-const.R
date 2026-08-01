@@ -27,7 +27,7 @@ destep_window_type_performance <- function(dest) {
     # Resolve it here because invalid type records must fall back to the same
     # detailed construction that the original window would have used.
     if ("DEFAULT_SETTING" %in% DBI::dbListTables(dest) &&
-        destep_table_has_fields(
+        db__has_fields(
             dest, "DEFAULT_SETTING",
             c("TABLE_NAME", "FIELD_NAME", "TYPE", "LONG")
         )) {
@@ -51,7 +51,7 @@ destep_window_type_performance <- function(dest) {
 
     required <- c("ID", "NAME", "K", "SC", "LIGHT_TRANS_RATIO")
     has_type_data <- "WINDOW_TYPE_DATA" %in% DBI::dbListTables(dest) &&
-        destep_table_has_fields(dest, "WINDOW_TYPE_DATA", required)
+        db__has_fields(dest, "WINDOW_TYPE_DATA", required)
     if (has_type_data) {
         type <- DBI::dbGetQuery(
             dest,
@@ -336,9 +336,9 @@ destep_conv_const <- function(dest, ep) {
     # layer as 0 and the glaze layer as 1.
     door <- const__door_layers(dest)
 
-    assert_unique_name(const$NAME[const$LAYER_NO == 0L], "construction")
-    assert_unique_name(window$NAME[window$LAYER_NO == 0L], "window")
-    assert_unique_name(door$NAME[door$LAYER_NO == 0L], "door")
+    name__assert_unique(const$NAME[const$LAYER_NO == 0L], "construction")
+    name__assert_unique(window$NAME[window$LAYER_NO == 0L], "window")
+    name__assert_unique(door$NAME[door$LAYER_NO == 0L], "door")
 
     data.table::setDT(const)
     data.table::setDT(window)
@@ -493,11 +493,11 @@ destep_conv_const <- function(dest, ep) {
     }
 
     if (nrow(win_type_glazing) > 0L) {
-        assert_unique_name(
+        name__assert_unique(
             win_type_glazing$TYPE_CONSTRUCTION_NAME,
             "window type construction"
         )
-        assert_unique_name(
+        name__assert_unique(
             win_type_glazing$SIMPLE_GLAZING_NAME,
             "simple glazing material"
         )

@@ -3,7 +3,7 @@
 # supply-air state fields live in AC_SYS, and the current real fixture has no
 # AC_SYS rows, so fixed EnergyPlus IdealLoads defaults are used here.
 destep_conv_ideal_loads <- function(dest, ep) {
-    if (!destep_has_rows(dest, "ROOM") || !destep_has_rows(dest, "ROOM_GROUP")) {
+    if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
@@ -42,7 +42,7 @@ destep_conv_ideal_loads <- function(dest, ep) {
     converted <- ideal[ideal$CAN_CONVERT]
     if (nrow(converted) == 0L) return(NULL)
 
-    out <- destep_combine_outputs(list(
+    out <- conv__combine_outputs(list(
         humidistat = ideal_loads__humidistat_objects(
             dest, ep, converted[converted$HUMIDITY_CONTROL]
         ),
@@ -171,31 +171,31 @@ destep_assert_ideal_loads_schedules <- function(ideal) {
 destep_ideal_loads_add_names <- function(ideal) {
     data.table::set(
         ideal, NULL, "ENERGYPLUS_IDEAL_LOADS_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads"))
     )
     data.table::set(
         ideal, NULL, "ENERGYPLUS_EQUIPMENT_LIST_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Equipment"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Equipment"))
     )
     data.table::set(
         ideal, NULL, "ENERGYPLUS_HUMIDISTAT_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Humidistat"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Humidistat"))
     )
     data.table::set(
         ideal, NULL, "ZONE_SUPPLY_AIR_NODE_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads Supply Node"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads Supply Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_EXHAUST_AIR_NODE_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads Exhaust Node"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Ideal Loads Exhaust Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_AIR_NODE_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Zone Air Node"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Zone Air Node"))
     )
     data.table::set(
         ideal, NULL, "ZONE_RETURN_AIR_NODE_NAME",
-        make_unique_name(paste(ideal$ROOM_NAME, "Zone Return Air Node"))
+        name__make_unique(paste(ideal$ROOM_NAME, "Zone Return Air Node"))
     )
     ideal
 }

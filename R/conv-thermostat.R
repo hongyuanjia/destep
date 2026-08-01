@@ -2,7 +2,7 @@
 # Each EnergyPlus zone needs its own control object, but rooms with identical
 # heating/cooling schedule IDs can share the same DualSetpoint object.
 destep_conv_thermostat <- function(dest, ep) {
-    if (!destep_has_rows(dest, "ROOM") || !destep_has_rows(dest, "ROOM_GROUP")) {
+    if (!db__has_rows(dest, "ROOM") || !db__has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
@@ -33,7 +33,7 @@ destep_conv_thermostat <- function(dest, ep) {
     )
     data.table::set(
         thermostat, NULL, "ENERGYPLUS_ZONE_CONTROL_NAME",
-        make_unique_name(paste(thermostat$ROOM_NAME, "Thermostat"))
+        name__make_unique(paste(thermostat$ROOM_NAME, "Thermostat"))
     )
 
     if (any(!thermostat$CAN_CONVERT)) {
@@ -52,7 +52,7 @@ destep_conv_thermostat <- function(dest, ep) {
         "ENERGYPLUS_SETPOINT_NAME"
     ), with = FALSE])
 
-    out <- destep_combine_outputs(list(
+    out <- conv__combine_outputs(list(
         control_type = destep_thermostat_control_type_schedule(dest, ep),
         setpoint = destep_thermostat_setpoint_objects(dest, ep, setpoint),
         control = destep_thermostat_control_objects(dest, ep, converted)

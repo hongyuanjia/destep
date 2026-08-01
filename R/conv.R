@@ -179,7 +179,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     # update Version comments
     ver <- destep_comment_version(tmpdb, ep)
-    ep$Version$comment(un_list(ver$object$comment))
+    ep$Version$comment(list__flatten(ver$object$comment))
 
     # Surface part geometry must be available when a window crosses a topology
     # split, because each clipped window piece references exactly one host part.
@@ -207,7 +207,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     if (any(vapply(
         c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
-        destep_has_rows, logical(1L), dest = tmpdb
+        db__has_rows, logical(1L), dest = tmpdb
     ))) {
         conv$internal_gains <- destep_conv_internal_gains(tmpdb, ep)
     }

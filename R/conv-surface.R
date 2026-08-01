@@ -122,7 +122,7 @@ surface__convert <- function(
         ON L.POINT = P.POINT_ID
         "
     )
-    assert_unique_name(surface$NAME[surface$POINT_NO == 0L], "surface")
+    name__assert_unique(surface$NAME[surface$POINT_NO == 0L], "surface")
     data.table::setDT(surface)
     data.table::setorderv(surface, c("ID", "POINT_NO"))
     surface <- surface__snap_coordinates(surface, geometry_profile)
@@ -131,7 +131,7 @@ surface__convert <- function(
     # copies are oriented. Vertices used by another plane are topological
     # junctions and must survive collinear-point cleanup.
     window <- data.table::data.table()
-    if (destep_has_rows(dest, "WINDOW")) {
+    if (db__has_rows(dest, "WINDOW")) {
         window <- data.table::as.data.table(DBI::dbGetQuery(dest, "
             SELECT
                 W.ID AS WINDOW_ID,

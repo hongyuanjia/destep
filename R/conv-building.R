@@ -2,7 +2,7 @@
 # TODO: one IDF per BUILDING?
 destep_conv_building <- function(dest, ep, which = NULL) {
     bld <- DBI::dbGetQuery(dest, "SELECT BUILDING_ID AS ID, NAME FROM BUILDING")
-    assert_unique_name(bld$NAME, "building")
+    name__assert_unique(bld$NAME, "building")
     data.table::setDT(bld)
 
     if (!is.null(which)) {

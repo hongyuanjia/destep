@@ -18,6 +18,90 @@ is_flag <- function(x) {
     is_scalar(x) && is.logical(x) && !is.na(x)
 }
 
+# Test whether a DeST table exists and contains at least one row without
+# exposing SQL identifier construction to individual converters.
+db__has_rows <- function(dest, table) {
+    if (!table %in% DBI::dbListTables(dest)) return(FALSE)
+    table <- as.character(DBI::dbQuoteIdentifier(dest, table))
+    DBI::dbGetQuery(
+        dest, paste0("SELECT COUNT(*) AS N FROM ", table)
+    )$N[[1L]] > 0L
+}
+
+# Check optional DeST schema fields before a converter builds dependent SQL.
+db__has_fields <- function(dest, table, fields) {
+    all(fields %in% DBI::dbListFields(dest, table))
+}
+
+# Normalize driver-dependent numeric column types in place for data.table
+# conversion pipelines.
+data__force_numeric <- function(dt, cols) {
+    for (col in cols) {
+        data.table::set(dt, NULL, col, as.numeric(dt[[col]]))
+    }
+    invisible(dt)
+}
+
+# Reject duplicate EnergyPlus object names before object assembly obscures the
+# originating DeST records.
+name__assert_unique <- function(names, type) {
+    if (anyDuplicated(names)) {
+        stop(sprintf(
+            "Duplicated %s names found: [%s]. This should already be handled when updating the names.",
+            type, paste(unique(names[duplicated(names)]), collapse = ", ")
+        ))
+    }
+}
+
+# Add stable ordinal suffixes to repeated names while preserving input order.
+name__make_unique <- function(name) {
+    spl_name <- collapse::gsplit(name, name)
+    spl_name <- .mapply(
+        function(name, len) if (len == 1L) name else sprintf("%s (%d)", name, seq_len(len)),
+        list(name = spl_name, len = collapse::vlengths(spl_name)),
+        NULL
+    )
+    collapse::greorder(list__flatten(spl_name), name)
+}
+
+# Flatten list values with package-wide defaults that avoid accidental names.
+list__flatten <- function(lst, recursive = FALSE, use.names = FALSE) {
+    unlist(lst, recursive = recursive, use.names = use.names)
+}
+
+# Combine partial EnergyPlus expansion results and rebase their object ids so
+# independently generated sections can be appended without collisions.
+conv__combine_outputs <- function(outputs, table = NULL) {
+    outputs <- Filter(Negate(is.null), outputs)
+    if (length(outputs) == 0L) return(NULL)
+
+    num_obj <- 0L
+    for (i in seq_along(outputs)) {
+        data.table::set(outputs[[i]]$object, NULL, "rleid", outputs[[i]]$object$rleid + num_obj)
+        data.table::set(outputs[[i]]$value, NULL, "rleid", outputs[[i]]$value$rleid + num_obj)
+        num_obj <- max(outputs[[i]]$object$rleid)
+    }
+
+    out <- list(
+        object = data.table::rbindlist(lapply(outputs, .subset2, "object")),
+        value = data.table::rbindlist(lapply(outputs, .subset2, "value"))
+    )
+
+    if (is.null(table)) {
+        table <- data.table::rbindlist(
+            lapply(names(outputs), function(name) {
+                tbl <- attr(outputs[[name]], "table")
+                if (is.null(tbl)) return(NULL)
+                data.table::set(data.table::copy(tbl), NULL, "SOURCE_TABLE", name)
+            }),
+            fill = TRUE
+        )
+    }
+    # Preserve the source snapshot for diagnostics and downstream converters.
+    attr(out, "table") <- table
+    out
+}
+
 abort <- function(message, class = NULL, call = NULL, ...) {
     ori <- getOption("warning.length")
     options(warning.length = 8170L)

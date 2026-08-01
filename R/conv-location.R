@@ -10,7 +10,7 @@ destep_conv_location <- function(dest, ep) {
             round(ELEVATION, 2) AS ELEVATION
         FROM ENVIRONMENT"
     )
-    assert_unique_name(loc$NAME, "environment")
+    name__assert_unique(loc$NAME, "environment")
     data.table::setDT(loc)
 
     out <- destep_add(dest, ep,

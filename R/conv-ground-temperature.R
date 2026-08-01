@@ -3,7 +3,7 @@
 # condition is Ground, so DeST's hourly user-defined ground temperatures are
 # reduced to the 12 monthly values required by the IDD.
 destep_conv_ground_temperature <- function(dest, ep) {
-    if (!destep_has_rows(dest, "GROUND_DATA")) return(NULL)
+    if (!db__has_rows(dest, "GROUND_DATA")) return(NULL)
 
     ground <- destep_ground_temperature_table(dest)
     monthly <- destep_monthly_ground_temperature(ground)
@@ -41,7 +41,7 @@ destep_ground_temperature_table <- function(dest) {
         )
     )
     data.table::setDT(ground)
-    destep_force_numeric(ground, c("ID", "HOUR", "T"))
+    data__force_numeric(ground, c("ID", "HOUR", "T"))
     destep_validate_ground_temperature_table(ground, ground_id)
 
     ground
@@ -83,8 +83,8 @@ destep_resolve_city_ground_data_ids <- function(dest) {
     if (!all(c("ENVIRONMENT", "SYS_CITY", "GROUND_DATA") %in% DBI::dbListTables(dest))) {
         return(numeric())
     }
-    if (!destep_table_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !destep_table_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
+    if (!db__has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+        !db__has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
         return(numeric())
     }
 
@@ -103,12 +103,6 @@ destep_resolve_city_ground_data_ids <- function(dest) {
     )$ID
 
     ids[!is.na(ids)]
-}
-
-# Check a table's columns before running optional bridge SQL.  This avoids
-# turning small unit-test fixtures into schema-completeness tests.
-destep_table_has_fields <- function(dest, table, fields) {
-    all(fields %in% DBI::dbListFields(dest, table))
 }
 
 # A BuildingSurface ground-temperature object has no room for gaps or duplicate

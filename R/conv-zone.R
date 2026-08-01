@@ -16,7 +16,7 @@ destep_conv_zone <- function(dest, ep) {
         ON R.OF_STOREY = S.ID
         "
     )
-    assert_unique_name(room$NAME, "room")
+    name__assert_unique(room$NAME, "room")
     data.table::setDT(room)
 
     #  construct ZoneList input
