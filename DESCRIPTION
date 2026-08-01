@@ -19,6 +19,7 @@ Imports:
     eplusr,
     lubridate,
     odbc,
+    polyclip,
     RSQLite
 Suggests: 
     archive,

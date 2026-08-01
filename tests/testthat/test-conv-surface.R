@@ -59,7 +59,7 @@ test_that("surface coordinates follow EnergyPlus's vertex tolerance", {
 })
 
 # Calculate one polygon's unit normal and area for geometry-invariant tests.
-surface_metrics <- function(surface) {
+surface__metrics <- function(surface) {
     following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
     normal <- c(
         sum((surface$POINT_Y - surface$POINT_Y[following]) *
@@ -94,7 +94,7 @@ test_that("windows are clipped to exact host surface parts", {
     )
 
     split <- destep_split_window_by_surface(window, host)
-    metric <- split[, surface_metrics(.SD), by = "OUTPUT_PART_ID"]
+    metric <- split[, surface__metrics(.SD), by = "OUTPUT_PART_ID"]
 
     expect_equal(data.table::uniqueN(split$OUTPUT_PART_ID), 2L)
     expect_true(all(metric$N_VERTEX == 3L))
@@ -107,6 +107,34 @@ test_that("windows are clipped to exact host surface parts", {
         destep_split_window_by_surface(outside, host),
         "Could not place DeST window"
     )
+})
+
+test_that("window-aware host triangulation avoids sub-centimetre slivers", {
+    host <- data.table::data.table(
+        POINT_NO = 0:4,
+        POINT_X = c(99.324, 99.421, 99.421, 81.774, 81.774),
+        POINT_Y = 9.075,
+        POINT_Z = c(9.0, 9.0, 13.5, 13.5, 9.0)
+    )
+    window <- data.table::data.table(
+        POINT_NO = 0:3,
+        POINT_X = c(85.604, 95.591, 95.591, 85.604),
+        POINT_Y = 9.075,
+        POINT_Z = c(9.977, 9.977, 12.523, 12.523)
+    )
+
+    triangulated <- destep_triangulate_surface_polygon(host, window)
+    clipped <- lapply(unique(triangulated$PART), function(part) {
+        destep_clip_window_polygon(window, triangulated[PART == part])
+    })
+    clipped <- Filter(Negate(is.null), clipped)
+
+    host_metric <- triangulated[, surface__metrics(.SD), by = "PART"]
+    clipped_area <- sum(vapply(
+        clipped, function(value) surface__metrics(value)$AREA, numeric(1L)
+    ))
+    expect_equal(sum(host_metric$AREA), surface__metrics(host)$AREA, tolerance = 1e-8)
+    expect_equal(clipped_area, surface__metrics(window)$AREA, tolerance = 1e-6)
 })
 
 test_that("real DeST surfaces preserve orientation, adjacency, area, and closure", {
@@ -124,9 +152,10 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     destep_update_name(dest)
 
     surface <- attr(destep_conv_surface(dest, ensure_empty_idf()), "table")
-    metric <- surface[, surface_metrics(.SD), by = .(
+    metric <- surface[, surface__metrics(.SD), by = .(
         OUTPUT_ID, ID, PLANE, NAME, ORIGINAL_NAME, TYPE, KIND_ENCLOSURE,
-        BOUNDARY, BOUNDARY_OBJECT, AZIMUTH, TILT, ROOM
+        BOUNDARY, BOUNDARY_OBJECT, AZIMUTH, TILT, ROOM, BOUNDARY_MODE,
+        SOURCE_TYPE, SOURCE_BOUNDARY, STOREY_MULTIPLIER, TYPICAL_PAIR_ID
     )]
     metric[, EXPECTED := list(list(destep_expected_surface_normal(
         AZIMUTH, TILT, destep_south_direction(dest)
@@ -137,20 +166,46 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     expect_true(all(metric$ALIGNMENT > 1.0 - 1e-6))
 
     original <- unique(metric, by = "ID")
-    expect_equal(nrow(original[KIND_ENCLOSURE == 3L & TYPE == "Roof" & BOUNDARY == "Outdoors"]), 18L)
-    expect_equal(nrow(original[KIND_ENCLOSURE == 6L & TYPE == "Floor" & BOUNDARY == "Outdoors"]), 2L)
+    # Trace metadata preserves DeST's source classification even when a middle
+    # storey's roof or exposed floor becomes part of the cyclic typical layer.
+    expect_equal(data.table::uniqueN(metric[
+        SOURCE_TYPE == "Roof" & SOURCE_BOUNDARY == "Outdoors"
+    ]$ID), 18L)
+    expect_equal(data.table::uniqueN(metric[
+        SOURCE_TYPE == "Floor" & SOURCE_BOUNDARY == "Outdoors"
+    ]$ID), 2L)
+    expect_equal(data.table::uniqueN(metric[
+        TYPE == "Roof" & BOUNDARY == "Outdoors"
+    ]$ID), 11L)
+    expect_equal(data.table::uniqueN(metric[
+        TYPE == "Floor" & BOUNDARY == "Outdoors"
+    ]$ID), 0L)
     expect_true(all(original[KIND_ENCLOSURE == 6L]$NZ < 0.0))
 
-    paired <- metric[BOUNDARY == "Surface"]
+    self <- metric[BOUNDARY == "Surface" & NAME == BOUNDARY_OBJECT]
+    expect_true(nrow(self) > 0L)
+    expect_true(all(self$BOUNDARY_MODE == "typical_cut_adiabatic"))
+
+    paired <- metric[BOUNDARY == "Surface" & NAME != BOUNDARY_OBJECT]
     peer <- match(paired$BOUNDARY_OBJECT, metric$NAME)
     expect_false(anyNA(peer))
-    expect_false(any(paired$NAME == paired$BOUNDARY_OBJECT))
     expect_equal(metric$BOUNDARY_OBJECT[peer], paired$NAME)
     expect_equal(paired$N_VERTEX, metric$N_VERTEX[peer])
     expect_true(all(
         paired$NX * metric$NX[peer] + paired$NY * metric$NY[peer] +
             paired$NZ * metric$NZ[peer] < -1.0 + 1e-6
     ))
+    # EnergyPlus applies zone multipliers after solving the representative
+    # zones, so every non-adiabatic peer pair must conserve A * multiplier.
+    expect_equal(
+        paired$AREA * paired$STOREY_MULTIPLIER,
+        metric$AREA[peer] * metric$STOREY_MULTIPLIER[peer],
+        tolerance = 1e-8
+    )
+    typical <- paired[BOUNDARY_MODE == "typical_cycle"]
+    expect_true(nrow(typical) > 0L)
+    expect_true(all(typical$STOREY_MULTIPLIER == 5L))
+    expect_true(all(!is.na(typical$TYPICAL_PAIR_ID)))
 
     edge <- surface[, {
         following <- seq_len(.N) %% .N + 1L
@@ -176,7 +231,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
         ORDER BY P.PLANE_ID, L.POINT_NO
     "))
     raw_area <- raw[PLANE %in% surface$PLANE,
-        .(SOURCE_AREA = surface_metrics(.SD)$AREA), by = "PLANE"]
+        .(SOURCE_AREA = surface__metrics(.SD)$AREA), by = "PLANE"]
     converted_area <- metric[, .(CONVERTED_AREA = sum(AREA)), by = .(ID, PLANE)]
     area <- merge(converted_area, raw_area, by = "PLANE")
     expect_lt(max(abs(area$CONVERTED_AREA - area$SOURCE_AREA)), 1e-6)
@@ -209,7 +264,11 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
                 "not fully enclosed", "vertex size mismatch",
                 "invalid Building Surface Name", "floor area.*differs",
                 "zone volume.*differs", "degenerate", "non-?convex",
-                "possibly coincident", "collinear"
+                "possibly coincident", "collinear",
+                "InterZone Surface Areas do not match as expected",
+                "Base surface does not surround subsurface",
+                "Distance between two vertices < \\.01",
+                "same materials in the reverse order"
             ),
             collapse = "|"
         ),

@@ -9,6 +9,7 @@ destep_conv_ideal_loads <- function(dest, ep) {
 
     ideal <- destep_room_group_ideal_loads_table(dest)
     destep_assert_ideal_loads_schedules(ideal)
+    ideal_loads__assert_humidity_schedules(ideal)
 
     # Non-air-conditioned rooms stay in the diagnostic table but do not get
     # zone equipment. AC_T_* tolerance schedules are intentionally not used.
@@ -23,6 +24,10 @@ destep_conv_ideal_loads <- function(dest, ep) {
     skip_reason[missing_schedule] <- "ROOM_GROUP.AC_SCHEDULE_ID is zero or missing"
     data.table::set(ideal, NULL, "SKIP_REASON", skip_reason)
     data.table::set(ideal, NULL, "CAN_CONVERT", is.na(skip_reason))
+    data.table::set(
+        ideal, NULL, "HUMIDITY_CONTROL",
+        ideal$CAN_CONVERT & ideal_loads__has_humidity_setpoints(ideal)
+    )
     ideal <- destep_ideal_loads_add_names(ideal)
 
     warning_skip <- !is.na(ideal$SKIP_REASON) &
@@ -38,6 +43,9 @@ destep_conv_ideal_loads <- function(dest, ep) {
     if (nrow(converted) == 0L) return(NULL)
 
     out <- destep_combine_outputs(list(
+        humidistat = ideal_loads__humidistat_objects(
+            dest, ep, converted[converted$HUMIDITY_CONTROL]
+        ),
         ideal_loads = destep_ideal_loads_objects(dest, ep, converted),
         sequential_fraction = destep_ideal_loads_sequential_fraction_schedule(dest, ep),
         equipment_list = destep_ideal_loads_equipment_lists(dest, ep, converted),
@@ -64,7 +72,9 @@ destep_room_group_ideal_loads_table <- function(dest) {
             G.AC_SCHEDULE_ID,
             S_AC.NAME AS AC_SCHEDULE_NAME,
             G.SET_RH_MIN_SCHEDULE,
+            S_RH_MIN.NAME AS HUMIDIFYING_SCHEDULE_NAME,
             G.SET_RH_MAX_SCHEDULE,
+            S_RH_MAX.NAME AS DEHUMIDIFYING_SCHEDULE_NAME,
             G.AC_T_MIN_SCHEDULE,
             G.AC_T_MAX_SCHEDULE
         FROM ROOM R
@@ -72,6 +82,10 @@ destep_room_group_ideal_loads_table <- function(dest) {
         ON R.OF_ROOM_GROUP = G.ROOM_GROUP_ID
         LEFT JOIN SCHEDULE_YEAR S_AC
         ON G.AC_SCHEDULE_ID = S_AC.SCHEDULE_ID
+        LEFT JOIN SCHEDULE_YEAR S_RH_MIN
+        ON G.SET_RH_MIN_SCHEDULE = S_RH_MIN.SCHEDULE_ID
+        LEFT JOIN SCHEDULE_YEAR S_RH_MAX
+        ON G.SET_RH_MAX_SCHEDULE = S_RH_MAX.SCHEDULE_ID
         ORDER BY R.ID
         "
     )
@@ -86,6 +100,46 @@ destep_room_group_ideal_loads_table <- function(dest) {
     )
 
     ideal
+}
+
+# A supported humidity boundary needs both the lower humidification schedule and
+# upper dehumidification schedule; zero in both fields means no humidity control.
+ideal_loads__has_humidity_setpoints <- function(ideal) {
+    !is.na(ideal$SET_RH_MIN_SCHEDULE) &
+        ideal$SET_RH_MIN_SCHEDULE != 0L &
+        !is.na(ideal$SET_RH_MAX_SCHEDULE) &
+        ideal$SET_RH_MAX_SCHEDULE != 0L
+}
+
+# Fail before object generation when a conditioned room has a one-sided or
+# dangling humidity schedule pair, because inventing a fallback would change
+# the DeST moisture-control boundary frozen by H0.
+ideal_loads__assert_humidity_schedules <- function(ideal) {
+    supported <- !is.na(ideal$IS_AC_ROOM) & ideal$IS_AC_ROOM != 0L &
+        !is.na(ideal$AC_SCHEDULE_ID) & ideal$AC_SCHEDULE_ID != 0L
+    has_min <- !is.na(ideal$SET_RH_MIN_SCHEDULE) & ideal$SET_RH_MIN_SCHEDULE != 0L
+    has_max <- !is.na(ideal$SET_RH_MAX_SCHEDULE) & ideal$SET_RH_MAX_SCHEDULE != 0L
+    incomplete <- supported & xor(has_min, has_max)
+    unresolved <- supported & (
+        (has_min & is.na(ideal$HUMIDIFYING_SCHEDULE_NAME)) |
+            (has_max & is.na(ideal$DEHUMIDIFYING_SCHEDULE_NAME))
+    )
+
+    if (!any(incomplete | unresolved)) return(invisible(NULL))
+
+    rows <- ideal[incomplete | unresolved]
+    detail <- paste(sprintf(
+        paste0(
+            "%s: SET_RH_MIN_SCHEDULE=%s, SET_RH_MAX_SCHEDULE=%s"
+        ),
+        rows$ROOM_NAME,
+        rows$SET_RH_MIN_SCHEDULE,
+        rows$SET_RH_MAX_SCHEDULE
+    ), collapse = "; ")
+    stop(sprintf(
+        "Cannot resolve complete ROOM_GROUP humidity schedule pair(s): %s",
+        detail
+    ), call. = FALSE)
 }
 
 # Air-conditioned room groups with a non-zero availability schedule must resolve
@@ -124,6 +178,10 @@ destep_ideal_loads_add_names <- function(ideal) {
         make_unique_name(paste(ideal$ROOM_NAME, "Equipment"))
     )
     data.table::set(
+        ideal, NULL, "ENERGYPLUS_HUMIDISTAT_NAME",
+        make_unique_name(paste(ideal$ROOM_NAME, "Humidistat"))
+    )
+    data.table::set(
         ideal, NULL, "ZONE_SUPPLY_AIR_NODE_NAME",
         make_unique_name(paste(ideal$ROOM_NAME, "Ideal Loads Supply Node"))
     )
@@ -140,6 +198,32 @@ destep_ideal_loads_add_names <- function(ideal) {
         make_unique_name(paste(ideal$ROOM_NAME, "Zone Return Air Node"))
     )
     ideal
+}
+
+# Create one ZoneControl:Humidistat for every supported room with a complete
+# DeST lower/upper relative-humidity schedule pair.
+ideal_loads__humidistat_objects <- function(dest, ep, ideal) {
+    if (nrow(ideal) == 0L) return(NULL)
+    values <- lapply(seq_len(nrow(ideal)), function(i) {
+        ideal_loads__humidistat_value(ideal, i)
+    })
+
+    eval(as.call(c(
+        destep_add, dest, ep,
+        lapply(values, function(val) bquote("ZoneControl:Humidistat" := .(val)))
+    )))
+}
+
+# Build the EnergyPlus humidistat value list for one converted DeST room group.
+ideal_loads__humidistat_value <- function(ideal, i) {
+    list(
+        name = ideal$ENERGYPLUS_HUMIDISTAT_NAME[[i]],
+        zone_name = ideal$ROOM_NAME[[i]],
+        humidifying_relative_humidity_setpoint_schedule_name =
+            ideal$HUMIDIFYING_SCHEDULE_NAME[[i]],
+        dehumidifying_relative_humidity_setpoint_schedule_name =
+            ideal$DEHUMIDIFYING_SCHEDULE_NAME[[i]]
+    )
 }
 
 # Create IdealLoads systems with explicit EnergyPlus default-style supply-air
@@ -161,6 +245,7 @@ destep_ideal_loads_value <- function(ideal, i) {
     if (is.na(outdoor_air_name)) {
         outdoor_air_name <- NULL
     }
+    humidity_control <- isTRUE(ideal$HUMIDITY_CONTROL[[i]])
 
     list(
         name = ideal$ENERGYPLUS_IDEAL_LOADS_NAME[[i]],
@@ -180,9 +265,9 @@ destep_ideal_loads_value <- function(ideal, i) {
         maximum_total_cooling_capacity = NULL,
         heating_availability_schedule_name = NULL,
         cooling_availability_schedule_name = NULL,
-        dehumidification_control_type = "ConstantSensibleHeatRatio",
-        cooling_sensible_heat_ratio = 0.7,
-        humidification_control_type = "None",
+        dehumidification_control_type = if (humidity_control) "Humidistat" else "None",
+        cooling_sensible_heat_ratio = NULL,
+        humidification_control_type = if (humidity_control) "Humidistat" else "None",
         design_specification_outdoor_air_object_name = outdoor_air_name,
         outdoor_air_inlet_node_name = NULL,
         demand_controlled_ventilation_type = "None",

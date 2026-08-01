@@ -2,7 +2,8 @@
 # interpolated in 3-D so the result stays on the original DeST middle plane even
 # when the stable clipping projection omits a non-constant coordinate.
 destep_clip_window_polygon <- function(
-    window, host, tolerance = 1e-10, distance_tolerance = 0.01
+    window, host, tolerance = 1e-10, distance_tolerance = 0.01,
+    boundary_inset = 1e-8
 ) {
     normal <- destep_surface_normal(host)
     projection <- setdiff(1:3, which.max(abs(normal)))
@@ -66,6 +67,35 @@ destep_clip_window_polygon <- function(
         }
     }
     if (nrow(value) < 3L) return(NULL)
+
+    # EnergyPlus 23.1's CHKSBS polygon test treats some subsurface vertices on
+    # a triangulated host boundary as outside even when the analytical distance
+    # is zero. Move only exact-boundary vertices an infinitesimal distance toward
+    # the convex host centroid. The displacement is two orders below the
+    # conversion coordinate tolerance; aggregate window-area invariants remain
+    # enforced.
+    host_centroid <- colMeans(as.matrix(
+        host[, .(POINT_X, POINT_Y, POINT_Z)]
+    ))
+    boundary <- vapply(seq_len(nrow(value)), function(index) {
+        any(vapply(seq_len(nrow(host_xy)), function(edge_index) {
+            edge_end <- host_xy[host_next[[edge_index]], ]
+            edge <- edge_end - host_xy[edge_index, ]
+            abs(cross_2d(
+                host_xy[edge_index, ],
+                edge_end,
+                value[index, 4:5]
+            )) / sqrt(sum(edge ^ 2)) <= tolerance
+        }, logical(1L)))
+    }, logical(1L))
+    if (any(boundary)) {
+        for (index in which(boundary)) {
+            direction <- host_centroid - value[index, 1:3]
+            value[index, 1:3] <- value[index, 1:3] +
+                boundary_inset * direction / sqrt(sum(direction ^ 2))
+        }
+        value[, 4:5] <- value[, projection, drop = FALSE]
+    }
 
     # Remove numerical duplicates introduced when a window corner lies exactly
     # on a host diagonal. Sub-centimetre slivers cannot survive EnergyPlus input
@@ -289,6 +319,9 @@ destep_conv_window <- function(dest, ep, surface = NULL) {
     }
     window <- data.table::rbindlist(list(side1, side2), fill = TRUE)
     window[, OUTPUT_ID := sprintf("%s-%d", ID, SIDE)]
+    # DeST window layers follow the same SIDE1-to-SIDE2 direction as their
+    # enclosure. SIDE1 therefore references the explicit reversed stack.
+    window[SIDE == 1L, CONSTRUCTION := sprintf("%s [Reverse]", CONSTRUCTION)]
     data.table::setorderv(window, c("OUTPUT_ID", "POINT_NO"))
     # Use the same DeST direction metadata as the parent surface so a window
     # cannot silently face into its zone when enclosure side ordering varies.

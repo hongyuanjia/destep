@@ -14,14 +14,18 @@ destep_test_ideal_loads_db <- function() {
         OF_AC_SYS = c(0L, 0L, 0L),
         IS_AC_ROOM = c(1L, 0L, 1L),
         AC_SCHEDULE_ID = c(100L, 100L, 101L),
-        SET_RH_MIN_SCHEDULE = c(0L, 0L, 0L),
-        SET_RH_MAX_SCHEDULE = c(0L, 0L, 0L),
+        SET_RH_MIN_SCHEDULE = c(200L, 200L, 201L),
+        SET_RH_MAX_SCHEDULE = c(210L, 210L, 211L),
         AC_T_MIN_SCHEDULE = c(300L, 300L, 301L),
         AC_T_MAX_SCHEDULE = c(400L, 400L, 401L)
     ))
     DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = c(100L, 101L),
-        NAME = c("AC Weekday", "AC Weekend")
+        SCHEDULE_ID = c(100L, 101L, 200L, 201L, 210L, 211L),
+        NAME = c(
+            "AC Weekday", "AC Weekend",
+            "RH Minimum 35", "RH Minimum 40",
+            "RH Maximum 60", "RH Maximum 65"
+        )
     ))
 
     dest
@@ -40,10 +44,29 @@ test_that("can convert ROOM_GROUP ideal loads for air-conditioned rooms", {
     value <- ideal$value
 
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:IdealLoadsAirSystem"), 2L)
+    expect_equal(sum(ideal$object$class_name == "ZoneControl:Humidistat"), 2L)
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:EquipmentList"), 2L)
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:EquipmentConnections"), 2L)
     expect_equal(tab$CAN_CONVERT, c(TRUE, FALSE, TRUE))
     expect_equal(tab$SKIP_REASON[[2L]], "ROOM_GROUP.IS_AC_ROOM is zero")
+    expect_equal(tab$HUMIDITY_CONTROL, c(TRUE, FALSE, TRUE))
+
+    expect_setequal(
+        value$value_chr[
+            value$class_name == "ZoneControl:Humidistat" &
+                value$field_name ==
+                    "Humidifying Relative Humidity Setpoint Schedule Name"
+        ],
+        c("RH Minimum 35", "RH Minimum 40")
+    )
+    expect_setequal(
+        value$value_chr[
+            value$class_name == "ZoneControl:Humidistat" &
+                value$field_name ==
+                    "Dehumidifying Relative Humidity Setpoint Schedule Name"
+        ],
+        c("RH Maximum 60", "RH Maximum 65")
+    )
 
     expect_setequal(
         value$value_chr[
@@ -68,9 +91,49 @@ test_that("can convert ROOM_GROUP ideal loads for air-conditioned rooms", {
     )
     expect_true(all(
         value$value_chr[
+            value$class_name == "ZoneHVAC:IdealLoadsAirSystem" &
+                value$field_name == "Dehumidification Control Type"
+        ] == "Humidistat"
+    ))
+    expect_true(all(
+        value$value_chr[
+            value$class_name == "ZoneHVAC:IdealLoadsAirSystem" &
+                value$field_name == "Humidification Control Type"
+        ] == "Humidistat"
+    ))
+    expect_true(all(
+        value$value_chr[
             value$class_name == "ZoneHVAC:EquipmentList" &
                 value$field_name == "Zone Equipment 1 Object Type"
         ] == "ZoneHVAC:IdealLoadsAirSystem"
+    ))
+})
+
+test_that("ideal loads disable synthetic latent control without humidity setpoints", {
+    ep <- ensure_empty_idf()
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbExecute(dest, "
+        UPDATE ROOM_GROUP
+        SET SET_RH_MIN_SCHEDULE = 0, SET_RH_MAX_SCHEDULE = 0
+    ")
+
+    ideal <- destep_conv_ideal_loads(dest, ep)
+    value <- ideal$value
+
+    expect_false(any(ideal$object$class_name == "ZoneControl:Humidistat"))
+    expect_true(all(
+        value$value_chr[
+            value$class_name == "ZoneHVAC:IdealLoadsAirSystem" &
+                value$field_name == "Dehumidification Control Type"
+        ] == "None"
+    ))
+    expect_true(all(
+        value$value_chr[
+            value$class_name == "ZoneHVAC:IdealLoadsAirSystem" &
+                value$field_name == "Humidification Control Type"
+        ] == "None"
     ))
 })
 
@@ -129,6 +192,32 @@ test_that("stops when ROOM_GROUP AC schedules cannot be resolved", {
     )
 })
 
+test_that("stops on incomplete or dangling ROOM_GROUP humidity schedules", {
+    ep <- ensure_empty_idf()
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbExecute(dest, "
+        UPDATE ROOM_GROUP
+        SET SET_RH_MAX_SCHEDULE = 0
+        WHERE ROOM_GROUP_ID = 10
+    ")
+    expect_error(
+        destep_conv_ideal_loads(dest, ep),
+        "Cannot resolve complete ROOM_GROUP humidity schedule pair"
+    )
+
+    DBI::dbExecute(dest, "
+        UPDATE ROOM_GROUP
+        SET SET_RH_MAX_SCHEDULE = 999
+        WHERE ROOM_GROUP_ID = 10
+    ")
+    expect_error(
+        destep_conv_ideal_loads(dest, ep),
+        "Cannot resolve complete ROOM_GROUP humidity schedule pair"
+    )
+})
+
 test_that("skips air-conditioned rooms without availability schedules", {
     ep <- ensure_empty_idf()
     dest <- destep_test_ideal_loads_db()
@@ -179,6 +268,7 @@ test_that("can convert ROOM_GROUP ideal loads from a real DeST model", {
         "办公室空调启停作息-加班4h"
     )
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:IdealLoadsAirSystem"), 27L)
+    expect_equal(sum(ideal$object$class_name == "ZoneControl:Humidistat"), 27L)
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:EquipmentList"), 27L)
     expect_equal(sum(ideal$object$class_name == "ZoneHVAC:EquipmentConnections"), 27L)
 })
@@ -191,6 +281,7 @@ test_that("to_eplus() includes resolvable ideal loads references", {
 
     idf <- to_eplus(src, 23.1)
     ideal <- idf$to_table(class = "ZoneHVAC:IdealLoadsAirSystem", all = TRUE)
+    humidistat <- idf$to_table(class = "ZoneControl:Humidistat", all = TRUE)
     outdoor_air <- idf$to_table(class = "DesignSpecification:OutdoorAir", all = TRUE)
     equipment <- idf$to_table(class = "ZoneHVAC:EquipmentList", all = TRUE)
     connection <- idf$to_table(class = "ZoneHVAC:EquipmentConnections", all = TRUE)
@@ -208,12 +299,36 @@ test_that("to_eplus() includes resolvable ideal loads references", {
     ])
 
     expect_equal(length(ideal_names), 27L)
+    expect_equal(
+        length(humidistat$value[humidistat$field == "Name"]),
+        27L
+    )
     expect_equal(length(outdoor_air_names), 36L)
     expect_equal(unique(outdoor_air_flow), 25 / 3600)
     expect_equal(length(equipment_names), 27L)
     expect_equal(length(connection$value[connection$field == "Zone Name"]), 27L)
     expect_true(all(
         ideal$value[ideal$field == "Availability Schedule Name"] %in% year_names
+    ))
+    expect_true(all(
+        ideal$value[ideal$field == "Dehumidification Control Type"] ==
+            "Humidistat"
+    ))
+    expect_true(all(
+        ideal$value[ideal$field == "Humidification Control Type"] ==
+            "Humidistat"
+    ))
+    expect_true(all(
+        humidistat$value[
+            humidistat$field ==
+                "Humidifying Relative Humidity Setpoint Schedule Name"
+        ] %in% year_names
+    ))
+    expect_true(all(
+        humidistat$value[
+            humidistat$field ==
+                "Dehumidifying Relative Humidity Setpoint Schedule Name"
+        ] %in% year_names
     ))
     expect_true(all(nzchar(ideal_outdoor_air)))
     expect_true(all(ideal_outdoor_air %in% outdoor_air_names))

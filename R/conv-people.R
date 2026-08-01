@@ -47,13 +47,11 @@ destep_conv_people <- function(dest, ep) {
                 WHEN O.PER_AREA = 1 THEN O.MINNUMBER
                 ELSE NULL
             END                AS MIN_PEOPLE_PER_AREA,
-            ROUND(O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6, 2)
+            O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6
                                AS ACTIVITY_LEVEL,
-            ROUND(
-                O.HEAT_PER_PERSON /
-                    (O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6),
-                2
-            )                  AS SENSIBLE_HEAT_FRACTION,
+            O.HEAT_PER_PERSON /
+                (O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6)
+                               AS SENSIBLE_HEAT_FRACTION,
             ROUND(1.0 - DM.DIST_AIR, 3)
                                AS FRACTION_RADIANT,
             O.MIN_REQUIRE_FRESH_AIR
@@ -333,6 +331,8 @@ destep_conv_electric_equipment <- function(dest, ep) {
                 WHEN E.PER_AREA = 1 THEN E.MINPOWER
                 ELSE NULL
             END              AS MIN_WATTS_PER_AREA,
+            E.MAX_HUM        AS MAX_HUM,
+            E.MIN_HUM        AS MIN_HUM,
             ROUND(1.0 - DM.DIST_AIR, 3)
                              AS FRACTION_RADIANT
         FROM EQUIPMENT_GAINS E
@@ -347,8 +347,9 @@ destep_conv_electric_equipment <- function(dest, ep) {
     data.table::setDT(equipment)
     destep_force_numeric(equipment, c(
         "DESIGN_LEVEL", "WATTS_PER_AREA", "MIN_DESIGN_LEVEL",
-        "MIN_WATTS_PER_AREA", "FRACTION_RADIANT"
+        "MIN_WATTS_PER_AREA", "MAX_HUM", "MIN_HUM", "FRACTION_RADIANT"
     ))
+    equipment__assert_no_moisture(equipment)
     watts_per_area_field <- destep_idd_field_name(ep, "ElectricEquipment", 6L)
     has_min <- any(
         destep_has_positive_minimum(equipment$MIN_DESIGN_LEVEL) |
@@ -375,6 +376,30 @@ destep_conv_electric_equipment <- function(dest, ep) {
     )))
 
     destep_combine_outputs(parts, table = equipment)
+}
+
+# ElectricEquipment has no direct moisture-generation input. Until that DeST
+# semantic is mapped independently, reject nonzero equipment moisture instead
+# of silently discarding latent gains that would bias total cooling.
+equipment__assert_no_moisture <- function(equipment) {
+    max_hum <- equipment$MAX_HUM
+    min_hum <- equipment$MIN_HUM
+    max_hum[is.na(max_hum)] <- 0
+    min_hum[is.na(min_hum)] <- 0
+    unsupported <- abs(max_hum) > 1e-12 | abs(min_hum) > 1e-12
+    if (!any(unsupported)) return(invisible(NULL))
+
+    rows <- equipment[unsupported]
+    detail <- paste(sprintf(
+        "%s: MIN_HUM=%s, MAX_HUM=%s",
+        rows$NAME,
+        rows$MIN_HUM,
+        rows$MAX_HUM
+    ), collapse = "; ")
+    stop(sprintf(
+        "Cannot convert nonzero EQUIPMENT_GAINS moisture generation: %s",
+        detail
+    ), call. = FALSE)
 }
 
 destep_equipment_values <- function(equipment, i, watts_per_area_field, always_on) {

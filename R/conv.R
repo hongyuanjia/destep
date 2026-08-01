@@ -161,6 +161,10 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         begin_day_of_month                     = 1L,
         end_month                              = 12L,
         end_day_of_month                       = 31L,
+        # DeST SCHEDULE_YEAR stores the first seven profiles as Monday through
+        # Sunday. Fix the simulation calendar to that same convention instead
+        # of inheriting a weather-file weekday that can shift every schedule.
+        day_of_week_for_start_day              = "Monday",
         use_weather_file_holidays_and_special_days = "Yes",
         use_weather_file_daylight_saving_period = "Yes",
         apply_weekend_holiday_rule             = "No",

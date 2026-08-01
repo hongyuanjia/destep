@@ -36,6 +36,47 @@ test_that("schedule conversion writes resolvable week day references", {
     expect_true(all(unique(week_day_names) %in% day_names))
 })
 
+test_that("schedule conversion preserves weekday and weekend profiles", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    # The first seven DeST profiles represent Monday through Sunday. Repeat a
+    # weekday-on/weekend-off pattern that exposes swapped day-profile links.
+    weekly <- rep(c(rep(1, 5L), 0, 0), each = 24L)
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Weekday Availability",
+        TYPE = 1L,
+        DATA = I(list(destep_test_schedule_blob(rep(
+            weekly,
+            length.out = 8760L
+        ))))
+    ))
+    DBI::dbWriteTable(dest, "SCHEDULE_USAGE", data.frame(
+        ID = 1L,
+        SCHEDULE_ID = 10L
+    ))
+
+    schedule <- destep_conv_schedule(dest, ep)
+    week <- schedule$value[class_name == "Schedule:Week:Compact"]
+    first_week <- week[rleid == unique(week$rleid)[[1L]]]
+    day <- schedule$value[
+        class_name == "Schedule:Day:Interval" &
+            field_name %in% c("Name", "Value Until Time 1")
+    ]
+    day_value <- day[field_name == "Value Until Time 1", value_num]
+    names(day_value) <- day[field_name == "Name", value_chr]
+
+    weekday_index <- which(first_week$value_chr == "For: Weekdays")
+    weekend_index <- which(first_week$value_chr == "For: Weekends")
+    weekday_name <- first_week$value_chr[weekday_index + 1L]
+    weekend_name <- first_week$value_chr[weekend_index + 1L]
+
+    expect_equal(unname(day_value[weekday_name]), 1)
+    expect_equal(unname(day_value[weekend_name]), 0)
+})
+
 test_that("schedule conversion creates a dedicated week for a unique final day", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
@@ -115,6 +156,106 @@ test_that("schedule conversion ignores missing and zero references", {
 
     expect_type(schedule, "list")
     expect_equal(attr(schedule, "table")$SCHEDULE_ID, 10L)
+})
+
+test_that("relative-humidity schedules convert DeST fractions to percent", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = c(10L, 20L),
+        NAME = c("RH Minimum", "RH Maximum"),
+        TYPE = c(4L, 4L),
+        DATA = I(list(
+            destep_test_schedule_blob(rep(0.35, 8760L)),
+            destep_test_schedule_blob(rep(0.60, 8760L))
+        ))
+    ))
+    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
+        ROOM_GROUP_ID = 1L,
+        SET_RH_MIN_SCHEDULE = 10L,
+        SET_RH_MAX_SCHEDULE = 20L
+    ))
+
+    schedule <- destep_conv_schedule(dest, ep)
+    table <- attr(schedule, "table")
+
+    expect_equal(unique(table[SCHEDULE_ID == 10L]$DATA[[1L]]), 35)
+    expect_equal(unique(table[SCHEDULE_ID == 20L]$DATA[[1L]]), 60)
+})
+
+test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Shared Schedule",
+        TYPE = 4L,
+        DATA = I(list(destep_test_schedule_blob(rep(0.35, 8760L))))
+    ))
+    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
+        ROOM_GROUP_ID = 1L,
+        SET_RH_MIN_SCHEDULE = 10L,
+        SET_RH_MAX_SCHEDULE = 10L,
+        AC_SCHEDULE_ID = 10L
+    ))
+
+    expect_error(
+        destep_conv_schedule(dest, ep),
+        "also referenced by non-humidity fields"
+    )
+})
+
+test_that("relative-humidity schedule conversion rejects unsupported units", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "RH Percent",
+        TYPE = 4L,
+        DATA = I(list(destep_test_schedule_blob(rep(35, 8760L))))
+    ))
+    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
+        ROOM_GROUP_ID = 1L,
+        SET_RH_MIN_SCHEDULE = 10L,
+        SET_RH_MAX_SCHEDULE = 10L
+    ))
+
+    expect_error(
+        destep_conv_schedule(dest, ep),
+        "fraction values in \\[0, 1\\]"
+    )
+})
+
+test_that("relative-humidity schedule conversion rejects inverted bounds", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = c(10L, 20L),
+        NAME = c("RH Minimum", "RH Maximum"),
+        TYPE = c(4L, 4L),
+        DATA = I(list(
+            destep_test_schedule_blob(rep(0.70, 8760L)),
+            destep_test_schedule_blob(rep(0.60, 8760L))
+        ))
+    ))
+    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
+        ROOM_GROUP_ID = 1L,
+        SET_RH_MIN_SCHEDULE = 10L,
+        SET_RH_MAX_SCHEDULE = 20L
+    ))
+
+    expect_error(
+        destep_conv_schedule(dest, ep),
+        "lower schedule 10 exceeds upper schedule 20"
+    )
 })
 
 test_that("schedule conversion returns null without valid references", {

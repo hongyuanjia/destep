@@ -334,6 +334,11 @@ destep_conv_const <- function(dest, ep) {
     data.table::setDT(const)
     data.table::setDT(window)
     data.table::setDT(door)
+    # Layer order is semantic, so make it deterministic before building both
+    # the source-direction and reversed EnergyPlus construction stacks.
+    data.table::setorderv(const, c("ID", "KIND", "LAYER_NO"))
+    data.table::setorderv(window, c("ID", "LAYER_NO"))
+    data.table::setorderv(door, c("ID", "LAYER_NO"))
 
     # Valid WINDOW_TYPE_DATA records replace the whole detailed glazing stack,
     # so only load SYS_WINDOW objects still referenced by fallback windows.
@@ -401,15 +406,18 @@ destep_conv_const <- function(dest, ep) {
 
     # normal construction
     norm_const <- list()
+    reverse_const <- list()
     norm_mat <- list()
 
     # window construction
     win_const <- list()
+    reverse_win_const <- list()
     win_glaze <- list()
     win_air <- list()
 
     # aggregate window-type construction
     win_type_const <- list()
+    reverse_win_type_const <- list()
     win_type_glazing <- unique(
         window_type[TYPE_DATA_VALID == TRUE],
         by = "TYPE_ID"
@@ -431,6 +439,19 @@ destep_conv_const <- function(dest, ep) {
             list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
         ]
 
+        # SIDE1 faces look from SIDE2 back toward SIDE1, opposite the stored
+        # DeST layer direction, and therefore require an explicit reversed
+        # Construction object instead of silently reusing the original stack.
+        reverse_const <- const[,
+            by = c("ID", "KIND"),
+            list(
+                name = sprintf("%s [Reverse]", NAME[[1L]]),
+                value = list(c(
+                    sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
+                ))
+            )
+        ]
+
         # construct normal Material input
         norm_mat <- unique(const[, .SD, .SDcols = col_mat], by = c("MATERIAL_ID", "LENGTH"))
     }
@@ -439,6 +460,16 @@ destep_conv_const <- function(dest, ep) {
         win_const <- window[, by = "ID",
             # use KIND = -1 to indicate that the construction is a window
             list(KIND = -1L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+        ]
+
+        reverse_win_const <- window[, by = "ID",
+            list(
+                KIND = -1L,
+                name = sprintf("%s [Reverse]", NAME[[1L]]),
+                value = list(c(
+                    sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
+                ))
+            )
         ]
 
         win_glaze <- unique(
@@ -467,6 +498,19 @@ destep_conv_const <- function(dest, ep) {
             name = TYPE_CONSTRUCTION_NAME,
             value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
         )]
+        # Whole-window simple glazing is direction-independent, but reciprocal
+        # interzone windows still use an explicit reverse name so side mapping
+        # remains uniform across aggregate and detailed constructions.
+        reverse_win_type_const <- win_type_glazing[, list(
+            ID = TYPE_ID,
+            KIND = -3L,
+            name = sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+            value = Map(
+                c,
+                sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+                SIMPLE_GLAZING_NAME
+            )
+        )]
     }
 
     if (nrow(door) > 0L) {
@@ -488,9 +532,12 @@ destep_conv_const <- function(dest, ep) {
     }
 
     dt_const <- unique(
-        data.table::rbindlist(
-            list(norm_const, win_const, win_type_const, door_const), TRUE
-        ),
+        data.table::rbindlist(list(
+            norm_const, reverse_const,
+            win_const, reverse_win_const,
+            win_type_const, reverse_win_type_const,
+            door_const
+        ), TRUE),
         by = c("ID", "KIND", "name")
     )
     dt_mat   <- unique(

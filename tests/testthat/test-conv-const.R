@@ -78,5 +78,20 @@ test_that("can convert 'Construction' and 'Material'", {
     ]
     expect_equal(max(material_thickness, na.rm = TRUE), 0.2)
     expect_true(any(material_thickness == 0.02))
+    construction <- const$value[class_name == "Construction"]
+    layer_count <- construction[field_name != "Name", .N, by = "rleid"]
+    regular_id <- layer_count[N > 1L]$rleid[[1L]]
+    regular_name <- construction[
+        rleid == regular_id & field_name == "Name", value_chr
+    ]
+    reverse_id <- construction[
+        field_name == "Name" & value_chr == paste0(regular_name, " [Reverse]"),
+        rleid
+    ]
+    expect_length(reverse_id, 1L)
+    expect_equal(
+        construction[rleid == reverse_id & field_name != "Name", value_chr],
+        rev(construction[rleid == regular_id & field_name != "Name", value_chr])
+    )
     expect_s3_class(attr(const, "table"), "data.table")
 })

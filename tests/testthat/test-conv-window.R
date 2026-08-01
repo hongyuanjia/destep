@@ -1,3 +1,17 @@
+# Calculate one polygon area independently for aggregate window invariants.
+window__area <- function(value) {
+    following <- seq_len(nrow(value)) %% nrow(value) + 1L
+    normal <- c(
+        sum((value$POINT_Y - value$POINT_Y[following]) *
+            (value$POINT_Z + value$POINT_Z[following])),
+        sum((value$POINT_Z - value$POINT_Z[following]) *
+            (value$POINT_X + value$POINT_X[following])),
+        sum((value$POINT_X - value$POINT_X[following]) *
+            (value$POINT_Y + value$POINT_Y[following]))
+    )
+    sqrt(sum(normal ^ 2)) / 2.0
+}
+
 test_that("can convert 'WINDOW'", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
@@ -84,7 +98,7 @@ test_that("can convert 'WINDOW'", {
     pair <- destep_conv_window(dest, ep)
     pair_table <- attr(pair, "table")
     pair_object <- unique(pair_table[, .(
-        OUTPUT_PART_ID, NAME, BOUNDARY_OBJECT, SURFACE_NAME
+        OUTPUT_PART_ID, NAME, BOUNDARY_OBJECT, SURFACE_NAME, SIDE, CONSTRUCTION
     )])
 
     expect_equal(nrow(pair$object), 2L)
@@ -96,6 +110,14 @@ test_that("can convert 'WINDOW'", {
         c("Window A [2]", "Window A [1]")
     )
     expect_setequal(pair_object$SURFACE_NAME, c("Room A Wall", "Room B Wall"))
+    expect_equal(
+        unique(pair_object[SIDE == 1L]$CONSTRUCTION),
+        "High Performance Window Simple Glazing Construction [Reverse]"
+    )
+    expect_equal(
+        unique(pair_object[SIDE == 2L]$CONSTRUCTION),
+        "High Performance Window Simple Glazing Construction"
+    )
 })
 
 test_that("skips window conversion without WINDOW records", {
@@ -123,7 +145,7 @@ test_that("can convert windows from a real DeST model", {
     destep_update_name(dest)
 
     surface <- attr(destep_conv_surface(dest, ep), "table")
-    window <- destep_conv_window(dest, ep)
+    window <- destep_conv_window(dest, ep, surface)
     tab <- attr(window, "table")
 
     expect_equal(unique(window$object$class_name), "FenestrationSurface:Detailed")
@@ -153,4 +175,21 @@ test_that("can convert windows from a real DeST model", {
             window_normal$V2 * surface_normal$V2[parent] +
             window_normal$V3 * surface_normal$V3[parent] > 1.0 - 1e-6
     ))
+
+    raw <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+        SELECT W.ID, L.POINT_NO, ROUND(P.X, 3) AS POINT_X,
+            ROUND(P.Y, 3) AS POINT_Y, ROUND(P.Z, 3) AS POINT_Z
+        FROM WINDOW W
+        INNER JOIN PLANE PL ON W.MIDDLE_PLANE = PL.PLANE_ID
+        INNER JOIN GEOMETRY G ON PL.GEOMETRY = G.GEOMETRY_ID
+        INNER JOIN LOOP_POINT L ON G.BOUNDARY_LOOP_ID = L.LOOP_ID
+        INNER JOIN POINT P ON L.POINT = P.POINT_ID
+        ORDER BY W.ID, L.POINT_NO
+    "))
+    source_area <- raw[, .(SOURCE_AREA = window__area(.SD)), by = "ID"]
+    converted_area <- tab[, .(PIECE_AREA = window__area(.SD)),
+        by = .(ID, OUTPUT_ID, OUTPUT_PART_ID)][,
+        .(CONVERTED_AREA = sum(PIECE_AREA)), by = .(ID, OUTPUT_ID)]
+    area <- source_area[converted_area, on = "ID"]
+    expect_lt(max(abs(area$CONVERTED_AREA - area$SOURCE_AREA)), 1e-6)
 })

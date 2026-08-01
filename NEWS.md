@@ -1,5 +1,20 @@
 # destep 0.0.0.9000
 
+- Fixed `Schedule:Week:Compact` semantic corruption by keeping day-type groups
+  paired with their `Schedule:Day` IDs when moving `AllOtherDays` to the final
+  field group, and anchored converted annual run periods to DeST's Monday-first
+  calendar (#32).
+- Added a traceable typical-storey approximation for multiplied DeST storeys,
+  pairing lower and upper repeated-floor boundaries at equal EnergyPlus zone
+  multipliers while making the first/top cut interfaces adiabatic (#32).
+- Added `to_epw()` to convert a uniquely selected, complete DeST
+  `CLIMATE_DATA` year into an EnergyPlus weather object, including
+  relative-humidity and solar-radiation derivations (#32).
+- Preserved aggregate window area across partitioned host surfaces by choosing
+  window-aware surface triangulations and applying an infinitesimal inward
+  boundary offset accepted by EnergyPlus geometry checks (#32).
+- Preserved DeST construction layer direction by emitting explicit reversed
+  constructions for `SIDE1` surfaces and reciprocal interzone windows (#32).
 - Added dedicated `Schedule:Week:Compact` generation when December 31 has a
   unique daily profile, allowing `destep_conv_schedule_week()` to preserve
   schedules that cannot reuse one of the first 52 weeks (#30).

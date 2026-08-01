@@ -68,6 +68,12 @@ test_that("to_eplus() works", {
     # shape returned by `$to_table()` for a one-object class.
     run_period <- idf$to_table(class = "RunPeriod", all = TRUE)
     expect_equal(run_period$value[run_period$field == "Name"], "Annual")
+    expect_equal(
+        run_period$value[
+            run_period$field == "Day of Week for Start Day"
+        ],
+        "Monday"
+    )
     geometry_rules <- idf$to_table(class = "GlobalGeometryRules", all = TRUE)
     expect_equal(
         geometry_rules$value[

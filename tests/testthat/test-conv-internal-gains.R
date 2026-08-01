@@ -47,6 +47,8 @@ test_that("can convert internal gains", {
         PER_AREA = 1L,
         MAXPOWER = 40,
         MINPOWER = 0,
+        MAX_HUM = 0,
+        MIN_HUM = 0,
         DIST_MODE = 4L
     ))
 
@@ -64,6 +66,26 @@ test_that("can convert internal gains", {
                 gains$value$field_name == "Activity Level Schedule Name"
         ]),
         "Activity Level 109.44 W"
+    )
+    activity_object <- gains$value[
+        class_name == "Schedule:Constant" &
+            field_name == "Name" &
+            value_chr == "Activity Level 109.44 W",
+        rleid
+    ]
+    expect_equal(
+        gains$value[
+            rleid == activity_object & field_name == "Hourly Value",
+            value_num
+        ],
+        40 + 0.1 * 2500 / 3.6
+    )
+    expect_equal(
+        unique(gains$value$value_num[
+            gains$value$class_name == "People" &
+                gains$value$field_name == "Sensible Heat Fraction"
+        ]),
+        40 / (40 + 0.1 * 2500 / 3.6)
     )
     expect_equal(sum(gains$object$class_name == "People"), 2L)
     expect_equal(
@@ -94,6 +116,42 @@ test_that("can convert internal gains", {
                 grepl("Watts per .*Floor Area", gains$value$field_name)
         ],
         c(9, 1)
+    )
+})
+
+test_that("nonzero equipment moisture is rejected until it can be mapped", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "ROOM", data.frame(
+        ID = 1L,
+        NAME = "Room 101"
+    ))
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Always On"
+    ))
+    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(
+        DIST_MODE_ID = 4L,
+        DIST_AIR = 0.7
+    ))
+    DBI::dbWriteTable(dest, "EQUIPMENT_GAINS", data.frame(
+        GAIN_ID = 103L,
+        NAME = "Wet Equipment",
+        OF_ROOM = 1L,
+        SCHEDULE = 10L,
+        PER_AREA = 0L,
+        MAXPOWER = 40,
+        MINPOWER = 0,
+        MAX_HUM = 0.2,
+        MIN_HUM = 0,
+        DIST_MODE = 4L
+    ))
+
+    expect_error(
+        destep_conv_electric_equipment(dest, ep),
+        "Cannot convert nonzero EQUIPMENT_GAINS moisture generation"
     )
 })
 
