@@ -480,7 +480,7 @@ conv__update_names <- function(dest, tables = NULL) {
                         WHERE STOREY.OF_BUILDING = BUILDING.`%s`
                     ) || ' ' || `%s`
                     ",
-                    input["name"], input["name"], MAP_ID_NAME$BUILDING["id"]
+                    input["name"], MAP_ID_NAME$BUILDING["id"], input["name"]
                 ))
             # prefix each surface name with the corresponding room name
             } else if (table == "SURFACE" && DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM")$N > 1L) {

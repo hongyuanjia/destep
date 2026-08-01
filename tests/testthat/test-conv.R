@@ -35,6 +35,29 @@ test_that("conv__update_names respects table dependencies", {
     )
 })
 
+test_that("conv__update_names prefixes storeys in multi-building models", {
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "BUILDING", data.frame(
+        BUILDING_ID = 1:2,
+        NAME = c("North Building", "South Building")
+    ))
+    DBI::dbWriteTable(dest, "STOREY", data.frame(
+        ID = 11:12,
+        NAME = c(".", "."),
+        NO = c(0L, 0L),
+        OF_BUILDING = 1:2
+    ))
+
+    conv__update_names(dest, "STOREY")
+
+    expect_equal(
+        DBI::dbReadTable(dest, "STOREY")$NAME,
+        c("North Building Storey 1", "South Building Storey 1")
+    )
+})
+
 test_that("conv__add_objects expands one EnergyPlus class", {
     ep <- ensure_empty_idf()
     values <- list(
