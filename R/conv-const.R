@@ -453,8 +453,8 @@ const__layered_constructions <- function(layer, by, kind = NULL) {
         )
     ]
     if (!is.null(kind)) {
-        normal[, KIND := kind]
-        reverse[, KIND := kind]
+        data.table::set(normal, NULL, "KIND", kind)
+        data.table::set(reverse, NULL, "KIND", kind)
     }
 
     data.table::rbindlist(list(normal, reverse), use.names = TRUE, fill = TRUE)
