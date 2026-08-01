@@ -109,6 +109,95 @@ destep_window_type_performance <- function(dest) {
     window
 }
 
+# Read opaque and transparent door layers while retaining one representative
+# host enclosure for every distinct DeST door construction.
+const__door_layers <- function(dest) {
+    DBI::dbGetQuery(dest,
+        "
+        WITH DR AS (
+            SELECT DOOR_CONSTRUCTION, MIN(OF_ENCLOSURE) AS OF_ENCLOSURE
+            FROM DOOR
+            WHERE DOOR_CONSTRUCTION != 0
+            GROUP BY DOOR_CONSTRUCTION
+            UNION
+            SELECT D.LONG AS DOOR_CONSTRUCTION, DR.OF_ENCLOSURE
+            FROM DOOR DR
+            LEFT JOIN DEFAULT_SETTING D
+            ON DR.DOOR_CONSTRUCTION = 0 AND
+               D.TABLE_NAME = 'DOOR' AND D.FIELD_NAME = 'DOOR_CONSTRUCTION' AND D.TYPE = 2
+            WHERE D.LONG IS NOT NULL
+        )
+        SELECT * FROM (
+            SELECT
+                S.DOOR_ID             AS ID,
+                S.CNAME               AS NAME,
+                -- use KIND = -2 to indicate that the construction is a door
+                -2                    AS KIND,
+                -- mark the normal layer as 0
+                0                     AS LAYER_NO,
+                L.LENGTH              AS LENGTH,
+                S.MATERIAL_ID         AS MATERIAL_ID,
+                M.CNAME               AS MATERIAL_NAME,
+                M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
+                M.DENSITY             AS MATERIAL_DENSITY,
+                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+            FROM DR D
+            LEFT JOIN SYS_DOOR S
+            ON D.DOOR_CONSTRUCTION = S.DOOR_ID
+            LEFT JOIN SYS_MATERIAL M
+            ON S.MATERIAL_ID = M.MATERIAL_ID
+            LEFT JOIN MAIN_ENCLOSURE E
+            ON D.OF_ENCLOSURE = E.ID
+            LEFT JOIN (
+                SELECT STRUCT_ID, KIND, SUM(LENGTH) AS LENGTH
+                FROM (
+                    SELECT STRUCT_ID, 1 AS KIND, LENGTH
+                    FROM SYS_OUTWALL_MATERIAL
+                    UNION
+                    SELECT STRUCT_ID, 2 AS KIND, LENGTH
+                    FROM SYS_INWALL_MATERIAL
+                    UNION
+                    SELECT STRUCT_ID, 3 AS KIND, LENGTH
+                    FROM SYS_ROOF_MATERIAL
+                    UNION
+                    SELECT STRUCT_ID, 4 AS KIND, LENGTH
+                    FROM SYS_GROUNDFLOOR_MATERIAL
+                    UNION
+                    SELECT STRUCT_ID, 5 AS KIND, LENGTH
+                    FROM SYS_MIDDLEFLOOR_MATERIAL
+                    UNION
+                    SELECT STRUCT_ID, 6 AS KIND, LENGTH
+                    FROM SYS_AIRFLOOR_MATERIAL
+                )
+                GROUP BY STRUCT_ID, KIND
+            ) L
+            ON E.CONSTRUCTION = L.STRUCT_ID AND E.KIND = L.KIND
+        ) WHERE ID IS NOT NULL -- in case there are no doors
+        UNION
+        SELECT * FROM (
+            SELECT
+                S.DOOR_ID             AS ID,
+                S.CNAME               AS NAME,
+                -- use KIND = -2 to indicate that the construction is a door
+                -2                    AS KIND,
+                -- mark the glaze layer as 1
+                1                     AS LAYER_NO,
+                M.THICK               AS LENGTH,
+                S.APP_ID              AS MATERIAL_ID,
+                M.CNAME               AS MATERIAL_NAME,
+                M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
+                M.DENSITY             AS MATERIAL_DENSITY,
+                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+            FROM DOOR D
+            LEFT JOIN SYS_DOOR S
+            ON D.DOOR_CONSTRUCTION = S.DOOR_ID AND S.APP_ID != 0 AND S.APP_FLAG = 1
+            LEFT JOIN SYS_APP_MATERIAL M
+            ON S.MATERIAL_ID = M.APP_MATERIAL_ID
+        ) WHERE ID IS NOT NULL -- in case there are no glaze layers
+        "
+    )
+}
+
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
 destep_conv_const <- function(dest, ep) {
     if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
@@ -243,89 +332,7 @@ destep_conv_const <- function(dest, ep) {
     # 'APP_FLAG' values to indicate if there are glazings in the door. Here we
     # form the data in the same format as normal construction: mark the normal
     # layer as 0 and the glaze layer as 1.
-    door <- DBI::dbGetQuery(dest,
-        "
-        WITH DR AS (
-            SELECT DISTINCT DOOR_CONSTRUCTION, MIN(OF_ENCLOSURE) AS OF_ENCLOSURE
-            FROM DOOR
-            WHERE DOOR_CONSTRUCTION != 0
-            UNION
-            SELECT D.LONG AS DOOR_CONSTRUCTION, DR.OF_ENCLOSURE
-            FROM DOOR DR
-            LEFT JOIN DEFAULT_SETTING D
-            ON DR.DOOR_CONSTRUCTION = 0 AND
-               D.TABLE_NAME = 'DOOR' AND D.FIELD_NAME = 'DOOR_CONSTRUCTION' AND D.TYPE = 2
-            WHERE D.LONG IS NOT NULL
-        )
-        SELECT * FROM (
-            SELECT
-                S.DOOR_ID             AS ID,
-                S.CNAME               AS NAME,
-                -- use KIND = -2 to indicate that the construction is a door
-                -2                    AS KIND,
-                -- mark the normal layer as 0
-                0                     AS LAYER_NO,
-                L.LENGTH              AS LENGTH,
-                S.MATERIAL_ID         AS MATERIAL_ID,
-                M.CNAME               AS MATERIAL_NAME,
-                M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
-                M.DENSITY             AS MATERIAL_DENSITY,
-                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
-            FROM DR D
-            LEFT JOIN SYS_DOOR S
-            ON D.DOOR_CONSTRUCTION = S.DOOR_ID
-            LEFT JOIN SYS_MATERIAL M
-            ON S.MATERIAL_ID = M.MATERIAL_ID
-            LEFT JOIN MAIN_ENCLOSURE E
-            ON D.OF_ENCLOSURE = E.ID
-            LEFT JOIN (
-                SELECT STRUCT_ID, KIND, SUM(LENGTH) AS LENGTH
-                FROM (
-                    SELECT STRUCT_ID, 1 AS KIND, LENGTH
-                    FROM SYS_OUTWALL_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 2 AS KIND, LENGTH
-                    FROM SYS_INWALL_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 3 AS KIND, LENGTH
-                    FROM SYS_ROOF_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 4 AS KIND, LENGTH
-                    FROM SYS_GROUNDFLOOR_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 5 AS KIND, LENGTH
-                    FROM SYS_MIDDLEFLOOR_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 6 AS KIND, LENGTH
-                    FROM SYS_AIRFLOOR_MATERIAL
-                )
-                GROUP BY STRUCT_ID, KIND
-            ) L
-            ON E.CONSTRUCTION = L.STRUCT_ID AND E.KIND = L.KIND
-        ) WHERE ID IS NOT NULL -- in case there are no doors
-        UNION
-        SELECT * FROM (
-            SELECT
-                S.DOOR_ID             AS ID,
-                S.CNAME               AS NAME,
-                -- use KIND = -2 to indicate that the construction is a door
-                -2                    AS KIND,
-                -- mark the glaze layer as 1
-                1                     AS LAYER_NO,
-                M.THICK               AS LENGTH,
-                S.APP_ID              AS MATERIAL_ID,
-                M.CNAME               AS MATERIAL_NAME,
-                M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
-                M.DENSITY             AS MATERIAL_DENSITY,
-                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
-            FROM DOOR D
-            LEFT JOIN SYS_DOOR S
-            ON D.DOOR_CONSTRUCTION = S.DOOR_ID AND S.APP_ID != 0 AND S.APP_FLAG = 1
-            LEFT JOIN SYS_APP_MATERIAL M
-            ON S.MATERIAL_ID = M.APP_MATERIAL_ID
-        ) WHERE ID IS NOT NULL -- in case there are no glaze layers
-        "
-    )
+    door <- const__door_layers(dest)
 
     assert_unique_name(const$NAME[const$LAYER_NO == 0L], "construction")
     assert_unique_name(window$NAME[window$LAYER_NO == 0L], "window")

@@ -1,3 +1,80 @@
+## Create the smallest construction database needed to exercise DeST door
+## layer selection without depending on a real model that contains no doors.
+const_test__door_db <- function(
+    door_construction = c(10L, 20L),
+    enclosure = c(100L, 200L),
+    material = c(1L, 2L),
+    app_id = c(0L, 0L),
+    app_flag = c(0L, 0L)
+) {
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    DBI::dbWriteTable(dest, "DOOR", data.frame(
+        ID = seq_along(door_construction),
+        DOOR_CONSTRUCTION = door_construction,
+        OF_ENCLOSURE = enclosure
+    ))
+    DBI::dbWriteTable(dest, "DEFAULT_SETTING", data.frame(
+        TABLE_NAME = character(), FIELD_NAME = character(),
+        TYPE = integer(), LONG = integer()
+    ))
+    DBI::dbWriteTable(dest, "SYS_DOOR", data.frame(
+        DOOR_ID = door_construction,
+        CNAME = paste("Door", door_construction),
+        MATERIAL_ID = material,
+        APP_ID = app_id,
+        APP_FLAG = app_flag
+    ))
+    DBI::dbWriteTable(dest, "SYS_MATERIAL", data.frame(
+        MATERIAL_ID = material,
+        CNAME = paste("Opaque", material),
+        CONDUCTIVITY = rep(0.5, length(material)),
+        DENSITY = rep(800, length(material)),
+        SPECIFIC_HEAT = rep(1000, length(material))
+    ))
+    DBI::dbWriteTable(dest, "SYS_APP_MATERIAL", data.frame(
+        APP_MATERIAL_ID = integer(), CNAME = character(), THICK = double(),
+        CONDUCTIVITY = double(), DENSITY = double(), SPECIFIC_HEAT = double()
+    ))
+    DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
+        ID = enclosure,
+        CONSTRUCTION = c(1000L, 2000L)[seq_along(enclosure)],
+        KIND = rep(1L, length(enclosure))
+    ))
+
+    layer_tables <- c(
+        "SYS_OUTWALL_MATERIAL", "SYS_INWALL_MATERIAL",
+        "SYS_ROOF_MATERIAL", "SYS_GROUNDFLOOR_MATERIAL",
+        "SYS_MIDDLEFLOOR_MATERIAL", "SYS_AIRFLOOR_MATERIAL"
+    )
+    empty_layer <- data.frame(
+        STRUCT_ID = integer(), MATERIAL_ID = integer(),
+        LAYER_NO = integer(), LENGTH = double()
+    )
+    for (table in layer_tables) {
+        DBI::dbWriteTable(dest, table, empty_layer)
+    }
+    DBI::dbWriteTable(
+        dest, "SYS_OUTWALL_MATERIAL",
+        data.frame(
+            STRUCT_ID = c(1000L, 2000L), MATERIAL_ID = material,
+            LAYER_NO = 0L, LENGTH = c(120, 180)
+        ),
+        overwrite = TRUE
+    )
+    dest
+}
+
+test_that("keeps every distinct non-default door construction", {
+    dest <- const_test__door_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    door <- const__door_layers(dest)
+    opaque <- door[door$LAYER_NO == 0L, ]
+
+    expect_equal(opaque$ID, c(10L, 20L))
+    expect_equal(opaque$LENGTH, c(120, 180))
+})
+
 test_that("resolves aggregate window type performance and fallbacks", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
