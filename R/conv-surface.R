@@ -716,18 +716,12 @@ surface__energyplus_unclosed_rooms <- function(
     rooms[!closed]
 }
 
-# Split surface edges at every coplanar room-shell junction introduced by the
-# typical-storey overlay. Reciprocal surface pairs are triangulated from one
-# common polygon and translated to the peer plane, preserving both exact shell
-# closure and one-to-one EnergyPlus boundary references.
-surface__normalize_room_junctions <- function(
-    surface, window = data.table::data.table(),
+# Identify surface groups that need junction repair and collect all original or
+# projected room-shell points that may split their edges.
+surface__junction_context <- function(
+    surface,
     profile = eplus_geom__profile()
 ) {
-    tolerance <- profile$plane_distance
-    distance_tolerance <- profile$coordinate_distance
-    surface <- data.table::copy(surface)
-    coordinate_columns <- geom__coordinate_columns()
     object <- unique(surface[, .(
         OUTPUT_ID, NAME, ROOM, BOUNDARY, BOUNDARY_OBJECT, BOUNDARY_MODE
     )])
@@ -743,7 +737,12 @@ surface__normalize_room_junctions <- function(
         OUTPUT_ID
     )]
     repair_rooms <- surface__energyplus_unclosed_rooms(surface, profile)
-    if (length(repair_rooms) == 0L) return(surface)
+    if (length(repair_rooms) == 0L) {
+        return(list(
+            object = object, repair_groups = character(),
+            room_point = data.table::data.table()
+        ))
+    }
     repair_groups <- unique(object[ROOM %in% repair_rooms]$GROUP)
     repair_member_rooms <- unique(object[GROUP %in% repair_groups]$ROOM)
     room_point <- unique(surface[
@@ -779,6 +778,25 @@ surface__normalize_room_junctions <- function(
     room_point <- unique(data.table::rbindlist(
         c(list(room_point), projected_point), fill = TRUE
     ))
+
+    list(
+        object = object,
+        repair_groups = repair_groups,
+        room_point = room_point
+    )
+}
+
+# Rebuild every affected reciprocal surface group from a shared split polygon,
+# translating the same geometry to the peer plane when a peer exists.
+surface__normalize_junction_groups <- function(
+    surface, window, profile, context
+) {
+    tolerance <- profile$plane_distance
+    distance_tolerance <- profile$coordinate_distance
+    coordinate_columns <- geom__coordinate_columns()
+    object <- context$object
+    repair_groups <- context$repair_groups
+    room_point <- context$room_point
     output <- list()
 
     for (group in unique(object$GROUP)) {
@@ -963,6 +981,19 @@ surface__normalize_room_junctions <- function(
     surface[, PART := data.table::rleid(OUTPUT_ID), by = "ID"]
     surface[, PART_COUNT := data.table::uniqueN(PART), by = "ID"]
     surface
+}
+
+# Split edges at every coplanar room-shell junction introduced by the
+# typical-storey overlay while preserving reciprocal boundary references.
+surface__normalize_room_junctions <- function(
+    surface, window = data.table::data.table(),
+    profile = eplus_geom__profile()
+) {
+    surface <- data.table::copy(surface)
+    context <- surface__junction_context(surface, profile)
+    if (length(context$repair_groups) == 0L) return(surface)
+
+    surface__normalize_junction_groups(surface, window, profile, context)
 }
 
 # Snap coordinates that EnergyPlus cannot distinguish to one deterministic
