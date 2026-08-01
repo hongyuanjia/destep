@@ -200,12 +200,9 @@ const__door_layers <- function(dest) {
     )
 }
 
-# MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-const__convert <- function(dest, ep) {
-    if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
-        return(NULL)
-    }
-
+# Read every opaque construction layer referenced by MAIN_ENCLOSURE, resolving
+# DeST's construction table from the enclosure kind.
+const__opaque_layers <- function(dest) {
     # The construction ID refers to different tables based on the kind of the
     # construction:
     #
@@ -216,7 +213,7 @@ const__convert <- function(dest, ep) {
     # KIND = 5 -> SYS_MIDDLEFLOOR -> SYS_MIDDLEFLOOR_MATERIAL -> MATERIAL
     # KIND = 6 -> SYS_AIRFLOOR    -> SYS_AIRFLOOR_MATERIAL    -> MATERIAL
     # TODO: translate Chinese names?
-    const <- DBI::dbGetQuery(dest,
+    DBI::dbGetQuery(dest,
         "
         WITH SYS_CONST AS (
             SELECT STRUCT_ID, CNAME, 1 AS KIND
@@ -287,14 +284,14 @@ const__convert <- function(dest, ep) {
         ON CM.MATERIAL_ID = M.MATERIAL_ID
         "
     )
+}
 
-    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
-    # Detailed layers are now retained only for windows that require fallback.
-    window_type <- const__window_type_performance(dest)
-
+# Read detailed window construction layers used when aggregate type performance
+# is missing or physically invalid.
+const__window_layers <- function(dest) {
     # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
     # TODO: handle 'SHADING' in 'WINDOW' table
-    window <- DBI::dbGetQuery(dest,
+    DBI::dbGetQuery(dest,
         "
         WITH WIN AS (
             SELECT DISTINCT WINDOW_CONSTRUCTION FROM WINDOW WHERE WINDOW_CONSTRUCTION != 0
@@ -327,6 +324,17 @@ const__convert <- function(dest, ep) {
         ON SM.MATERIAL_ID = M.APP_MATERIAL_ID
         "
     )
+}
+
+# Normalize the referenced DeST layers and select detailed-window fallbacks
+# before EnergyPlus object tables are derived from them.
+const__prepare_layers <- function(dest) {
+    const <- const__opaque_layers(dest)
+
+    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
+    # Detailed layers are now retained only for windows that require fallback.
+    window_type <- const__window_type_performance(dest)
+    window <- const__window_layers(dest)
 
     # DOOR -> SYS_DOOR -> SYS_MATERIAL
     # TODO: GlazedDoor or Door?
@@ -401,17 +409,27 @@ const__convert <- function(dest, ep) {
             with(window, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
-    # only rename glaze layers for doors
+    # Door body and glazing materials can also vary by thickness, so apply the
+    # same stable suffix used for opaque and window materials.
     if (nrow(door) > 0L) {
-        # door should have the same thickness as the parent wall
-        if (nrow(const) > 0L) {
-
-        }
-        any(door$LAYER_NO == 1L)
         data.table::set(door, NULL, "MATERIAL_NAME",
             with(door, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
+
+    list(
+        const = const, window = window,
+        window_type = window_type, door = door
+    )
+}
+
+# Derive deduplicated EnergyPlus construction and material tables from the
+# normalized DeST source layers.
+const__object_tables <- function(source) {
+    const <- source$const
+    window <- source$window
+    window_type <- source$window_type
+    door <- source$door
 
     # normal construction
     norm_const <- list()
@@ -560,7 +578,46 @@ const__convert <- function(dest, ep) {
     dt_air <- data.table::rbindlist(list(win_air), fill = TRUE)
     if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
 
-    out <- eval(as.call(c(
+    list(
+        construction = dt_const,
+        material = dt_mat,
+        glazing = dt_glaze,
+        air = dt_air,
+        simple_glazing = win_type_glazing
+    )
+}
+
+# MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
+const__convert <- function(dest, ep) {
+    if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
+        return(NULL)
+    }
+
+    source <- const__prepare_layers(dest)
+    object <- const__object_tables(source)
+    out <- const__assemble_objects(
+        dest, ep, object$material, object$simple_glazing,
+        object$glazing, object$air, object$construction
+    )
+
+    # always attach the table to the output in case it is useful later
+    attr(out, "table") <- data.table::rbindlist(
+        list(
+            source$const, source$window,
+            object$simple_glazing, source$door
+        ),
+        fill = TRUE
+    )
+
+    out
+}
+
+# Assemble the heterogeneous material and construction classes after the
+# converter has normalized every source table and resolved its fallbacks.
+const__assemble_objects <- function(
+    dest, ep, dt_mat, win_type_glazing, dt_glaze, dt_air, dt_const
+) {
+    eval(as.call(c(
         conv__add, dest, ep,
 
         # Material
@@ -598,20 +655,8 @@ const__convert <- function(dest, ep) {
         }),
 
         if (nrow(dt_glaze) > 0L) {
-            # NOTE: It is not an one-to-one match between the glazing optical
-            # properties in DeST and EnergyPlus.
-            #
-            # We can found 2.5mm, 3mm, 6mm and 12mm clear glazing in the dataset
-            # 'WindowGlassMaterials.idf' distributed from EnergyPlus
-            #
-            # However, the entries in 'SYS_APP_MATERIAL' in DeST have thickness of
-            # 3mm, 5mm and 18mm.
-            #
-            # An approach is to use the LBNL Window program to extract the optical
-            # properties of the glazing. But haven't try this yet.
-            #
-            # Here we will use the optical properties of a 3mm clear glazing for all
-            # glazing in DeST and issue a message
+            # Detailed DeST optical fields have no direct EnergyPlus match, so
+            # retain the established 3 mm clear-glazing approximation.
             clear3mm <- list(
                 Name = "CLEAR 3MM", Conductivity = 0.9, Thickness = 0.003,
                 `Optical Data Type` = "SpectralAverage",
@@ -651,13 +696,8 @@ const__convert <- function(dest, ep) {
         },
 
         # Construction
-        lapply(dt_const$value, function(con) bquote("Construction" := as.list(.(con))))
+        lapply(dt_const$value, function(con) {
+            bquote("Construction" := as.list(.(con)))
+        })
     )))
-
-    # always attach the table to the output in case it is useful later
-    attr(out, "table") <- data.table::rbindlist(
-        list(const, window, win_type_glazing, door), fill = TRUE
-    )
-
-    out
 }
