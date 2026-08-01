@@ -67,7 +67,7 @@ test_that("can convert 'WINDOW'", {
         Z = c(1, 1, 3, 3)
     ))
 
-    expect_type(window <- destep_conv_window(dest, ep), "list")
+    expect_type(window <- window__convert(dest, ep), "list")
     expect_named(window, c("object", "value"))
     expect_equal(unique(window$object$class_name), "FenestrationSurface:Detailed")
     expect_s3_class(attr(window, "table"), "data.table")
@@ -84,7 +84,7 @@ test_that("can convert 'WINDOW'", {
         SC = 0.4022989,
         LIGHT_TRANS_RATIO = 0.58
     ))
-    typed <- destep_conv_window(dest, ep)
+    typed <- window__convert(dest, ep)
     expect_equal(
         unique(attr(typed, "table")$CONSTRUCTION),
         "High Performance Window Simple Glazing Construction"
@@ -95,7 +95,7 @@ test_that("can convert 'WINDOW'", {
     DBI::dbExecute(dest, "UPDATE SURFACE SET TYPE = 0")
     DBI::dbExecute(dest, "UPDATE SURFACE SET NAME = 'Room A Wall' WHERE SURFACE_ID = 10")
     DBI::dbExecute(dest, "UPDATE SURFACE SET NAME = 'Room B Wall' WHERE SURFACE_ID = 20")
-    pair <- destep_conv_window(dest, ep)
+    pair <- window__convert(dest, ep)
     pair_table <- attr(pair, "table")
     pair_object <- unique(pair_table[, .(
         OUTPUT_PART_ID, NAME, BOUNDARY_OBJECT, SURFACE_NAME, SIDE, CONSTRUCTION
@@ -125,7 +125,90 @@ test_that("skips window conversion without WINDOW records", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    expect_null(destep_conv_window(dest, ep))
+    expect_null(window__convert(dest, ep))
+})
+
+test_that("rectangular windows stay intact on an intact host", {
+    host <- data.table::data.table(
+        ID = 10L, PART = 1L, NAME = "Wall", POINT_NO = 0:3,
+        POINT_X = c(0, 4, 4, 0), POINT_Y = 0,
+        POINT_Z = c(0, 0, 4, 4)
+    )
+    window <- data.table::data.table(
+        OUTPUT_ID = "200-1", ID = 200L, SURFACE_ID = 10L,
+        ORIGINAL_NAME = "Window", NAME = "Window", SIDE = 1L,
+        INTERZONE = FALSE, BOUNDARY_OBJECT = NA_character_, POINT_NO = 0:3,
+        POINT_X = c(1, 3, 3, 1), POINT_Y = 0,
+        POINT_Z = c(1, 1, 3, 3)
+    )
+
+    split <- window__split_by_surface(window, host)
+
+    expect_equal(data.table::uniqueN(split$OUTPUT_PART_ID), 1L)
+    expect_equal(nrow(split), 4L)
+})
+
+test_that("window clipping rejects invalid host-plane geometry", {
+    host <- data.table::data.table(
+        POINT_NO = 0:3,
+        POINT_X = c(0, 4, 4, 0), POINT_Y = c(0, 0, 0.005, 0),
+        POINT_Z = c(0, 0, 4, 4)
+    )
+    window <- data.table::data.table(
+        POINT_NO = 0:3,
+        POINT_X = c(1, 3, 3, 1), POINT_Y = 0,
+        POINT_Z = c(1, 1, 3, 3)
+    )
+    expect_error(
+        window__clip_polygon(window, host),
+        "host must be planar and convex"
+    )
+
+    host[, POINT_Y := 0]
+    window[, POINT_Y := 0.001]
+    expect_error(
+        window__clip_polygon(window, host),
+        "not coplanar"
+    )
+})
+
+test_that("interzone window pieces use the same canonical partition", {
+    # The two room sides have opposite winding. Partitioning them independently
+    # must not choose opposite quadrilateral diagonals for reciprocal pieces.
+    side1_host <- data.table::data.table(
+        ID = 10L, PART = 1L, NAME = "Wall A", POINT_NO = 0:3,
+        POINT_X = c(0, 4, 4, 0), POINT_Y = 0,
+        POINT_Z = c(0, 0, 4, 4)
+    )
+    side2_host <- data.table::copy(side1_host[4:1])
+    side2_host[, `:=`(ID = 20L, NAME = "Wall B", POINT_NO = 0:3)]
+
+    side1 <- data.table::data.table(
+        OUTPUT_ID = "200-1", ID = 200L, SURFACE_ID = 10L,
+        ORIGINAL_NAME = "Window", NAME = "Window", SIDE = 1L,
+        INTERZONE = TRUE, BOUNDARY_OBJECT = NA_character_, POINT_NO = 0:3,
+        POINT_X = c(1, 3, 2.5, 1), POINT_Y = 0,
+        POINT_Z = c(1, 1, 3, 3)
+    )
+    side2 <- data.table::copy(side1[4:1])
+    side2[, `:=`(
+        OUTPUT_ID = "200-2", SURFACE_ID = 20L, SIDE = 2L,
+        POINT_NO = 0:3
+    )]
+    split <- window__split_by_surface(
+        data.table::rbindlist(list(side1, side2)),
+        data.table::rbindlist(list(side1_host, side2_host))
+    )
+    piece <- split[, .(
+        VERTICES = paste(sort(sprintf(
+            "%.12f|%.12f|%.12f", POINT_X, POINT_Y, POINT_Z
+        )), collapse = ";")
+    ), by = .(SIDE, PIECE)]
+    side1_piece <- piece[SIDE == 1L][order(PIECE)]$VERTICES
+    side2_piece <- piece[SIDE == 2L][order(PIECE)]$VERTICES
+
+    expect_equal(length(side1_piece), 2L)
+    expect_equal(side1_piece, side2_piece)
 })
 
 test_that("can convert windows from a real DeST model", {
@@ -144,8 +227,8 @@ test_that("can convert windows from a real DeST model", {
     RSQLite::sqliteCopyDatabase(src, dest)
     destep_update_name(dest)
 
-    surface <- attr(destep_conv_surface(dest, ep), "table")
-    window <- destep_conv_window(dest, ep, surface)
+    surface <- attr(surface__convert(dest, ep), "table")
+    window <- window__convert(dest, ep, surface)
     tab <- attr(window, "table")
 
     expect_equal(unique(window$object$class_name), "FenestrationSurface:Detailed")
@@ -165,9 +248,9 @@ test_that("can convert windows from a real DeST model", {
     expect_true(all(tab$POINT_NO %in% 0:3))
 
     window_normal <- tab[
-        , as.list(destep_surface_normal(.SD)), by = .(OUTPUT_PART_ID, SURFACE_NAME)
+        , as.list(geom__unit_normal(.SD)), by = .(OUTPUT_PART_ID, SURFACE_NAME)
     ]
-    surface_normal <- surface[, as.list(destep_surface_normal(.SD)), by = .(OUTPUT_ID, NAME)]
+    surface_normal <- surface[, as.list(geom__unit_normal(.SD)), by = .(OUTPUT_ID, NAME)]
     parent <- match(window_normal$SURFACE_NAME, surface_normal$NAME)
     expect_false(anyNA(parent))
     expect_true(all(

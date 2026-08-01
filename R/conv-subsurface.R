@@ -1,27 +1,32 @@
 # Clip one planar window polygon against one convex host part. Intersections are
 # interpolated in 3-D so the result stays on the original DeST middle plane even
 # when the stable clipping projection omits a non-constant coordinate.
-destep_clip_window_polygon <- function(
-    window, host, tolerance = 1e-10, distance_tolerance = 0.01,
-    boundary_inset = 1e-8
+window__clip_polygon <- function(
+    window, host, profile = eplus_geom__profile()
 ) {
-    normal <- destep_surface_normal(host)
-    projection <- setdiff(1:3, which.max(abs(normal)))
-    host_xy <- as.matrix(host[, .(POINT_X, POINT_Y, POINT_Z)])[
-        , projection, drop = FALSE
-    ]
-    host_area <- sum(
-        host_xy[, 1L] * host_xy[c(2:nrow(host_xy), 1L), 2L] -
-            host_xy[c(2:nrow(host_xy), 1L), 1L] * host_xy[, 2L]
-    ) / 2.0
-    if (host_area < 0.0) host_xy <- host_xy[nrow(host_xy):1L, , drop = FALSE]
+    tolerance <- profile$intersection
+    distance_tolerance <- profile$coordinate_distance
+    boundary_inset <- profile$boundary_inset_distance
+    frame <- geom__polygon_frame(host, profile$normal_magnitude)
+    if (!frame$valid) geom__unit_normal(host, profile$normal_magnitude)
+    if (frame$planarity_error > profile$planarity_distance ||
+        !geom__polygon_is_convex(host, profile$angle)) {
+        stop("A converted EnergyPlus window host must be planar and convex.")
+    }
+    normal <- frame$normal
+    projection <- frame$projection
+    host_xy <- frame$xy
+    if (frame$signed_area < 0.0) {
+        host_xy <- host_xy[nrow(host_xy):1L, , drop = FALSE]
+    }
 
     xyz <- as.matrix(window[, .(POINT_X, POINT_Y, POINT_Z)])
-    value <- cbind(xyz, xyz[, projection, drop = FALSE])
-    cross_2d <- function(a, b, point) {
-        (b[[1L]] - a[[1L]]) * (point[[2L]] - a[[2L]]) -
-            (b[[2L]] - a[[2L]]) * (point[[1L]] - a[[1L]])
+    host_origin <- frame$coordinates[1L, ]
+    plane_error <- abs(as.vector(sweep(xyz, 2L, host_origin, "-") %*% normal))
+    if (any(plane_error > profile$planarity_distance)) {
+        stop("A DeST window polygon is not coplanar with its converted host.")
     }
+    value <- cbind(xyz, xyz[, projection, drop = FALSE])
     intersection <- function(start, end, clip_start, clip_end) {
         edge <- clip_end - clip_start
         segment <- end[4:5] - start[4:5]
@@ -44,10 +49,12 @@ destep_clip_window_polygon <- function(
         input <- value
         value <- matrix(numeric(), nrow = 0L, ncol = 5L)
         previous <- input[nrow(input), ]
-        previous_inside <- cross_2d(clip_start, clip_end, previous[4:5]) >= -tolerance
+        previous_inside <- geom__cross_2d(
+            clip_start, clip_end, previous[4:5]
+        ) >= -tolerance
         for (index in seq_len(nrow(input))) {
             current <- input[index, ]
-            current_inside <- cross_2d(
+            current_inside <- geom__cross_2d(
                 clip_start, clip_end, current[4:5]
             ) >= -tolerance
             if (current_inside) {
@@ -68,10 +75,10 @@ destep_clip_window_polygon <- function(
     }
     if (nrow(value) < 3L) return(NULL)
 
-    # EnergyPlus 23.1's CHKSBS polygon test treats some subsurface vertices on
+    # The reference EnergyPlus profile's CHKSBS test treats some vertices on
     # a triangulated host boundary as outside even when the analytical distance
     # is zero. Move only exact-boundary vertices an infinitesimal distance toward
-    # the convex host centroid. The displacement is two orders below the
+    # the convex host centroid. The displacement is many orders below the
     # conversion coordinate tolerance; aggregate window-area invariants remain
     # enforced.
     host_centroid <- colMeans(as.matrix(
@@ -81,7 +88,7 @@ destep_clip_window_polygon <- function(
         any(vapply(seq_len(nrow(host_xy)), function(edge_index) {
             edge_end <- host_xy[host_next[[edge_index]], ]
             edge <- edge_end - host_xy[edge_index, ]
-            abs(cross_2d(
+            abs(geom__cross_2d(
                 host_xy[edge_index, ],
                 edge_end,
                 value[index, 4:5]
@@ -116,18 +123,22 @@ destep_clip_window_polygon <- function(
         POINT_Z = value[, 3L]
     )
     out[, POINT_NO := seq_len(.N) - 1L]
+    if (!geom__polygon_frame(out, profile$normal_magnitude)$valid ||
+        geom__polygon_area(out) <= profile$area) return(NULL)
     out
 }
 
 # Split windows with the exact host parts produced by surface conversion. The
 # same deterministic part number is used on both sides of an interzone opening,
 # allowing reciprocal FenestrationSurface references after clipping.
-destep_split_window_by_surface <- function(window, surface = NULL) {
+window__split_by_surface <- function(
+    window, surface = NULL, profile = eplus_geom__profile()
+) {
     expected <- unique(window[, .(OUTPUT_ID, ORIGINAL_NAME)])
     if (is.null(surface)) {
         window[, PART := 1L]
     } else {
-        coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+        coordinate_columns <- geom__coordinate_columns()
         window <- window[, {
             source <- data.table::copy(.SD)
             host <- surface[ID == source$SURFACE_ID[[1L]]]
@@ -139,16 +150,38 @@ destep_split_window_by_surface <- function(window, surface = NULL) {
             }
             part <- lapply(unique(host$PART), function(part_id) {
                 host_part <- host[PART == part_id]
-                clipped <- destep_clip_window_polygon(source, host_part)
+                clipped <- window__clip_polygon(source, host_part, profile)
                 if (is.null(clipped)) return(NULL)
-                # EnergyPlus may replace a clipped four-sided non-rectangle by
-                # an equivalent rectangle. Fan every clipped polygon into exact
-                # triangles so neither area nor position is silently changed.
-                clipped_part <- if (nrow(clipped) <= 3L) {
+                # Canonical winding and start coordinates make reciprocal window
+                # sides choose the same diagonal and subpart numbering.
+                clipped <- geom__canonicalize_polygon(
+                    clipped, profile$normal_magnitude
+                )
+                # Preserve rectangles as one EnergyPlus subsurface. Other
+                # polygons are triangulated because EnergyPlus may replace a
+                # four-sided non-rectangle with an equivalent rectangle.
+                clipped_part <- if (nrow(clipped) <= 3L ||
+                    geom__polygon_is_rectangle(
+                        clipped,
+                        angle_tolerance = profile$angle,
+                        distance_tolerance = profile$coordinate_distance,
+                        planarity_tolerance = profile$planarity_distance
+                    )) {
                     list(clipped)
                 } else {
+                    if (!geom__polygon_is_convex(clipped, profile$angle)) {
+                        stop(paste(
+                            "DeST windows with concave polygons are not",
+                            "supported by EnergyPlus window conversion."
+                        ))
+                    }
+                    # The clipped subject and host are convex, so a canonical
+                    # first-vertex fan stays inside the polygon and is identical
+                    # for reciprocal room-side copies.
                     lapply(seq.int(2L, nrow(clipped) - 1L), function(index) {
-                        value <- data.table::copy(clipped[c(1L, index, index + 1L)])
+                        value <- data.table::copy(
+                            clipped[c(1L, index, index + 1L)]
+                        )
                         value[, POINT_NO := 0:2]
                         value
                     })
@@ -207,9 +240,39 @@ destep_split_window_by_surface <- function(window, surface = NULL) {
     window
 }
 
+# Expand one room-facing copy of every DeST window from its SIDE1/SIDE2 source
+# columns. A shared implementation keeps exterior and interzone classification
+# identical for both directions.
+window__expand_side <- function(window, side) {
+    peer <- 3L - side
+    surface_type <- sprintf("SIDE%d_SURFACE_TYPE", side)
+    peer_type <- sprintf("SIDE%d_SURFACE_TYPE", peer)
+    surface_id <- sprintf("SIDE%d_SURFACE_ID", side)
+    surface_name <- sprintf("SIDE%d_SURFACE_NAME", side)
+    azimuth <- sprintf("SIDE%d_AZIMUTH", side)
+    tilt <- sprintf("SIDE%d_TILT", side)
+
+    value <- data.table::copy(window[!get(surface_type) %in% c(1L, 2L)])
+    if (nrow(value) == 0L) return(value)
+    value[, `:=`(
+        ORIGINAL_NAME = NAME,
+        SIDE = side,
+        SURFACE_ID = get(surface_id),
+        SURFACE_NAME = get(surface_name),
+        AZIMUTH = get(azimuth),
+        TILT = get(tilt),
+        INTERZONE = !get(peer_type) %in% c(1L, 2L),
+        BOUNDARY_OBJECT = NA_character_
+    )]
+    value
+}
+
 # TODO: handle window shading
 # WINDOW -> FenestrationSurface:Detailed
-destep_conv_window <- function(dest, ep, surface = NULL) {
+window__convert <- function(
+    dest, ep, surface = NULL,
+    geometry_profile = eplus_geom__profile(ep$version())
+) {
     if (!destep_has_rows(dest, "WINDOW")) return(NULL)
 
     # TODO: Does DeST support polygon windows other than rectangles?
@@ -291,32 +354,8 @@ destep_conv_window <- function(dest, ep, surface = NULL) {
     # window belongs only to the room side, whereas an interzone window must be
     # emitted once for each room and the two EnergyPlus objects must reference
     # each other explicitly.
-    side1 <- window[!SIDE1_SURFACE_TYPE %in% c(1L, 2L)]
-    side2 <- window[!SIDE2_SURFACE_TYPE %in% c(1L, 2L)]
-    if (nrow(side1) > 0L) {
-        side1[, `:=`(
-            ORIGINAL_NAME = NAME,
-            SIDE = 1L,
-            SURFACE_ID = SIDE1_SURFACE_ID,
-            SURFACE_NAME = SIDE1_SURFACE_NAME,
-            AZIMUTH = SIDE1_AZIMUTH,
-            TILT = SIDE1_TILT,
-            INTERZONE = !SIDE2_SURFACE_TYPE %in% c(1L, 2L),
-            BOUNDARY_OBJECT = NA_character_
-        )]
-    }
-    if (nrow(side2) > 0L) {
-        side2[, `:=`(
-            ORIGINAL_NAME = NAME,
-            SIDE = 2L,
-            SURFACE_ID = SIDE2_SURFACE_ID,
-            SURFACE_NAME = SIDE2_SURFACE_NAME,
-            AZIMUTH = SIDE2_AZIMUTH,
-            TILT = SIDE2_TILT,
-            INTERZONE = !SIDE1_SURFACE_TYPE %in% c(1L, 2L),
-            BOUNDARY_OBJECT = NA_character_
-        )]
-    }
+    side1 <- window__expand_side(window, 1L)
+    side2 <- window__expand_side(window, 2L)
     window <- data.table::rbindlist(list(side1, side2), fill = TRUE)
     window[, OUTPUT_ID := sprintf("%s-%d", ID, SIDE)]
     # DeST window layers follow the same SIDE1-to-SIDE2 direction as their
@@ -325,13 +364,17 @@ destep_conv_window <- function(dest, ep, surface = NULL) {
     data.table::setorderv(window, c("OUTPUT_ID", "POINT_NO"))
     # Use the same DeST direction metadata as the parent surface so a window
     # cannot silently face into its zone when enclosure side ordering varies.
-    south_direction <- destep_south_direction(dest)
+    south_direction <- geom__south_direction(dest)
     window <- window[
-        , destep_orient_surface_polygon(.SD, south_direction), by = "OUTPUT_ID"
+        , geom__orient_surface_polygon(
+            .SD, south_direction, geometry_profile
+        ), by = "OUTPUT_ID"
     ]
-    window <- destep_split_window_by_surface(window, surface)
+    window <- window__split_by_surface(window, surface, geometry_profile)
     window <- window[
-        , destep_orient_surface_polygon(.SD, south_direction), by = "OUTPUT_PART_ID"
+        , geom__orient_surface_polygon(
+            .SD, south_direction, geometry_profile
+        ), by = "OUTPUT_PART_ID"
     ]
     assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
 
@@ -361,12 +404,7 @@ destep_conv_window <- function(dest, ep, surface = NULL) {
                 number_of_vertices = max(POINT_NO) + 1L
             ),
             # Vertices
-            as.list(as.double(vapply(POINT_NO + 1L,
-                FUN.VALUE = double(3),
-                function(ind) {
-                    c(POINT_X[ind], POINT_Y[ind], POINT_Z[ind])
-                }
-            )))
+            geom__eplus_vertex_values(.SD)
         )))
     ]$value
 

@@ -56,7 +56,7 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(const, "table"), "data.table")
 
     # can convert 'BuildingSurface:Detailed'
-    expect_type(surface <- destep_conv_surface(dest, ep), "list")
+    expect_type(surface <- surface__convert(dest, ep), "list")
     expect_named(surface, c("object", "value"))
     expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
     expect_s3_class(attr(surface, "table"), "data.table")

@@ -91,6 +91,8 @@ MAP_ID_NAME <- list(
 #'        It can be `"latest"`, which is the default, to indicate using the
 #'        latest EnergyPlus version supported by the
 #'        \{[eplusr](https://cran.r-project.org/package=eplusr)\} package.
+#'        Geometry compatibility has been validated against EnergyPlus 23.1;
+#'        other versions currently reuse that profile with an explicit warning.
 #'
 #' @param copy \[logical\] Whether to copy the input DeST database to a
 #'        temporary SQLite database. Note that if `FALSE`, the input database
@@ -181,8 +183,11 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
 
     # Surface part geometry must be available when a window crosses a topology
     # split, because each clipped window piece references exactly one host part.
-    surface <- destep_conv_surface(tmpdb, ep)
-    window <- destep_conv_window(tmpdb, ep, attr(surface, "table"))
+    geometry_profile <- eplus_geom__profile(ep$version())
+    surface <- surface__convert(tmpdb, ep, geometry_profile)
+    window <- window__convert(
+        tmpdb, ep, attr(surface, "table"), geometry_profile
+    )
 
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(

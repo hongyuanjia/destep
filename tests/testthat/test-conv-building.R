@@ -21,11 +21,11 @@ test_that("DeST south direction maps to EnergyPlus north axis", {
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
     DBI::dbWriteTable(dest, "ENVIRONMENT", data.frame(SOUTH_DIRECTION = 270))
 
-    expect_equal(destep_north_axis(dest), 0)
+    expect_equal(geom__north_axis(dest), 0)
     DBI::dbExecute(dest, "UPDATE ENVIRONMENT SET SOUTH_DIRECTION = 0")
-    expect_equal(destep_north_axis(dest), 90)
+    expect_equal(geom__north_axis(dest), 90)
     expect_equal(
-        destep_expected_surface_normal(0, 90, 0),
+        geom__expected_surface_normal(0, 90, 0),
         c(-1, 0, 0),
         tolerance = 1e-12
     )

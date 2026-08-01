@@ -1,5 +1,7 @@
 # SURFACE|MAIN_ENCLOSURE|PLANE -> BuildingSurface:Detailed
-destep_conv_surface <- function(dest, ep) {
+surface__convert <- function(
+    dest, ep, geometry_profile = eplus_geom__profile(ep$version())
+) {
     # NOTE: In DeST, the main enclosure table is used to store the relationship
     # between surfaces and the rooms they belong to. Different from EnergyPlus,
     # 'adjacent' surfaces in DeST have different locations. The distance between
@@ -123,7 +125,7 @@ destep_conv_surface <- function(dest, ep) {
     assert_unique_name(surface$NAME[surface$POINT_NO == 0L], "surface")
     data.table::setDT(surface)
     data.table::setorderv(surface, c("ID", "POINT_NO"))
-    surface <- destep_snap_surface_coordinates(surface)
+    surface <- surface__snap_coordinates(surface, geometry_profile)
 
     # Normalize each shared middle-plane polygon once before the two room-side
     # copies are oriented. Vertices used by another plane are topological
@@ -147,16 +149,18 @@ destep_conv_surface <- function(dest, ep) {
             ORDER BY W.ID, L.POINT_NO
         "))
     }
-    surface <- destep_normalize_surface_topology(surface, window)
+    surface <- surface__normalize_topology(surface, window, geometry_profile)
     # remove the surface indicating outside environment and grounds
     surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
-    surface <- surface__apply_typical_storey_boundaries(surface, window)
+    surface <- surface__apply_typical_storey_boundaries(
+        surface, window, geometry_profile
+    )
 
     # Orient every polygon from DeST's source azimuth and tilt. This also makes
     # exposed floors face downward without relying on enclosure side numbers.
-    south_direction <- destep_south_direction(dest)
+    south_direction <- geom__south_direction(dest)
     surface <- surface[
-        , destep_orient_surface_polygon(.SD, south_direction),
+        , geom__orient_surface_polygon(.SD, south_direction, geometry_profile),
         by = "OUTPUT_ID"
     ]
 
@@ -191,12 +195,7 @@ destep_conv_surface <- function(dest, ep) {
                 number_of_vertices = max(POINT_NO) + 1L
             ),
             # Vertices
-            as.list(as.double(vapply(POINT_NO + 1L,
-                FUN.VALUE = double(3),
-                function(ind) {
-                    c(POINT_X[ind], POINT_Y[ind], POINT_Z[ind])
-                }
-            )))
+            geom__eplus_vertex_values(.SD)
         )))
     ]$value
 
@@ -226,9 +225,11 @@ destep_conv_surface <- function(dest, ep) {
 # ID and plane, while cut faces in adjacent non-multiplied storeys become
 # self-referenced adiabatic surfaces.
 surface__apply_typical_storey_boundaries <- function(
-    surface, window = data.table::data.table(), tolerance = 1e-8,
-    distance_tolerance = 0.01
+    surface, window = data.table::data.table(),
+    profile = eplus_geom__profile()
 ) {
+    tolerance <- profile$plane_distance
+    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
     surface[, `:=`(
         SOURCE_TYPE = TYPE,
@@ -252,21 +253,6 @@ surface__apply_typical_storey_boundaries <- function(
             "Typical-storey approximation does not support a window on a",
             "rewired horizontal surface."
         ))
-    }
-
-    # Calculate polygon area from Newell's vector. Keeping this local avoids a
-    # second package-level geometry API for one transformation invariant.
-    polygon_area <- function(value) {
-        following <- seq_len(nrow(value)) %% nrow(value) + 1L
-        vector <- c(
-            sum((value$POINT_Y - value$POINT_Y[following]) *
-                (value$POINT_Z + value$POINT_Z[following])),
-            sum((value$POINT_Z - value$POINT_Z[following]) *
-                (value$POINT_X + value$POINT_X[following])),
-            sum((value$POINT_X - value$POINT_X[following]) *
-                (value$POINT_Y + value$POINT_Y[following]))
-        )
-        sqrt(sum(vector ^ 2)) / 2.0
     }
 
     # Return the construction name without the explicit reverse-stack suffix.
@@ -294,11 +280,7 @@ surface__apply_typical_storey_boundaries <- function(
                 END_Y = part$POINT_Y[following]
             )
         }))
-        edge[, EDGE := ifelse(
-            START < END,
-            paste(START, END, sep = "/"),
-            paste(END, START, sep = "/")
-        )]
+        edge[, EDGE := geom__edge_key(START, END)]
         count <- edge[, .N, by = "EDGE"]
         boundary <- edge[count[N == 1L], on = "EDGE", nomatch = 0L]
         coordinate <- unique(data.table::rbindlist(list(
@@ -335,7 +317,7 @@ surface__apply_typical_storey_boundaries <- function(
         region
     }
 
-    coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+    coordinate_columns <- geom__coordinate_columns()
     target_output <- unique(target$OUTPUT_ID)
     counterpart <- unique(target[
         BOUNDARY == "Surface" & !is.na(BOUNDARY_OBJECT), BOUNDARY_OBJECT
@@ -400,7 +382,7 @@ surface__apply_typical_storey_boundaries <- function(
                 # would create millimetre-scale slivers at their crossings.
                 overlap <- polyclip::polyclip(
                     polygon_region(down), polygon_region(up),
-                    op = "intersection", eps = 1e-10
+                    op = "intersection", eps = profile$intersection
                 )
                 if (length(overlap) == 0L) next
 
@@ -456,22 +438,22 @@ surface__apply_typical_storey_boundaries <- function(
                         POINT_Z = up$POINT_Z[[1L]]
                     )
                     polygon[, POINT_NO := seq_len(.N) - 1L]
-                    polygon <- destep_simplify_surface_polygon(
-                        polygon,
-                        tolerance = tolerance,
-                        distance_tolerance = distance_tolerance
-                    )
-                    if (nrow(polygon) < 3L || polygon_area(polygon) <= 1e-6) next
-                    # Synchronized triangulation gives both sides identical
-                    # convex parts without reintroducing either source mesh.
-                    triangle <- if (nrow(polygon) == 3L) {
+                    polygon <- surface__simplify_polygon(polygon, profile)
+                    if (nrow(polygon) < 3L ||
+                        geom__polygon_area(polygon) <= profile$area) next
+                    # A convex overlap is already a valid synchronized part on
+                    # both sides. Preserve it intact and triangulate only a
+                    # concave overlap that EnergyPlus cannot use reliably for
+                    # shadow receiving or casting.
+                    triangle <- if (
+                        nrow(polygon) == 3L ||
+                            geom__polygon_is_convex(polygon, profile$angle)
+                    ) {
                         polygon[, PART := 1L]
                     } else {
                         tryCatch(
-                            destep_triangulate_surface_polygon(
-                                polygon,
-                                tolerance = tolerance,
-                                distance_tolerance = distance_tolerance
+                            surface__triangulate_polygon(
+                                polygon, profile = profile
                             ),
                             error = function(error) {
                                 stop(sprintf(
@@ -484,6 +466,7 @@ surface__apply_typical_storey_boundaries <- function(
                             }
                         )
                     }
+                    triangle <- surface__merge_convex_parts(triangle, profile)
                     for (part in unique(triangle$PART)) {
                         up_geometry <- triangle[PART == part]
                         up_geometry[, c("PART") := NULL]
@@ -516,18 +499,20 @@ surface__apply_typical_storey_boundaries <- function(
     # Every original source face must be exactly covered by the common overlay.
     # This catches gaps and overlaps before an incomplete storey is written.
     source_area <- target[, .(
-        PART_AREA = polygon_area(.SD)
+        PART_AREA = geom__polygon_area(.SD)
     ), by = .(ID, OUTPUT_ID)][, .(
         SOURCE_AREA = sum(PART_AREA)
     ), by = "ID"]
     rebuilt_area <- rebuilt[, .(
-        REBUILT_AREA = polygon_area(.SD)
+        REBUILT_AREA = geom__polygon_area(.SD)
     ), by = .(ID = SOURCE_ID, TYPICAL_PAIR_ID)]
     rebuilt_area <- rebuilt_area[, .(
         REBUILT_AREA = sum(REBUILT_AREA)
     ), by = "ID"][source_area, on = "ID"]
     rebuilt_area[, ERROR := REBUILT_AREA - SOURCE_AREA]
-    area_tolerance <- pmax(1e-6, tolerance * abs(rebuilt_area$SOURCE_AREA))
+    area_tolerance <- pmax(
+        profile$area, tolerance * abs(rebuilt_area$SOURCE_AREA)
+    )
     if (anyNA(rebuilt_area$REBUILT_AREA) ||
         any(abs(rebuilt_area$ERROR) > area_tolerance)) {
         failure <- rebuilt_area[
@@ -580,7 +565,7 @@ surface__apply_typical_storey_boundaries <- function(
     ), fill = TRUE)
     data.table::setorderv(surface, c("ID", "PART", "POINT_NO"))
     surface <- surface__normalize_room_junctions(
-        surface, window, tolerance, distance_tolerance
+        surface, window, profile
     )
 
     # All non-adiabatic Surface references must be reciprocal after rewiring.
@@ -600,16 +585,121 @@ surface__apply_typical_storey_boundaries <- function(
     surface
 }
 
+# Return rooms that fail the profile's EnergyPlus two-pass closure test.
+# The second pass inserts missing collinear points, so harmless T-junction edge
+# segmentation does not trigger expensive exported-surface normalization.
+surface__energyplus_unclosed_rooms <- function(
+    surface, profile = eplus_geom__profile()
+) {
+    vertex_tolerance <- profile$closure_vertex_distance
+    room_is_closed <- function(room) {
+        output_ids <- unique(room$OUTPUT_ID)
+        faces <- lapply(output_ids, function(output_id) {
+            as.matrix(room[OUTPUT_ID == output_id,
+                .(POINT_X, POINT_Y, POINT_Z)])
+        })
+        if (length(faces) == 0L) return(FALSE)
+
+        # EnergyPlus keeps the first coordinate in traversal order as the
+        # representative of every coordinate-wise 1.27 cm vertex cluster.
+        unique_vertices <- matrix(numeric(), nrow = 0L, ncol = 3L)
+        vertex_index <- function(point) {
+            if (nrow(unique_vertices) > 0L) {
+                close <- which(apply(
+                    abs(sweep(unique_vertices, 2L, point, "-")),
+                    1L, max
+                ) < vertex_tolerance)
+                if (length(close) > 0L) return(close[[1L]])
+            }
+            unique_vertices <<- rbind(unique_vertices, point)
+            nrow(unique_vertices)
+        }
+        face_indices <- lapply(faces, function(face) {
+            apply(face, 1L, vertex_index)
+        })
+        count_edges <- function(indices) {
+            edge <- unlist(lapply(indices, function(index) {
+                following <- c(index[-1L], index[[1L]])
+                geom__edge_key(index, following)
+            }), use.names = FALSE)
+            table(edge)
+        }
+
+        first_count <- count_edges(face_indices)
+        if (length(first_count) > 0L && all(first_count == 2L)) return(TRUE)
+
+        # Only a failed first pass receives every near-collinear room vertex.
+        # This mirrors EnergyPlus's computationally intensive fallback and
+        # avoids creating new high-count edges in an already closed shell.
+        expanded_indices <- lapply(faces, function(face) {
+            expanded <- integer()
+            following <- seq_len(nrow(face)) %% nrow(face) + 1L
+            for (index in seq_len(nrow(face))) {
+                start <- face[index, ]
+                end <- face[following[[index]], ]
+                direction <- end - start
+                edge_length <- sqrt(sum(direction ^ 2))
+                if (edge_length <= profile$zero_distance) next
+
+                start_distance <- abs(sweep(
+                    unique_vertices, 2L, start, "-"
+                ))
+                end_distance <- abs(sweep(
+                    unique_vertices, 2L, end, "-"
+                ))
+                not_endpoint <- apply(start_distance, 1L, max) >=
+                    vertex_tolerance & apply(end_distance, 1L, max) >=
+                    vertex_tolerance
+                relative <- sweep(unique_vertices, 2L, start, "-")
+                unit <- direction / edge_length
+                perpendicular <- relative - outer(
+                    as.vector(relative %*% unit), unit
+                )
+                line_distance <- sqrt(rowSums(perpendicular ^ 2))
+                between_error <- abs(
+                    edge_length - sqrt(rowSums(relative ^ 2)) -
+                        sqrt(rowSums(end_distance ^ 2))
+                )
+                candidate <- which(
+                    not_endpoint & line_distance < vertex_tolerance &
+                        between_error < vertex_tolerance
+                )
+                if (length(candidate) > 0L) {
+                    position <- as.vector(
+                        relative[candidate, , drop = FALSE] %*% direction
+                    ) / sum(direction ^ 2)
+                    candidate <- candidate[order(position)]
+                }
+                expanded <- c(expanded, vertex_index(start), candidate)
+            }
+            expanded[c(TRUE, diff(expanded) != 0L)]
+        })
+        second_count <- count_edges(expanded_indices)
+        length(second_count) > 0L && all(second_count == 2L)
+    }
+
+    rooms <- unique(surface$ROOM)
+    closed <- vapply(rooms, function(room_name) {
+        room_is_closed(surface[
+            ROOM == room_name &
+                TYPE %in% c("Wall", "Floor", "Ceiling", "Roof")
+        ])
+    }, logical(1L))
+    rooms[!closed]
+}
+
 # Split surface edges at every coplanar room-shell junction introduced by the
 # typical-storey overlay. Reciprocal surface pairs are triangulated from one
 # common polygon and translated to the peer plane, preserving both exact shell
 # closure and one-to-one EnergyPlus boundary references.
 surface__normalize_room_junctions <- function(
-    surface, window = data.table::data.table(), tolerance = 1e-8,
-    distance_tolerance = 0.01
+    surface, window = data.table::data.table(),
+    profile = eplus_geom__profile()
 ) {
+    tolerance <- profile$plane_distance
+    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
-    coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+    coordinate_columns <- geom__coordinate_columns()
     object <- unique(surface[, .(
         OUTPUT_ID, NAME, ROOM, BOUNDARY, BOUNDARY_OBJECT, BOUNDARY_MODE
     )])
@@ -624,17 +714,26 @@ surface__normalize_room_junctions <- function(
         ),
         OUTPUT_ID
     )]
-    room_point <- unique(surface[, .(ROOM, POINT_X, POINT_Y, POINT_Z)])
+    repair_rooms <- surface__energyplus_unclosed_rooms(surface, profile)
+    if (length(repair_rooms) == 0L) return(surface)
+    repair_groups <- unique(object[ROOM %in% repair_rooms]$GROUP)
+    repair_member_rooms <- unique(object[GROUP %in% repair_groups]$ROOM)
+    room_point <- unique(surface[
+        ROOM %in% repair_member_rooms,
+        .(ROOM, POINT_X, POINT_Y, POINT_Z)
+    ])
     # A cyclic face can acquire a junction by projecting a room-shell vertex
     # onto its horizontal plane. Precompute the same projections so incident
     # walls see those vertices regardless of group traversal order.
-    typical_object <- object[BOUNDARY_MODE == "typical_cycle"]
+    typical_object <- object[
+        GROUP %in% repair_groups & BOUNDARY_MODE == "typical_cycle"
+    ]
     projected_point <- lapply(seq_len(nrow(typical_object)), function(index) {
         typical_id <- typical_object$OUTPUT_ID[[index]]
         typical_room <- typical_object$ROOM[[index]]
         typical <- surface[OUTPUT_ID == typical_id]
         candidate <- room_point[ROOM == typical_room]
-        normal <- destep_surface_normal(typical)
+        normal <- geom__unit_normal(typical)
         origin <- as.numeric(typical[1L, .(POINT_X, POINT_Y, POINT_Z)])
         coordinate <- as.matrix(candidate[, .(POINT_X, POINT_Y, POINT_Z)])
         plane_distance <- as.vector(
@@ -664,12 +763,17 @@ surface__normalize_room_junctions <- function(
         } else {
             NULL
         }
+        if (!group %in% repair_groups) {
+            output[[length(output) + 1L]] <- base
+            if (paired) output[[length(output) + 1L]] <- peer
+            next
+        }
 
         rooms <- unique(member$ROOM)
         project_parallel <- paired &&
             any(member$BOUNDARY_MODE == "typical_cycle")
         candidate <- room_point[ROOM %in% rooms]
-        normal <- destep_surface_normal(base)
+        normal <- geom__unit_normal(base)
         origin <- as.numeric(base[1L, .(POINT_X, POINT_Y, POINT_Z)])
         coordinate <- as.matrix(candidate[, .(POINT_X, POINT_Y, POINT_Z)])
         plane_distance <- as.vector(sweep(coordinate, 2L, origin, "-") %*% normal)
@@ -688,11 +792,10 @@ surface__normalize_room_junctions <- function(
         )]
         candidate <- unique(candidate, by = "JUNCTION_KEY")
         candidate[, JUNCTION_KEY := NULL]
-        split <- destep_split_surface_edges(
-            base, candidate,
-            tolerance = tolerance,
-            distance_tolerance = distance_tolerance * (1.0 + 1e-6)
-        )
+        split_profile <- profile
+        split_profile$coordinate_distance <-
+            distance_tolerance * (1.0 + 1e-6)
+        split <- surface__split_edges(base, candidate, split_profile)
         changed <- nrow(split) > nrow(base)
         if (!changed) {
             output[[length(output) + 1L]] <- base
@@ -709,7 +812,7 @@ surface__normalize_room_junctions <- function(
         # ear clipping may legally bypass a collinear junction with one longer
         # diagonal, which reopens the room shell even though total area matches.
         triangle <- if (nrow(avoid_points) == 0L &&
-            destep_surface_polygon_is_convex(split)) {
+            geom__polygon_is_convex(split, profile$angle)) {
             center <- colMeans(as.matrix(
                 split[, .(POINT_X, POINT_Y, POINT_Z)]
             ))
@@ -736,11 +839,7 @@ surface__normalize_room_junctions <- function(
             }))
         } else {
             tryCatch(
-                destep_triangulate_surface_polygon(
-                    split, avoid_points,
-                    tolerance = min(tolerance, 1e-10),
-                    distance_tolerance = distance_tolerance
-                ),
+                surface__triangulate_polygon(split, avoid_points, profile),
                 error = function(error) {
                     stop(sprintf(
                         "Could not normalize room junctions for surface group %s: %s",
@@ -749,6 +848,7 @@ surface__normalize_room_junctions <- function(
                 }
             )
         }
+        triangle <- surface__merge_convex_parts(triangle, profile)
         part_ids <- unique(triangle$PART)
         base_metadata <- base[1L,
             setdiff(names(base), coordinate_columns), with = FALSE
@@ -840,7 +940,10 @@ surface__normalize_room_junctions <- function(
 # Snap coordinates that EnergyPlus cannot distinguish to one deterministic
 # representative before topology is constructed. A spatial hash restricts each
 # search to neighboring 0.01 m buckets instead of comparing every point pair.
-destep_snap_surface_coordinates <- function(surface, tolerance = 0.01) {
+surface__snap_coordinates <- function(
+    surface, profile = eplus_geom__profile()
+) {
+    tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
     point <- unique(surface[, .(POINT_X, POINT_Y, POINT_Z)])
     data.table::setorderv(point, c("POINT_X", "POINT_Y", "POINT_Z"))
@@ -898,122 +1001,179 @@ destep_snap_surface_coordinates <- function(surface, tolerance = 0.01) {
     surface
 }
 
-# Return the drawing-space south direction used to interpret DeST surface
-# azimuths. Older ad hoc databases without ENVIRONMENT retain DeST's standard
-# drawing convention, where drawing +Y points north.
-destep_south_direction <- function(dest) {
-    if (!"ENVIRONMENT" %in% DBI::dbListTables(dest) ||
-        !destep_table_has_fields(dest, "ENVIRONMENT", "SOUTH_DIRECTION")) {
-        # DeST's standard 270-degree setting places drawing north on +Y. Use it
-        # only for legacy or synthetic databases that lack ENVIRONMENT metadata.
-        return(270.0)
-    }
-
-    direction <- DBI::dbGetQuery(
-        dest,
-        "SELECT DISTINCT SOUTH_DIRECTION FROM ENVIRONMENT WHERE SOUTH_DIRECTION IS NOT NULL"
-    )$SOUTH_DIRECTION
-    if (length(direction) == 0L) return(270.0)
-    if (length(direction) > 1L) {
-        # One EnergyPlus Building object has only one North Axis, so silently
-        # choosing one of several DeST orientations would rotate some geometry.
-        stop("Multiple DeST south directions cannot be represented in one EnergyPlus model.")
-    }
-
-    as.double(direction[[1L]]) %% 360.0
-}
-
-# Translate the DeST drawing south-vector angle to EnergyPlus's clockwise
-# rotation from true north to the model +Y axis.
-destep_north_axis <- function(dest) {
-    # Drawing +Y is 90 degrees counterclockwise from +X. Offsetting DeST's
-    # south-vector angle by 90 degrees gives EnergyPlus's clockwise rotation
-    # from true north to the model +Y axis.
-    (destep_south_direction(dest) + 90.0) %% 360.0
-}
-
-# Convert DeST's azimuth/tilt convention into one drawing-coordinate unit
-# normal. The sentinel azimuths distinguish downward and upward horizontal
-# faces, while regular azimuths rotate clockwise from drawing north.
-destep_expected_surface_normal <- function(azimuth, tilt, south_direction) {
-    if (length(azimuth) != 1L || length(tilt) != 1L ||
-        is.na(azimuth) || is.na(tilt)) {
-        stop("A DeST surface must have one azimuth and tilt to determine its orientation.")
-    }
-    # The +/-999 values are DeST sentinels rather than compass azimuths: +999
-    # denotes a downward horizontal face and -999 an upward horizontal face.
-    if (azimuth == 999.0) return(c(0.0, 0.0, -1.0))
-    if (azimuth == -999.0) return(c(0.0, 0.0, 1.0))
-
-    # DeST azimuth increases clockwise from drawing north. Drawing north is
-    # opposite SOUTH_DIRECTION, so clockwise azimuth is subtracted here.
-    direction <- (south_direction - 180.0 - azimuth) * pi / 180.0
-    inclination <- tilt * pi / 180.0
-    # TILT is measured from the horizontal: sin(TILT) is the horizontal normal
-    # magnitude and cos(TILT) is its vertical component.
-    c(
-        cos(direction) * sin(inclination),
-        sin(direction) * sin(inclination),
-        cos(inclination)
-    )
-}
-
-# Calculate a polygon normal with Newell's method so concave planar DeST faces
-# can be oriented without assuming a particular starting vertex.
-destep_surface_normal <- function(surface) {
-    # Wrap the final vertex back to the first so each Newell term represents
-    # one ordered polygon edge without requiring a particular starting corner.
-    following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
-    # Newell's accumulated vector remains stable for the concave, planar floor
-    # polygons found in DeST, where a three-point cross product is insufficient.
-    normal <- c(
-        sum((surface$POINT_Y - surface$POINT_Y[following]) *
-            (surface$POINT_Z + surface$POINT_Z[following])),
-        sum((surface$POINT_Z - surface$POINT_Z[following]) *
-            (surface$POINT_X + surface$POINT_X[following])),
-        sum((surface$POINT_X - surface$POINT_X[following]) *
-            (surface$POINT_Y + surface$POINT_Y[following]))
-    )
-    magnitude <- sqrt(sum(normal ^ 2))
-    if (!is.finite(magnitude) || magnitude <= 1e-12) {
-        # A zero normal means EnergyPlus cannot determine an outside face, so
-        # fail before emitting a geometrically ambiguous surface.
-        name <- if ("NAME" %in% names(surface)) surface$NAME[[1L]] else "<unknown>"
-        stop(sprintf("DeST surface '%s' has a degenerate polygon.", name))
-    }
-
-    normal / magnitude
-}
-
-# Reverse a canonical polygon only when its geometric normal opposes the DeST
-# outward direction. A non-positive alignment is rejected rather than silently
-# emitting an ambiguous EnergyPlus face.
-destep_orient_surface_polygon <- function(surface, south_direction, tolerance = 1e-8) {
+# Merge adjacent triangulation parts with a deterministic greedy policy whenever
+# deleting their common diagonal leaves one planar convex polygon. Retained
+# collinear junctions prevent a merge from reopening a zone edge.
+surface__merge_convex_parts <- function(
+    surface, profile = eplus_geom__profile(),
+    angle_tolerance = profile$angle,
+    distance_tolerance = profile$coordinate_distance,
+    planarity_tolerance = profile$planarity_distance
+) {
     surface <- data.table::copy(surface)
-    expected <- destep_expected_surface_normal(
-        surface$AZIMUTH[[1L]], surface$TILT[[1L]], south_direction
+    part_ids <- unique(surface$PART)
+    if (length(part_ids) <= 1L) return(surface)
+
+    # Stable coordinate indices remove input-row order from adjacency and tie
+    # breaking. The representative row supplies non-coordinate metadata only.
+    key <- sprintf(
+        "%.12f|%.12f|%.12f",
+        surface$POINT_X, surface$POINT_Y, surface$POINT_Z
     )
-    # The dot product tests only direction, independent of polygon area. A
-    # near-zero value means the coordinates contradict the DeST direction data.
-    alignment <- sum(destep_surface_normal(surface) * expected)
-    if (abs(alignment) <= tolerance) {
-        stop(sprintf(
-            "DeST surface '%s' polygon is inconsistent with its azimuth and tilt.",
-            surface$NAME[[1L]]
-        ))
+    unique_key <- sort(unique(key))
+    vertex <- match(key, unique_key)
+    representative <- match(unique_key, key)
+    coordinates <- as.matrix(surface[representative,
+        .(POINT_X, POINT_Y, POINT_Z)])
+    polygon <- lapply(part_ids, function(part) vertex[surface$PART == part])
+
+    # Canonical cycle starts make output part numbering reproducible without
+    # reversing individual parts, because shared edges need opposite directions.
+    canonical_cycle <- function(value) {
+        first <- which.min(value)
+        value[c(seq.int(first, length(value)), seq_len(first - 1L))]
     }
-    # Reversing the complete sequence changes only winding; coordinates, area,
-    # and the canonical set of shared-edge vertices remain unchanged.
-    if (alignment < 0.0) surface <- surface[nrow(surface):1L]
-    data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
-    surface
+    polygon <- lapply(polygon, canonical_cycle)
+    polygon_key <- function(value) paste(sort(value), collapse = ",")
+    polygon <- polygon[order(vapply(polygon, polygon_key, character(1L)))]
+
+    merge_boundary <- function(first, second) {
+        first_next <- c(first[-1L], first[[1L]])
+        second_next <- c(second[-1L], second[[1L]])
+        start <- c(first, second)
+        end <- c(first_next, second_next)
+        edge <- geom__edge_key(start, end)
+        repeated <- names(which(table(edge) == 2L))
+        if (length(repeated) != 1L) return(NULL)
+        keep <- edge != repeated[[1L]]
+        start <- start[keep]
+        end <- end[keep]
+
+        boundary <- integer()
+        current <- start[[1L]]
+        origin <- current
+        repeat {
+            outgoing <- which(start == current)
+            if (length(outgoing) != 1L) return(NULL)
+            selected <- outgoing[[1L]]
+            boundary <- c(boundary, current)
+            current <- end[[selected]]
+            start <- start[-selected]
+            end <- end[-selected]
+            if (current == origin) break
+            if (length(boundary) > length(first) + length(second)) return(NULL)
+        }
+        if (length(start) > 0L || length(boundary) < 3L) return(NULL)
+        canonical_cycle(boundary)
+    }
+    merge_metrics <- function(boundary) {
+        xyz <- coordinates[boundary, , drop = FALSE]
+        frame <- geom__polygon_frame(xyz, profile$normal_magnitude)
+        if (!frame$valid || frame$planarity_error > planarity_tolerance) {
+            return(NULL)
+        }
+
+        following <- c(2:nrow(xyz), 1L)
+        previous <- c(nrow(xyz), seq_len(nrow(xyz) - 1L))
+        incoming <- xyz - xyz[previous, , drop = FALSE]
+        outgoing <- xyz[following, , drop = FALSE] - xyz
+        incoming_length <- sqrt(rowSums(incoming ^ 2))
+        outgoing_length <- sqrt(rowSums(outgoing ^ 2))
+        if (any(incoming_length < distance_tolerance) ||
+            any(outgoing_length < distance_tolerance)) return(NULL)
+
+        xy <- frame$xy
+        turn <- vapply(seq_len(nrow(xy)), function(index) {
+            geom__cross_2d(
+                xy[previous[[index]], ], xy[index, ], xy[following[[index]], ]
+            )
+        }, numeric(1L))
+        scale <- incoming_length * outgoing_length
+        # A straight-through point may be a required room-shell T-junction and
+        # therefore cannot become an independently removable EnergyPlus vertex.
+        if (any(abs(turn) <= sin(angle_tolerance) * scale)) return(NULL)
+        if (!(all(turn > 0.0) || all(turn < 0.0))) return(NULL)
+        list(area = frame$area, key = paste(boundary, collapse = ","))
+    }
+
+    repeat {
+        if (length(polygon) < 2L) break
+        starts <- integer()
+        ends <- integer()
+        owners <- integer()
+        for (index in seq_along(polygon)) {
+            value <- polygon[[index]]
+            starts <- c(starts, value)
+            ends <- c(ends, c(value[-1L], value[[1L]]))
+            owners <- c(owners, rep(index, length(value)))
+        }
+        occurrence <- split(owners, geom__edge_key(starts, ends))
+        adjacent <- occurrence[vapply(
+            occurrence,
+            function(value) {
+                length(value) == 2L && value[[1L]] != value[[2L]]
+            },
+            logical(1L)
+        )]
+        if (length(adjacent) == 0L) break
+
+        candidate <- list()
+        for (edge in names(adjacent)) {
+            owner <- adjacent[[edge]]
+            first <- min(owner)
+            second <- max(owner)
+            boundary <- merge_boundary(polygon[[first]], polygon[[second]])
+            if (is.null(boundary)) next
+            metric <- merge_metrics(boundary)
+            if (is.null(metric)) next
+            endpoint <- as.integer(strsplit(edge, "/", fixed = TRUE)[[1L]])
+            shared_length <- sqrt(sum(
+                (coordinates[endpoint[[1L]], ] -
+                    coordinates[endpoint[[2L]], ]) ^ 2
+            ))
+            candidate[[length(candidate) + 1L]] <- list(
+                first = first, second = second, boundary = boundary,
+                removed = length(polygon[[first]]) +
+                    length(polygon[[second]]) - length(boundary),
+                shared_length = shared_length, area = metric$area,
+                boundary_key = metric$key
+            )
+        }
+        if (length(candidate) == 0L) break
+
+        score <- data.table::rbindlist(lapply(candidate, function(value) {
+            data.table::data.table(
+                removed = value$removed,
+                shared_length = value$shared_length,
+                area = value$area,
+                boundary_key = value$boundary_key
+            )
+        }))
+        selected <- order(
+            -score$removed, -score$shared_length, -score$area,
+            score$boundary_key
+        )[[1L]]
+        value <- candidate[[selected]]
+        polygon[[value$first]] <- value$boundary
+        polygon[[value$second]] <- NULL
+        polygon <- polygon[order(vapply(polygon, polygon_key, character(1L)))]
+    }
+
+    data.table::rbindlist(lapply(seq_along(polygon), function(part) {
+        value <- data.table::copy(surface[representative[polygon[[part]]]])
+        value[, `:=`(PART = part, POINT_NO = seq_len(.N) - 1L)]
+        value
+    }))
 }
 
 # Build one canonical vertex sequence per MAIN_ENCLOSURE middle plane. Planar
 # DeST faces remain intact unless a true topology junction or concavity requires
 # a part boundary that EnergyPlus can preserve.
-destep_normalize_surface_topology <- function(surface, window = data.table::data.table()) {
-    coordinate_columns <- c("POINT_NO", "POINT_X", "POINT_Y", "POINT_Z")
+surface__normalize_topology <- function(
+    surface, window = data.table::data.table(),
+    profile = eplus_geom__profile()
+) {
+    coordinate_columns <- geom__coordinate_columns()
     # Separate per-surface metadata from middle-plane coordinates so a shared
     # polygon is normalized once and then copied consistently to both rooms.
     metadata <- unique(
@@ -1040,7 +1200,7 @@ destep_normalize_surface_topology <- function(surface, window = data.table::data
         candidates <- unique(
             room_point[ROOM %in% rooms, .(POINT_X, POINT_Y, POINT_Z)]
         )
-        destep_split_surface_edges(.SD, candidates)
+        surface__split_edges(.SD, candidates, profile)
     }, by = "PLANE"]
     point[, COORDINATE_KEY := sprintf(
         "%.3f|%.3f|%.3f", POINT_X, POINT_Y, POINT_Z
@@ -1051,7 +1211,7 @@ destep_normalize_surface_topology <- function(surface, window = data.table::data
     # Private collinear points can be removed safely before surface copies are
     # oriented, which also prevents peer vertex-count differences in EnergyPlus.
     point <- point[, {
-        value <- destep_simplify_surface_polygon(.SD)
+        value <- surface__simplify_polygon(.SD, profile)
         if (nrow(value) < 3L) {
             warning(sprintf(
                 paste(
@@ -1067,13 +1227,14 @@ destep_normalize_surface_topology <- function(surface, window = data.table::data
         # EnergyPlus does not rewrite the IDF, but its GetSurfaceData path copies
         # input vertices into an in-memory SurfaceTmp and CheckConvexity removes
         # collinear vertices from that working copy. With reversed peer winding,
-        # EnergyPlus 23.1 removed different counts from some complex peer faces,
+        # The reference EnergyPlus profile removed different counts from some
+        # complex peer faces,
         # causing a vertex-size-mismatch fatal error. Encode each protected
-        # junction as a true part boundary before export: minimally partition
+        # junction as a true part boundary before export: selectively partition
         # window hosts, and triangulate other polygons with identical part IDs
         # on both sides of an interzone construction.
-        split <- any(destep_redundant_surface_vertices(.SD) & PROTECTED)
-        concave <- !destep_surface_polygon_is_convex(.SD)
+        split <- any(surface__redundant_vertices(.SD, profile) & PROTECTED)
+        concave <- !geom__polygon_is_convex(.SD, profile$angle)
         avoid_points <- window[PLANE == .BY$PLANE]
         if (split) {
             # A protected straight-through junction must become an actual edge.
@@ -1081,18 +1242,21 @@ destep_normalize_surface_topology <- function(surface, window = data.table::data
             # slightly non-planar remainder and deleting different peer points.
             # This path is limited to affected planes; ordinary DeST faces keep
             # their original polygon, while windows are clipped to these parts.
-            destep_triangulate_surface_polygon(.SD, avoid_points)
+            surface__triangulate_polygon(.SD, avoid_points, profile)
         } else if (concave) {
             # Concave heat-transfer surfaces are legal, but EnergyPlus cannot
             # reliably use them as shadow receivers or casters. This condition
             # independently justifies complete triangulation.
-            destep_triangulate_surface_polygon(.SD, avoid_points)
+            surface__triangulate_polygon(.SD, avoid_points, profile)
         } else {
             copy <- data.table::copy(.SD)
             copy[, `:=`(PART = 1L, POINT_NO = seq_len(.N) - 1L)]
             copy
         }
     }, by = "PLANE"]
+    # Delete only triangulation diagonals whose removal leaves a planar convex
+    # face; both room-side copies inherit the same deterministic partition.
+    point <- point[, surface__merge_convex_parts(.SD, profile), by = "PLANE"]
     point[, PART_COUNT := data.table::uniqueN(PART), by = "PLANE"]
     point[, c("COORDINATE_KEY", "PROTECTED") := NULL]
 
@@ -1115,9 +1279,11 @@ destep_normalize_surface_topology <- function(surface, window = data.table::data
 # the same edge segmentation. Candidate points are limited to incident rooms
 # and tested with vectorized projection, so the work is O(edges * candidates)
 # per middle plane instead of comparing every point in the building.
-destep_split_surface_edges <- function(
-    surface, all_coordinates, tolerance = 1e-8, distance_tolerance = 0.01
+surface__split_edges <- function(
+    surface, all_coordinates, profile = eplus_geom__profile()
 ) {
+    tolerance <- profile$plane_distance
+    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
     coordinates <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])
     candidates <- as.matrix(all_coordinates[, .(POINT_X, POINT_Y, POINT_Z)])
@@ -1182,9 +1348,11 @@ destep_split_surface_edges <- function(
 # when it coincides with either neighbor, or when the incoming and outgoing
 # edges continue in the same straight direction. Keeping this calculation
 # separate ensures topology splitting and simplification use the same tolerance.
-destep_redundant_surface_vertices <- function(
-    surface, tolerance = 1e-6, distance_tolerance = 0.01
+surface__redundant_vertices <- function(
+    surface, profile = eplus_geom__profile()
 ) {
+    tolerance <- profile$angle
+    distance_tolerance <- profile$coordinate_distance
     n_vertex <- nrow(surface)
     previous <- c(n_vertex, seq_len(n_vertex - 1L))
     following <- c(seq.int(2L, n_vertex), 1L)
@@ -1212,62 +1380,35 @@ destep_redundant_surface_vertices <- function(
         )
 }
 
-# Return whether all non-collinear turns of a planar polygon have the same
-# direction. EnergyPlus warns for concave shadow receivers, so this geometric
-# property is evaluated independently from topology-junction handling.
-destep_surface_polygon_is_convex <- function(surface, tolerance = 1e-6) {
-    normal <- destep_surface_normal(surface)
-    projection <- setdiff(1:3, which.max(abs(normal)))
-    xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
-    previous <- c(nrow(xy), seq_len(nrow(xy) - 1L))
-    following <- c(seq.int(2L, nrow(xy)), 1L)
-    incoming <- xy - xy[previous, , drop = FALSE]
-    outgoing <- xy[following, , drop = FALSE] - xy
-    turn <-
-        (xy[, 1L] - xy[previous, 1L]) *
-            (xy[following, 2L] - xy[, 2L]) -
-        (xy[, 2L] - xy[previous, 2L]) *
-            (xy[following, 1L] - xy[, 1L])
-    scale <- sqrt(rowSums(incoming ^ 2)) * sqrt(rowSums(outgoing ^ 2))
-    turn <- turn[abs(turn) > sin(tolerance) * scale]
-    length(turn) > 0L && (all(turn > 0.0) || all(turn < 0.0))
-}
-
 # Triangulate a simple planar polygon with ear clipping while retaining every
 # protected boundary junction. It is called only for planes that still contain
 # required collinear junctions after simplification, not for every surface.
-# This dependency-free R implementation is cubic in the worst case because each
-# candidate ear checks remaining vertices, but surface polygons are processed
-# independently and normally contain few vertices. Each resulting triangle is a
-# valid EnergyPlus base surface, and peer faces reuse identical part numbering.
-destep_triangulate_surface_polygon <- function(
-    surface, avoid_points = data.table::data.table(), tolerance = 1e-10,
-    distance_tolerance = 0.01
+# Ordinary ear clipping is cubic; the window-clearance search may explore more
+# states, so it is capped by the versioned geometry profile before falling back
+# to deterministic ordinary clipping. Peer faces reuse identical part numbering.
+surface__triangulate_polygon <- function(
+    surface, avoid_points = data.table::data.table(),
+    profile = eplus_geom__profile()
 ) {
+    tolerance <- profile$intersection
+    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
-    normal <- destep_surface_normal(surface)
-    # Project the planar 3-D face onto its most stable 2-D coordinate pair.
-    projection <- setdiff(1:3, which.max(abs(normal)))
-    xy <- as.matrix(surface[, .(POINT_X, POINT_Y, POINT_Z)])[, projection, drop = FALSE]
-    signed_area <- sum(
-        xy[, 1L] * xy[c(2:nrow(xy), 1L), 2L] -
-            xy[c(2:nrow(xy), 1L), 1L] * xy[, 2L]
-    ) / 2.0
-    if (signed_area < 0.0) {
+    frame <- geom__polygon_frame(surface, profile$normal_magnitude)
+    if (!frame$valid) geom__unit_normal(surface, profile$normal_magnitude)
+    normal <- frame$normal
+    projection <- frame$projection
+    xy <- frame$xy
+    if (frame$signed_area < 0.0) {
         # Normalize to counterclockwise order so positive cross products are
         # convex turns throughout the ear-clipping loop.
         surface <- surface[nrow(surface):1L]
         xy <- xy[nrow(xy):1L, , drop = FALSE]
     }
 
-    cross_2d <- function(a, b, c) {
-        (b[[1L]] - a[[1L]]) * (c[[2L]] - a[[2L]]) -
-            (b[[2L]] - a[[2L]]) * (c[[1L]] - a[[1L]])
-    }
     inside_triangle <- function(point, a, b, c) {
-        cross_2d(a, b, point) >= -tolerance &&
-            cross_2d(b, c, point) >= -tolerance &&
-            cross_2d(c, a, point) >= -tolerance
+        geom__cross_2d(a, b, point) >= -tolerance &&
+            geom__cross_2d(b, c, point) >= -tolerance &&
+            geom__cross_2d(c, a, point) >= -tolerance
     }
 
     # Score a candidate ear by its new diagonal's clearance from every window
@@ -1297,7 +1438,8 @@ destep_triangulate_surface_polygon <- function(
     # edge either clears all window corners by 1 cm or passes through a corner
     # exactly. This removes unavoidable near-corner diagonals in ordinary
     # boundary-only triangulations without changing the aggregate host area.
-    if (nrow(avoid_xy) > 0L && destep_surface_polygon_is_convex(surface)) {
+    if (nrow(avoid_xy) > 0L &&
+        geom__polygon_is_convex(surface, profile$angle)) {
         span <- apply(xy, 2L, range)
         grid <- expand.grid(
             X = seq(span[1L, 1L], span[2L, 1L], length.out = 11L),
@@ -1312,7 +1454,9 @@ destep_triangulate_surface_polygon <- function(
         host_next <- seq_len(nrow(xy)) %% nrow(xy) + 1L
         inside <- apply(candidate_center, 1L, function(point) {
             all(vapply(seq_len(nrow(xy)), function(index) {
-                cross_2d(xy[index, ], xy[host_next[[index]], ], point) > tolerance
+                geom__cross_2d(
+                    xy[index, ], xy[host_next[[index]], ], point
+                ) > tolerance
             }, logical(1L)))
         })
         candidate_center <- candidate_center[inside, , drop = FALSE]
@@ -1361,7 +1505,9 @@ destep_triangulate_surface_polygon <- function(
             current <- remaining[[position]]
             following <- remaining[position %% length(remaining) + 1L]
             # A non-positive turn is concave or collinear and cannot be an ear.
-            if (cross_2d(xy[previous, ], xy[current, ], xy[following, ]) <= tolerance) {
+            if (geom__cross_2d(
+                xy[previous, ], xy[current, ], xy[following, ]
+            ) <= tolerance) {
                 next
             }
             candidate_xy <- xy[c(previous, current, following), , drop = FALSE]
@@ -1388,10 +1534,15 @@ destep_triangulate_surface_polygon <- function(
         candidate
     }
     failed_state <- new.env(hash = TRUE, parent = emptyenv())
+    searched_states <- 0L
     find_clear_triangulation <- function(remaining) {
         if (length(remaining) == 3L) return(list(remaining))
         state <- paste(remaining, collapse = ",")
         if (isTRUE(failed_state[[state]])) return(NULL)
+        searched_states <<- searched_states + 1L
+        if (searched_states > profile$triangulation_max_states) {
+            return(NULL)
+        }
 
         candidate <- valid_ears(remaining)
         if (length(candidate) > 0L) {
@@ -1423,9 +1574,9 @@ destep_triangulate_surface_polygon <- function(
     remaining <- seq_len(nrow(surface))
     triangle <- find_clear_triangulation(remaining)
     if (is.null(triangle)) {
-        # Some pathological window layouts may make a fully clear triangulation
-        # impossible. Retain deterministic ordinary ear clipping here; the
-        # downstream area invariant then reports any unavoidable geometry loss.
+        # A pathological layout or the explicit state cap can make a fully clear
+        # search unavailable. Deterministic ordinary clipping avoids unbounded
+        # conversion time; downstream area checks still report geometry loss.
         triangle <- list()
         while (length(remaining) > 3L) {
             candidate <- valid_ears(remaining)
@@ -1456,9 +1607,10 @@ destep_triangulate_surface_polygon <- function(
 
 # Remove redundant vertices from one ordered DeST surface polygon while
 # retaining turns and at least the three vertices needed for a valid face.
-destep_simplify_surface_polygon <- function(
-    surface, tolerance = 1e-6, distance_tolerance = 0.01
+surface__simplify_polygon <- function(
+    surface, profile = eplus_geom__profile()
 ) {
+    distance_tolerance <- profile$coordinate_distance
     surface <- data.table::copy(surface)
 
     repeat {
@@ -1484,9 +1636,7 @@ destep_simplify_surface_polygon <- function(
             next
         }
 
-        redundant <- destep_redundant_surface_vertices(
-            surface, tolerance, distance_tolerance
-        )
+        redundant <- surface__redundant_vertices(surface, profile)
         if ("PROTECTED" %in% names(surface)) {
             redundant <- redundant & !surface$PROTECTED
         }
@@ -1496,19 +1646,11 @@ destep_simplify_surface_polygon <- function(
     }
 
     if (nrow(surface) >= 3L) {
-        following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
-        normal <- c(
-            sum((surface$POINT_Y - surface$POINT_Y[following]) *
-                (surface$POINT_Z + surface$POINT_Z[following])),
-            sum((surface$POINT_Z - surface$POINT_Z[following]) *
-                (surface$POINT_X + surface$POINT_X[following])),
-            sum((surface$POINT_X - surface$POINT_X[following]) *
-                (surface$POINT_Y + surface$POINT_Y[following]))
-        )
         # Snapping can collapse a very narrow source polygon into one line even
         # when its remaining edges are long. Omit the zero-area face before any
         # normal or convexity calculation tries to interpret it.
-        if (sqrt(sum(normal ^ 2)) <= 1e-12) return(surface[0L])
+        if (sqrt(sum(geom__newell_vector(surface) ^ 2)) <=
+            profile$normal_magnitude) return(surface[0L])
     }
 
     data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)

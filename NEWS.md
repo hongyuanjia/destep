@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Reduced converted geometry fragmentation by preserving planar convex surfaces
+  and rectangular windows, while making reciprocal interzone-window partitions
+  deterministic and centralizing EnergyPlus geometry tolerances (#32).
 - Fixed `Schedule:Week:Compact` semantic corruption by keeping day-type groups
   paired with their `Schedule:Day` IDs when moving `AllOtherDays` to the final
   field group, and anchored converted annual run periods to DeST's Monday-first
