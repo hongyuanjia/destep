@@ -1,7 +1,6 @@
-# SURFACE|MAIN_ENCLOSURE|PLANE -> BuildingSurface:Detailed
-surface__convert <- function(
-    dest, ep, geometry_profile = eplus_geom__profile(ep$version())
-) {
+# Read the two room-side copies of every DeST enclosure on their shared middle
+# plane, then put the coordinates on the EnergyPlus geometry tolerance grid.
+surface__source_table <- function(dest, geometry_profile) {
     # NOTE: In DeST, the main enclosure table is used to store the relationship
     # between surfaces and the rooms they belong to. Different from EnergyPlus,
     # 'adjacent' surfaces in DeST have different locations. The distance between
@@ -125,48 +124,35 @@ surface__convert <- function(
     assert_unique_name(surface$NAME[surface$POINT_NO == 0L], "surface")
     data.table::setDT(surface)
     data.table::setorderv(surface, c("ID", "POINT_NO"))
-    surface <- surface__snap_coordinates(surface, geometry_profile)
+    surface__snap_coordinates(surface, geometry_profile)
+}
 
-    # Normalize each shared middle-plane polygon once before the two room-side
-    # copies are oriented. Vertices used by another plane are topological
-    # junctions and must survive collinear-point cleanup.
-    window <- data.table::data.table()
-    if (db_has_rows(dest, "WINDOW")) {
-        window <- data.table::as.data.table(DBI::dbGetQuery(dest, "
-            SELECT
-                W.ID AS WINDOW_ID,
-                E.MIDDLE_PLANE AS PLANE,
-                L.POINT_NO,
-                ROUND(P.X, 3) AS POINT_X,
-                ROUND(P.Y, 3) AS POINT_Y,
-                ROUND(P.Z, 3) AS POINT_Z
-            FROM WINDOW W
-            INNER JOIN MAIN_ENCLOSURE E ON W.OF_ENCLOSURE = E.ID
-            INNER JOIN PLANE PL ON W.MIDDLE_PLANE = PL.PLANE_ID
-            INNER JOIN GEOMETRY G ON PL.GEOMETRY = G.GEOMETRY_ID
-            INNER JOIN LOOP_POINT L ON G.BOUNDARY_LOOP_ID = L.LOOP_ID
-            INNER JOIN POINT P ON L.POINT = P.POINT_ID
-            ORDER BY W.ID, L.POINT_NO
-        "))
-    }
-    surface <- surface__normalize_topology(surface, window, geometry_profile)
-    # remove the surface indicating outside environment and grounds
-    surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
-    surface <- surface__apply_typical_storey_boundaries(
-        surface, window, geometry_profile
-    )
+# Read window vertices used as protected junctions while host surfaces are
+# normalized. Empty DeST window tables deliberately produce an empty data.table.
+surface__window_table <- function(dest) {
+    if (!db_has_rows(dest, "WINDOW")) return(data.table::data.table())
 
-    # Orient every polygon from DeST's source azimuth and tilt. This also makes
-    # exposed floors face downward without relying on enclosure side numbers.
-    south_direction <- geom__south_direction(dest)
-    surface <- surface[
-        , geom__orient_surface_polygon(.SD, south_direction, geometry_profile),
-        by = "OUTPUT_ID"
-    ]
+    data.table::as.data.table(DBI::dbGetQuery(dest, "
+        SELECT
+            W.ID AS WINDOW_ID,
+            E.MIDDLE_PLANE AS PLANE,
+            L.POINT_NO,
+            ROUND(P.X, 3) AS POINT_X,
+            ROUND(P.Y, 3) AS POINT_Y,
+            ROUND(P.Z, 3) AS POINT_Z
+        FROM WINDOW W
+        INNER JOIN MAIN_ENCLOSURE E ON W.OF_ENCLOSURE = E.ID
+        INNER JOIN PLANE PL ON W.MIDDLE_PLANE = PL.PLANE_ID
+        INNER JOIN GEOMETRY G ON PL.GEOMETRY = G.GEOMETRY_ID
+        INNER JOIN LOOP_POINT L ON G.BOUNDARY_LOOP_ID = L.LOOP_ID
+        INNER JOIN POINT P ON L.POINT = P.POINT_ID
+        ORDER BY W.ID, L.POINT_NO
+    "))
+}
 
-    # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
-    # TODO: how does EnergyPlus handle "empty floor slab"?
-
+# Convert normalized surface rows into the ordered field lists expected by
+# BuildingSurface:Detailed, accounting for the pre-Space IDD schema.
+surface__object_values <- function(surface, ep) {
     value <- surface[,
         by = "OUTPUT_ID",
         list(value = list(c(
@@ -199,14 +185,44 @@ surface__convert <- function(
         )))
     ]$value
 
-    # remove space name field
+    # EnergyPlus 9.5 and earlier do not expose the Space Name field.
     if (ep$version() <= "9.5") {
         ind <- which(names(value[[1L]]) == "space_name")
-        if (length(ind) > 0L) {
-            value <- lapply(value, .subset, -ind)
-        }
+        if (length(ind) > 0L) value <- lapply(value, .subset, -ind)
     }
 
+    value
+}
+
+# SURFACE|MAIN_ENCLOSURE|PLANE -> BuildingSurface:Detailed
+surface__convert <- function(
+    dest, ep, geometry_profile = eplus_geom__profile(ep$version())
+) {
+    surface <- surface__source_table(dest, geometry_profile)
+    window <- surface__window_table(dest)
+
+    # Normalize each shared middle-plane polygon once before the two room-side
+    # copies are oriented. Vertices used by another plane are topological
+    # junctions and must survive collinear-point cleanup.
+    surface <- surface__normalize_topology(surface, window, geometry_profile)
+    # remove the surface indicating outside environment and grounds
+    surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
+    surface <- surface__apply_typical_storey_boundaries(
+        surface, window, geometry_profile
+    )
+
+    # Orient every polygon from DeST's source azimuth and tilt. This also makes
+    # exposed floors face downward without relying on enclosure side numbers.
+    south_direction <- geom__south_direction(dest)
+    surface <- surface[
+        , geom__orient_surface_polygon(.SD, south_direction, geometry_profile),
+        by = "OUTPUT_ID"
+    ]
+
+    # TODO: how does DeST handle the case when the surface is both a floor and a ceiling?
+    # TODO: how does EnergyPlus handle "empty floor slab"?
+
+    value <- surface__object_values(surface, ep)
     out <- conv__add_objects(dest, ep, "BuildingSurface:Detailed", value)
 
     # always attach the table to the output in case it is useful later
