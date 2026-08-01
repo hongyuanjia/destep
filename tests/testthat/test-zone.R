@@ -6,10 +6,10 @@ test_that("can convert 'Zone'", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path, verbose = TRUE)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
     # can convert 'Zone', 'ZoneList', 'ZoneGroup'
-    expect_type(zn <- destep_conv_zone(dest, ep), "list")
+    expect_type(zn <- zone__convert(dest, ep), "list")
     expect_named(zn, c("object", "value"))
     expect_equal(unique(zn$object$class_name), c("Zone", "ZoneList", "ZoneGroup"))
     expect_s3_class(attr(zn, "table"), "data.table")

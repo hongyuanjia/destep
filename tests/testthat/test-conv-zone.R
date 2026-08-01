@@ -18,7 +18,7 @@ test_that("can convert 'Zone'", {
     ))
 
     # can convert 'Zone'
-    expect_type(zone <- destep_conv_zone(dest, ep), "list")
+    expect_type(zone <- zone__convert(dest, ep), "list")
     expect_named(zone, c("object", "value"))
     expect_equal(unique(zone$object$class_name), c("Zone", "ZoneList", "ZoneGroup"))
     expect_s3_class(attr(zone, "table"), "data.table")
@@ -46,9 +46,9 @@ test_that("can convert real DeST rooms with storey heights", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    zone <- destep_conv_zone(dest, ep)
+    zone <- zone__convert(dest, ep)
     tab <- attr(zone, "table")
 
     expect_gt(nrow(tab), 0L)

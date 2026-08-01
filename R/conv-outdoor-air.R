@@ -2,18 +2,17 @@
 # DeST stores the requirement as m3/h per person; EnergyPlus expects m3/s per
 # person for the Flow/Person method, so values are converted once here and then
 # reused by zone equipment converters such as IdealLoads.
-destep_conv_design_specification_outdoor_air <- function(dest, ep) {
-    outdoor_air <- destep_occupant_outdoor_air_table(dest)
+outdoor_air__convert <- function(dest, ep) {
+    outdoor_air <- outdoor_air__occupant_table(dest)
     if (nrow(outdoor_air) == 0L) return(NULL)
 
     values <- lapply(seq_len(nrow(outdoor_air)), function(i) {
-        destep_outdoor_air_value(outdoor_air, i)
+        outdoor_air__value(outdoor_air, i)
     })
 
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("DesignSpecification:OutdoorAir" := .(val)))
-    )))
+    out <- conv__add_objects(
+        dest, ep, "DesignSpecification:OutdoorAir", values
+    )
     attr(out, "table") <- outdoor_air
 
     out
@@ -22,7 +21,7 @@ destep_conv_design_specification_outdoor_air <- function(dest, ep) {
 # Build one row per room for positive occupant outdoor-air requirements. If a
 # room has multiple occupant gain rows, their fresh-air requirements must agree;
 # otherwise the model needs a more explicit conflict-resolution rule.
-destep_occupant_outdoor_air_table <- function(dest) {
+outdoor_air__occupant_table <- function(dest) {
     cols <- c(
         "ROOM_ID", "ROOM_NAME", "MIN_REQUIRE_FRESH_AIR",
         "OUTDOOR_AIR_FLOW_PER_PERSON", "ENERGYPLUS_OUTDOOR_AIR_NAME"
@@ -36,7 +35,7 @@ destep_occupant_outdoor_air_table <- function(dest) {
     )
     data.table::setcolorder(empty, cols)
 
-    if (!destep_has_rows(dest, "ROOM") || !destep_has_rows(dest, "OCCUPANT_GAINS")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "OCCUPANT_GAINS")) {
         return(empty)
     }
 
@@ -59,13 +58,13 @@ destep_occupant_outdoor_air_table <- function(dest) {
     data.table::setDT(outdoor_air)
     if (nrow(outdoor_air) == 0L) return(empty)
 
-    destep_assert_outdoor_air_rooms(outdoor_air)
-    destep_assert_outdoor_air_consistency(outdoor_air)
+    outdoor_air__assert_rooms(outdoor_air)
+    outdoor_air__assert_consistency(outdoor_air)
 
     outdoor_air <- unique(
         outdoor_air[, .(ROOM_ID, ROOM_NAME, MIN_REQUIRE_FRESH_AIR)]
     )
-    destep_force_numeric(outdoor_air, "MIN_REQUIRE_FRESH_AIR")
+    dt_force_numeric(outdoor_air, "MIN_REQUIRE_FRESH_AIR")
 
     # Convert from DeST's m3/h-person to EnergyPlus' m3/s-person.
     data.table::set(
@@ -83,7 +82,7 @@ destep_occupant_outdoor_air_table <- function(dest) {
 
 # Positive fresh-air requirements must point to a known room; otherwise the
 # generated DesignSpecification object would not have a usable zone context.
-destep_assert_outdoor_air_rooms <- function(outdoor_air) {
+outdoor_air__assert_rooms <- function(outdoor_air) {
     unresolved <- is.na(outdoor_air$ROOM_NAME)
     if (!any(unresolved)) {
         return(invisible(NULL))
@@ -103,7 +102,7 @@ destep_assert_outdoor_air_rooms <- function(outdoor_air) {
 
 # Each room is mapped to one DesignSpecification:OutdoorAir object in this
 # converter, so conflicting per-person requirements are treated as invalid.
-destep_assert_outdoor_air_consistency <- function(outdoor_air) {
+outdoor_air__assert_consistency <- function(outdoor_air) {
     conflicts <- outdoor_air[, .(
         N = data.table::uniqueN(MIN_REQUIRE_FRESH_AIR),
         VALUES = paste(sort(unique(MIN_REQUIRE_FRESH_AIR)), collapse = ", ")
@@ -126,7 +125,7 @@ destep_assert_outdoor_air_consistency <- function(outdoor_air) {
 
 # Build one DesignSpecification:OutdoorAir value list using the Flow/Person
 # method so EnergyPlus multiplies the requirement by zone occupancy.
-destep_outdoor_air_value <- function(outdoor_air, i) {
+outdoor_air__value <- function(outdoor_air, i) {
     list(
         name = outdoor_air$ENERGYPLUS_OUTDOOR_AIR_NAME[[i]],
         outdoor_air_method = "Flow/Person",

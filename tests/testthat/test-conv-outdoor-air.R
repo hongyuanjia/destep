@@ -21,7 +21,7 @@ test_that("can convert occupant minimum fresh air to DesignSpecification:Outdoor
     dest <- destep_test_outdoor_air_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    outdoor_air <- destep_conv_design_specification_outdoor_air(dest, ep)
+    outdoor_air <- outdoor_air__convert(dest, ep)
     tab <- attr(outdoor_air, "table")
     value <- outdoor_air$value
 
@@ -52,7 +52,7 @@ test_that("deduplicates matching occupant outdoor-air requirements by room", {
     )
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    outdoor_air <- destep_conv_design_specification_outdoor_air(dest, ep)
+    outdoor_air <- outdoor_air__convert(dest, ep)
 
     expect_equal(sum(outdoor_air$object$class_name == "DesignSpecification:OutdoorAir"), 1L)
     expect_equal(attr(outdoor_air, "table")$ROOM_NAME, "Room 1")
@@ -67,7 +67,7 @@ test_that("stops on conflicting occupant outdoor-air requirements by room", {
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     expect_error(
-        destep_conv_design_specification_outdoor_air(dest, ep),
+        outdoor_air__convert(dest, ep),
         "Conflicting OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR"
     )
 })
@@ -77,7 +77,7 @@ test_that("skips zero or missing occupant outdoor-air requirements", {
     dest <- destep_test_outdoor_air_db(fresh_air = c(0, NA_real_))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    expect_null(destep_conv_design_specification_outdoor_air(dest, ep))
+    expect_null(outdoor_air__convert(dest, ep))
 })
 
 test_that("stops when occupant outdoor-air room references cannot be resolved", {
@@ -86,7 +86,7 @@ test_that("stops when occupant outdoor-air room references cannot be resolved", 
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     expect_error(
-        destep_conv_design_specification_outdoor_air(dest, ep),
+        outdoor_air__convert(dest, ep),
         "Cannot resolve OCCUPANT_GAINS outdoor-air room reference"
     )
 })
@@ -105,9 +105,9 @@ test_that("can convert occupant outdoor air from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    outdoor_air <- destep_conv_design_specification_outdoor_air(dest, ep)
+    outdoor_air <- outdoor_air__convert(dest, ep)
     tab <- attr(outdoor_air, "table")
 
     expect_equal(nrow(tab), 36L)

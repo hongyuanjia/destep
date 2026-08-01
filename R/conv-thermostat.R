@@ -1,19 +1,19 @@
 # ROOM_GROUP temperature setpoint schedules -> ZoneControl:Thermostat.
 # Each EnergyPlus zone needs its own control object, but rooms with identical
 # heating/cooling schedule IDs can share the same DualSetpoint object.
-destep_conv_thermostat <- function(dest, ep) {
-    if (!destep_has_rows(dest, "ROOM") || !destep_has_rows(dest, "ROOM_GROUP")) {
+thermostat__convert <- function(dest, ep) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_GROUP")) {
         return(NULL)
     }
 
-    thermostat <- destep_room_group_thermostat_table(dest)
-    destep_assert_thermostat_schedules(thermostat)
+    thermostat <- thermostat__room_group_table(dest)
+    thermostat__assert_schedules(thermostat)
 
     # A room group can exist without setpoint schedules. Keep those rows in the
     # diagnostic table but do not create incomplete EnergyPlus controls.
     skip_reason <- rep(NA_character_, nrow(thermostat))
     skip_reason[is.na(thermostat$ROOM_GROUP_ID)] <- "ROOM.OF_ROOM_GROUP does not reference ROOM_GROUP"
-    missing_setpoint <- is.na(skip_reason) & !destep_has_thermostat_setpoints(thermostat)
+    missing_setpoint <- is.na(skip_reason) & !thermostat__has_setpoints(thermostat)
     skip_reason[missing_setpoint] <- "ROOM_GROUP setpoint schedule is zero or missing"
     # A ZoneControl:Thermostat is valid only for a Zone with equipment. Keep
     # this predicate aligned with IdealLoads so unconditioned DeST rooms do not
@@ -29,7 +29,7 @@ destep_conv_thermostat <- function(dest, ep) {
     data.table::set(thermostat, NULL, "CAN_CONVERT", is.na(skip_reason))
     data.table::set(
         thermostat, NULL, "ENERGYPLUS_SETPOINT_NAME",
-        destep_thermostat_setpoint_names(thermostat)
+        thermostat__setpoint_names(thermostat)
     )
     data.table::set(
         thermostat, NULL, "ENERGYPLUS_ZONE_CONTROL_NAME",
@@ -52,10 +52,10 @@ destep_conv_thermostat <- function(dest, ep) {
         "ENERGYPLUS_SETPOINT_NAME"
     ), with = FALSE])
 
-    out <- destep_combine_outputs(list(
-        control_type = destep_thermostat_control_type_schedule(dest, ep),
-        setpoint = destep_thermostat_setpoint_objects(dest, ep, setpoint),
-        control = destep_thermostat_control_objects(dest, ep, converted)
+    out <- conv__combine_outputs(list(
+        control_type = thermostat__control_type_schedule(dest, ep),
+        setpoint = thermostat__setpoint_objects(dest, ep, setpoint),
+        control = thermostat__control_objects(dest, ep, converted)
     ), table = thermostat)
 
     out
@@ -64,7 +64,7 @@ destep_conv_thermostat <- function(dest, ep) {
 # Collect the room-level ROOM_GROUP thermostat inputs and resolve both setpoint
 # schedule names up front, so downstream conversion can fail before writing IDF
 # objects if a non-zero schedule ID is dangling.
-destep_room_group_thermostat_table <- function(dest) {
+thermostat__room_group_table <- function(dest) {
     thermostat <- DBI::dbGetQuery(
         dest,
         "
@@ -96,7 +96,7 @@ destep_room_group_thermostat_table <- function(dest) {
 
 # Non-zero setpoint IDs are explicit foreign keys to SCHEDULE_YEAR. Missing
 # targets should stop conversion instead of silently creating broken references.
-destep_assert_thermostat_schedules <- function(thermostat) {
+thermostat__assert_schedules <- function(thermostat) {
     has_heat <- !is.na(thermostat$SET_T_MIN_SCHEDULE) & thermostat$SET_T_MIN_SCHEDULE != 0L
     has_cool <- !is.na(thermostat$SET_T_MAX_SCHEDULE) & thermostat$SET_T_MAX_SCHEDULE != 0L
     unresolved_heat <- has_heat & is.na(thermostat$HEATING_SCHEDULE_NAME)
@@ -122,7 +122,7 @@ destep_assert_thermostat_schedules <- function(thermostat) {
 
 # A complete DeST thermostat needs both lower and upper temperature schedules.
 # IS_AC_ROOM is deliberately not part of this predicate; it is diagnostic only.
-destep_has_thermostat_setpoints <- function(thermostat) {
+thermostat__has_setpoints <- function(thermostat) {
     !is.na(thermostat$SET_T_MIN_SCHEDULE) &
         thermostat$SET_T_MIN_SCHEDULE != 0L &
         !is.na(thermostat$SET_T_MAX_SCHEDULE) &
@@ -131,9 +131,9 @@ destep_has_thermostat_setpoints <- function(thermostat) {
 
 # Use stable schedule-ID based names so identical ROOM_GROUP setpoint pairs
 # share one ThermostatSetpoint:DualSetpoint object across all zones.
-destep_thermostat_setpoint_names <- function(thermostat) {
+thermostat__setpoint_names <- function(thermostat) {
     ifelse(
-        destep_has_thermostat_setpoints(thermostat),
+        thermostat__has_setpoints(thermostat),
         sprintf(
             "DeST Dual Setpoint H%s C%s",
             thermostat$SET_T_MIN_SCHEDULE,
@@ -145,8 +145,8 @@ destep_thermostat_setpoint_names <- function(thermostat) {
 
 # EnergyPlus uses control type 4 to select ThermostatSetpoint:DualSetpoint. A
 # single constant schedule can be shared by every ZoneControl:Thermostat.
-destep_thermostat_control_type_schedule <- function(dest, ep) {
-    destep_add(
+thermostat__control_type_schedule <- function(dest, ep) {
+    conv__add(
         dest, ep,
         "Schedule:Constant" := list(
             name = "DeST Dual Setpoint Control Type",
@@ -158,19 +158,16 @@ destep_thermostat_control_type_schedule <- function(dest, ep) {
 
 # Create one shared DualSetpoint object for each distinct DeST lower/upper
 # temperature schedule pair.
-destep_thermostat_setpoint_objects <- function(dest, ep, setpoint) {
+thermostat__setpoint_objects <- function(dest, ep, setpoint) {
     values <- lapply(seq_len(nrow(setpoint)), function(i) {
-        destep_thermostat_setpoint_value(setpoint, i)
+        thermostat__setpoint_value(setpoint, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ThermostatSetpoint:DualSetpoint" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ThermostatSetpoint:DualSetpoint", values)
 }
 
 # Build the DualSetpoint value list for one distinct schedule pair.
-destep_thermostat_setpoint_value <- function(setpoint, i) {
+thermostat__setpoint_value <- function(setpoint, i) {
     list(
         name = setpoint$ENERGYPLUS_SETPOINT_NAME[[i]],
         heating_setpoint_temperature_schedule_name = setpoint$HEATING_SCHEDULE_NAME[[i]],
@@ -180,19 +177,16 @@ destep_thermostat_setpoint_value <- function(setpoint, i) {
 
 # Create one ZoneControl:Thermostat per room while reusing the shared dual
 # setpoint object selected by the room group's schedule pair.
-destep_thermostat_control_objects <- function(dest, ep, thermostat) {
+thermostat__control_objects <- function(dest, ep, thermostat) {
     values <- lapply(seq_len(nrow(thermostat)), function(i) {
-        destep_thermostat_control_value(thermostat, i)
+        thermostat__control_value(thermostat, i)
     })
 
-    eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneControl:Thermostat" := .(val)))
-    )))
+    conv__add_objects(dest, ep, "ZoneControl:Thermostat", values)
 }
 
 # Build the ZoneControl object value list for one converted room.
-destep_thermostat_control_value <- function(thermostat, i) {
+thermostat__control_value <- function(thermostat, i) {
     list(
         name = thermostat$ENERGYPLUS_ZONE_CONTROL_NAME[[i]],
         zone_or_zonelist_name = thermostat$ROOM_NAME[[i]],

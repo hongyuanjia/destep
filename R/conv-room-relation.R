@@ -3,8 +3,8 @@
 # says that the referenced 8760-value schedule corresponds to air changes, so
 # those hourly schedule values are treated as hourly ACH values. VENT_SET_MAX is
 # retained in the diagnostic table until its unit is confirmed from DeST.
-destep_conv_room_ventilation <- function(dest, ep) {
-    if (!destep_has_rows(dest, "ROOM_RELATION")) return(NULL)
+ventilation__convert <- function(dest, ep) {
+    if (!db_has_rows(dest, "ROOM_RELATION")) return(NULL)
 
     relation <- DBI::dbGetQuery(
         dest,
@@ -49,7 +49,7 @@ destep_conv_room_ventilation <- function(dest, ep) {
     # use a unit ACH design level so the referenced DeST schedule DATA values
     # pass through as the actual hourly ACH sequence.
     data.table::set(relation, NULL, "AIR_CHANGES_PER_HOUR", 1)
-    data.table::set(relation, NULL, "ENERGYPLUS_NAME", destep_room_ventilation_names(relation))
+    data.table::set(relation, NULL, "ENERGYPLUS_NAME", ventilation__names(relation))
 
     if (any(!relation$CAN_CONVERT)) {
         warn(sprintf(
@@ -62,12 +62,11 @@ destep_conv_room_ventilation <- function(dest, ep) {
     if (nrow(ventilation) == 0L) return(NULL)
 
     values <- lapply(seq_len(nrow(ventilation)), function(i) {
-        destep_room_ventilation_value(ventilation, i)
+        ventilation__value(ventilation, i)
     })
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
-        lapply(values, function(val) bquote("ZoneVentilation:DesignFlowRate" := .(val)))
-    )))
+    out <- conv__add_objects(
+        dest, ep, "ZoneVentilation:DesignFlowRate", values
+    )
 
     attr(out, "table") <- relation
 
@@ -76,7 +75,7 @@ destep_conv_room_ventilation <- function(dest, ep) {
 
 # Build stable EnergyPlus object names for ROOM_RELATION records whose DeST NAME
 # is usually empty or a literal dot in observed models.
-destep_room_ventilation_names <- function(relation) {
+ventilation__names <- function(relation) {
     raw_name <- relation$NAME
     use_room_name <- is.na(raw_name) | raw_name == "." | !nzchar(raw_name)
     raw_name[use_room_name] <- paste(relation$ROOM_NAME[use_room_name], "Outdoor Ventilation")
@@ -87,7 +86,7 @@ destep_room_ventilation_names <- function(relation) {
 
 # Create the EnergyPlus ventilation object value list for one external
 # ROOM_RELATION row.
-destep_room_ventilation_value <- function(ventilation, i) {
+ventilation__value <- function(ventilation, i) {
     list(
         name = ventilation$ENERGYPLUS_NAME[[i]],
         zone_or_zonelist_or_space_or_spacelist_name = ventilation$ROOM_NAME[[i]],

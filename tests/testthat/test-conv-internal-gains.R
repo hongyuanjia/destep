@@ -47,10 +47,12 @@ test_that("can convert internal gains", {
         PER_AREA = 1L,
         MAXPOWER = 40,
         MINPOWER = 0,
+        MAX_HUM = 0,
+        MIN_HUM = 0,
         DIST_MODE = 4L
     ))
 
-    gains <- destep_conv_internal_gains(dest, ep)
+    gains <- internal_gains__convert(dest, ep)
 
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
@@ -64,6 +66,26 @@ test_that("can convert internal gains", {
                 gains$value$field_name == "Activity Level Schedule Name"
         ]),
         "Activity Level 109.44 W"
+    )
+    activity_object <- gains$value[
+        class_name == "Schedule:Constant" &
+            field_name == "Name" &
+            value_chr == "Activity Level 109.44 W",
+        rleid
+    ]
+    expect_equal(
+        gains$value[
+            rleid == activity_object & field_name == "Hourly Value",
+            value_num
+        ],
+        40 + 0.1 * 2500 / 3.6
+    )
+    expect_equal(
+        unique(gains$value$value_num[
+            gains$value$class_name == "People" &
+                gains$value$field_name == "Sensible Heat Fraction"
+        ]),
+        40 / (40 + 0.1 * 2500 / 3.6)
     )
     expect_equal(sum(gains$object$class_name == "People"), 2L)
     expect_equal(
@@ -97,6 +119,75 @@ test_that("can convert internal gains", {
     )
 })
 
+test_that("rejects internal gain minimum values above their maximum", {
+    people <- data.frame(
+        NAME = "Invalid People", SCHEDULE_NAME = "Always On",
+        METHOD = "People", NUMBER_OF_PEOPLE = 1,
+        MIN_NUMBER_OF_PEOPLE = 2
+    )
+    lights <- data.frame(
+        NAME = "Invalid Lights", SCHEDULE_NAME = "Always On",
+        METHOD = "LightingLevel", LIGHTING_LEVEL = 5,
+        MIN_LIGHTING_LEVEL = 6
+    )
+    equipment <- data.frame(
+        NAME = "Invalid Equipment", SCHEDULE_NAME = "Always On",
+        METHOD = "EquipmentLevel", DESIGN_LEVEL = 10,
+        MIN_DESIGN_LEVEL = 11
+    )
+
+    expect_error(
+        internal_gains__people_values(people, 1L, "Minimum"),
+        "Invalid People.*minimum.*exceeds maximum"
+    )
+    expect_error(
+        internal_gains__light_values(lights, 1L, "watts_per_floor_area", "Minimum"),
+        "Invalid Lights.*minimum.*exceeds maximum"
+    )
+    expect_error(
+        internal_gains__equipment_values(
+            equipment, 1L, "watts_per_floor_area", "Minimum"
+        ),
+        "Invalid Equipment.*minimum.*exceeds maximum"
+    )
+})
+
+test_that("nonzero equipment moisture is rejected until it can be mapped", {
+    ep <- ensure_empty_idf()
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbWriteTable(dest, "ROOM", data.frame(
+        ID = 1L,
+        NAME = "Room 101"
+    ))
+    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
+        SCHEDULE_ID = 10L,
+        NAME = "Always On"
+    ))
+    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(
+        DIST_MODE_ID = 4L,
+        DIST_AIR = 0.7
+    ))
+    DBI::dbWriteTable(dest, "EQUIPMENT_GAINS", data.frame(
+        GAIN_ID = 103L,
+        NAME = "Wet Equipment",
+        OF_ROOM = 1L,
+        SCHEDULE = 10L,
+        PER_AREA = 0L,
+        MAXPOWER = 40,
+        MINPOWER = 0,
+        MAX_HUM = 0.2,
+        MIN_HUM = 0,
+        DIST_MODE = 4L
+    ))
+
+    expect_error(
+        internal_gains__convert_electric_equipment(dest, ep),
+        "Cannot convert nonzero EQUIPMENT_GAINS moisture generation"
+    )
+})
+
 test_that("can convert internal gains from a real DeST model", {
     skip_on_cran()
 
@@ -111,9 +202,9 @@ test_that("can convert internal gains from a real DeST model", {
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    gains <- destep_conv_internal_gains(dest, ep)
+    gains <- internal_gains__convert(dest, ep)
     expected <- DBI::dbGetQuery(
         dest,
         "

@@ -1,7 +1,7 @@
 # ROOM -> Zone
 # ROOM$OF_STOREY -> STOREY$ID + MULTIPLE
 # ROOM$OF_STORY -> ZoneList
-destep_conv_zone <- function(dest, ep) {
+zone__convert <- function(dest, ep) {
     room <- DBI::dbGetQuery(dest,
         "SELECT
             R.ID                 AS ID,
@@ -38,7 +38,7 @@ destep_conv_zone <- function(dest, ep) {
     ]
 
     out <- eval(as.call(c(
-        destep_add, dest, ep,
+        conv__add, dest, ep,
         # Zone
         quote("Zone" := list(
             name = room$NAME,

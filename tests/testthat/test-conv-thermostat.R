@@ -33,7 +33,7 @@ test_that("can convert ROOM_GROUP thermostat setpoints with shared dual setpoint
     dest <- destep_test_thermostat_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    thermostat <- destep_conv_thermostat(dest, ep)
+    thermostat <- thermostat__convert(dest, ep)
     tab <- attr(thermostat, "table")
     value <- thermostat$value
 
@@ -105,7 +105,7 @@ test_that("stops when ROOM_GROUP setpoint schedules cannot be resolved", {
     ))
 
     expect_error(
-        destep_conv_thermostat(dest, ep),
+        thermostat__convert(dest, ep),
         "Cannot resolve ROOM_GROUP thermostat schedule"
     )
 })
@@ -122,7 +122,7 @@ test_that("skips rooms without complete ROOM_GROUP setpoints", {
     ")
 
     expect_warning(
-        thermostat <- destep_conv_thermostat(dest, ep),
+        thermostat <- thermostat__convert(dest, ep),
         "Skipped 1 ROOM row"
     )
 
@@ -145,9 +145,9 @@ test_that("can convert ROOM_GROUP thermostat setpoints from a real DeST model", 
         unlink(path_tmp)
     }, add = TRUE)
     RSQLite::sqliteCopyDatabase(src, dest)
-    destep_update_name(dest)
+    conv__update_names(dest)
 
-    thermostat <- destep_conv_thermostat(dest, ep)
+    thermostat <- thermostat__convert(dest, ep)
     tab <- attr(thermostat, "table")
 
     expect_equal(sum(tab$CAN_CONVERT), 27L)

@@ -13,7 +13,9 @@ DBIConnection object.}
 \item{ver}{[string] A character string specifying the EnergyPlus version.
 It can be \code{"latest"}, which is the default, to indicate using the
 latest EnergyPlus version supported by the
-\{\href{https://cran.r-project.org/package=eplusr}{eplusr}\} package.}
+\{\href{https://cran.r-project.org/package=eplusr}{eplusr}\} package.
+Geometry compatibility has been validated against EnergyPlus 23.1;
+other versions currently reuse that profile with an explicit warning.}
 
 \item{copy}{[logical] Whether to copy the input DeST database to a
 temporary SQLite database. Note that if \code{FALSE}, the input database

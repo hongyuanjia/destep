@@ -1,8 +1,8 @@
 test_that("DeST schema catalog has the expected shape", {
-    catalog <- destep_schema_catalog()
+    catalog <- schema__catalog()
     tables <- catalog$tables
     fields <- catalog$fields
-    fields_cn <- destep_read_schema_tsv("fields_cn.tsv")
+    fields_cn <- schema__read_tsv("fields_cn.tsv")
     observations <- catalog$observations
 
     expect_named(catalog, c("tables", "fields", "observations"))
@@ -106,7 +106,7 @@ test_that("DeST schema catalog has the expected shape", {
 
 test_that("DeST schema catalog matches the real fixture schema", {
     skip_on_cran()
-    catalog <- destep_schema_catalog()
+    catalog <- schema__catalog()
     tables <- catalog$tables
     fields <- catalog$fields
     observations <- catalog$observations

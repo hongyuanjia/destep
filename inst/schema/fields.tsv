@@ -77,10 +77,10 @@ ROOM_GROUP	ROOM_GROUP_ID	1	primary_key	Identifier.	""
 ROOM_GROUP	NAME	2	""	Name.	""
 ROOM_GROUP	OF_BUILDING	3	""	Owning building identifier, related to BUILDING.BUILDING_ID.	""
 ROOM_GROUP	OF_AC_SYS	4	""	Owning air-conditioning system ID; 0 means it does not belong to any system.	""
-ROOM_GROUP	IS_AC_ROOM	5	""	Nonzero means this is an air-conditioned room.	Used by destep_conv_ideal_loads to decide whether to create IdealLoads zone equipment.
-ROOM_GROUP	AC_SCHEDULE_ID	6	""	Air-conditioning on/off schedule ID.	Converted by destep_conv_ideal_loads as the IdealLoads availability schedule.
-ROOM_GROUP	SET_T_MIN_SCHEDULE	7	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by destep_conv_thermostat as the heating setpoint schedule.
-ROOM_GROUP	SET_T_MAX_SCHEDULE	8	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by destep_conv_thermostat as the cooling setpoint schedule.
+ROOM_GROUP	IS_AC_ROOM	5	""	Nonzero means this is an air-conditioned room.	Used by ideal_loads__convert to decide whether to create IdealLoads zone equipment.
+ROOM_GROUP	AC_SCHEDULE_ID	6	""	Air-conditioning on/off schedule ID.	Converted by ideal_loads__convert as the IdealLoads availability schedule.
+ROOM_GROUP	SET_T_MIN_SCHEDULE	7	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by thermostat__convert as the heating setpoint schedule.
+ROOM_GROUP	SET_T_MAX_SCHEDULE	8	""	Room temperature setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	Converted by thermostat__convert as the cooling setpoint schedule.
 ROOM_GROUP	SET_RH_MIN_SCHEDULE	9	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
 ROOM_GROUP	SET_RH_MAX_SCHEDULE	10	""	Room humidity setpoint schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID.	""
 ROOM_GROUP	AC_T_MIN_SCHEDULE	11	""	Air-conditioning activation temperature schedule ID, corresponding to SCHEDULE_YEAR.SCHEDULE_ID, used for unitary air-conditioning systems.	Not converted yet; interpreted as a DeST unitary-system tolerance or activation schedule without a direct IdealLoads v1 mapping.
@@ -471,7 +471,7 @@ OCCUPANT_GAINS	MAXNUMBER	6	""	Maximum number of people, as people or people per 
 OCCUPANT_GAINS	MINNUMBER	7	""	Minimum number of people, as people or people per square meter.	""
 OCCUPANT_GAINS	HEAT_PER_PERSON	8	""	Heat gain per person in W.	""
 OCCUPANT_GAINS	DAMP_PER_PERSON	9	""	Moisture generation per person in kg/hr.	""
-OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	""	Minimum outdoor-air flow required per person in m3/h.	Converted by destep_conv_design_specification_outdoor_air as Flow/Person after converting from m3/h-person to m3/s-person.
+OCCUPANT_GAINS	MIN_REQUIRE_FRESH_AIR	10	""	Minimum outdoor-air flow required per person in m3/h.	Converted by outdoor_air__convert as Flow/Person after converting from m3/h-person to m3/s-person.
 OCCUPANT_GAINS	PER_AREA	11	""	Whether the value is per square meter.	""
 OCCUPANT_GAINS	A	12	""	A	""
 OCCUPANT_GAINS	B	13	""	B	""

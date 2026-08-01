@@ -1,7 +1,7 @@
 # Resolve the aggregate thermal and optical properties of every DeST window.
 # The returned table is shared by construction and fenestration conversion so
 # both paths apply exactly the same validity checks and fallback decisions.
-destep_window_type_performance <- function(dest) {
+const__window_type_performance <- function(dest) {
     window <- DBI::dbGetQuery(
         dest,
         "SELECT ID AS WINDOW_ID, TYPE AS TYPE_ID,
@@ -27,7 +27,7 @@ destep_window_type_performance <- function(dest) {
     # Resolve it here because invalid type records must fall back to the same
     # detailed construction that the original window would have used.
     if ("DEFAULT_SETTING" %in% DBI::dbListTables(dest) &&
-        destep_table_has_fields(
+        db_has_fields(
             dest, "DEFAULT_SETTING",
             c("TABLE_NAME", "FIELD_NAME", "TYPE", "LONG")
         )) {
@@ -51,7 +51,7 @@ destep_window_type_performance <- function(dest) {
 
     required <- c("ID", "NAME", "K", "SC", "LIGHT_TRANS_RATIO")
     has_type_data <- "WINDOW_TYPE_DATA" %in% DBI::dbListTables(dest) &&
-        destep_table_has_fields(dest, "WINDOW_TYPE_DATA", required)
+        db_has_fields(dest, "WINDOW_TYPE_DATA", required)
     if (has_type_data) {
         type <- DBI::dbGetQuery(
             dest,
@@ -109,146 +109,16 @@ destep_window_type_performance <- function(dest) {
     window
 }
 
-# MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-destep_conv_const <- function(dest, ep) {
-    if (DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM MAIN_ENCLOSURE")$N == 0L) {
-        return(NULL)
-    }
-
-    # The construction ID refers to different tables based on the kind of the
-    # construction:
-    #
-    # KIND = 1 -> SYS_OUTWALL     -> SYS_OUTWALL_MATERIAL     -> MATERIAL
-    # KIND = 2 -> SYS_INWALL      -> SYS_INWALL_MATERIAL      -> MATERIAL
-    # KIND = 3 -> SYS_ROOF        -> SYS_ROOF_MATERIAL        -> MATERIAL
-    # KIND = 4 -> SYS_GROUNDFLOOR -> SYS_GROUNDFLOOR_MATERIAL -> MATERIAL
-    # KIND = 5 -> SYS_MIDDLEFLOOR -> SYS_MIDDLEFLOOR_MATERIAL -> MATERIAL
-    # KIND = 6 -> SYS_AIRFLOOR    -> SYS_AIRFLOOR_MATERIAL    -> MATERIAL
-    # TODO: translate Chinese names?
-    const <- DBI::dbGetQuery(dest,
-        "
-        WITH SYS_CONST AS (
-            SELECT STRUCT_ID, CNAME, 1 AS KIND
-            FROM SYS_OUTWALL
-            UNION
-            SELECT STRUCT_ID, CNAME, 2 AS KIND
-            FROM SYS_INWALL
-            UNION
-            SELECT STRUCT_ID, CNAME, 3 AS KIND
-            FROM SYS_ROOF
-            UNION
-            SELECT STRUCT_ID, CNAME, 4 AS KIND
-            FROM SYS_GROUNDFLOOR
-            UNION
-            SELECT STRUCT_ID, CNAME, 5 AS KIND
-            FROM SYS_MIDDLEFLOOR
-            UNION
-            SELECT STRUCT_ID, CNAME, 6 AS KIND
-            FROM SYS_AIRFLOOR
-        ),
-        SYS_CONST_MATERIAL AS (
-            SELECT STRUCT_ID, 1 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_OUTWALL_MATERIAL
-            UNION
-            SELECT STRUCT_ID, 2 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_INWALL_MATERIAL
-            UNION
-            SELECT STRUCT_ID, 3 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_ROOF_MATERIAL
-            UNION
-            SELECT STRUCT_ID, 4 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_GROUNDFLOOR_MATERIAL
-            UNION
-            SELECT STRUCT_ID, 5 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_MIDDLEFLOOR_MATERIAL
-            UNION
-            SELECT STRUCT_ID, 6 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
-            FROM SYS_AIRFLOOR_MATERIAL
-        ),
-        CONST AS (
-            SELECT DISTINCT CONSTRUCTION, KIND FROM MAIN_ENCLOSURE WHERE CONSTRUCTION != 0
-            UNION
-            SELECT DISTINCT D.LONG AS CONSTRUCTION, E.KIND
-            FROM MAIN_ENCLOSURE E
-            LEFT JOIN DEFAULT_SETTING D
-            -- handle default construction
-            ON E.CONSTRUCTION = 0 AND E.KIND = D.KIND AND
-            D.TABLE_NAME = 'MAIN_ENCLOSURE' AND D.FIELD_NAME = 'CONSTRUCTION' AND D.TYPE = 2
-            WHERE D.LONG IS NOT NULL
-        )
-        SELECT
-            C.STRUCT_ID     AS ID,
-            C.CNAME         AS NAME,
-            CONST.KIND      AS KIND,
-            CM.LAYER_NO     AS LAYER_NO,
-            CM.LENGTH       AS LENGTH,
-            CM.MATERIAL_ID  AS MATERIAL_ID,
-            M.CNAME         AS MATERIAL_NAME,
-            M.CONDUCTIVITY  AS MATERIAL_CONDUCTIVITY,
-            M.DENSITY       AS MATERIAL_DENSITY,
-            M.SPECIFIC_HEAT AS MATERIAL_SPECIFIC_HEAT
-        FROM CONST
-        LEFT JOIN SYS_CONST C
-        ON CONST.CONSTRUCTION = C.STRUCT_ID AND CONST.KIND = C.KIND
-        LEFT JOIN SYS_CONST_MATERIAL CM
-        ON C.STRUCT_ID = CM.STRUCT_ID AND C.KIND = CM.KIND
-        LEFT JOIN SYS_MATERIAL M
-        ON CM.MATERIAL_ID = M.MATERIAL_ID
-        "
-    )
-
-    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
-    # Detailed layers are now retained only for windows that require fallback.
-    window_type <- destep_window_type_performance(dest)
-
-    # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
-    # TODO: handle 'SHADING' in 'WINDOW' table
-    window <- DBI::dbGetQuery(dest,
-        "
-        WITH WIN AS (
-            SELECT DISTINCT WINDOW_CONSTRUCTION FROM WINDOW WHERE WINDOW_CONSTRUCTION != 0
-            UNION
-            SELECT D.LONG AS WINDOW_CONSTRUCTION
-            FROM WINDOW W
-            LEFT JOIN DEFAULT_SETTING D
-            ON W.WINDOW_CONSTRUCTION = 0 AND
-               D.TABLE_NAME = 'WINDOW' AND D.FIELD_NAME = 'WINDOW_CONSTRUCTION' AND D.TYPE = 2
-            WHERE D.LONG IS NOT NULL
-        )
-        SELECT
-            S.WINDOW_ID           AS ID,
-            S.CNAME               AS NAME,
-            -- use KIND = -1 to indicate that the construction is a window
-            -1                    AS KIND,
-            SM.LAYER_NO           AS LAYER_NO,
-            SM.LENGTH             AS LENGTH,
-            SM.MATERIAL_ID        AS MATERIAL_ID,
-            M.CNAME               AS MATERIAL_NAME,
-            M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
-            M.DENSITY             AS MATERIAL_DENSITY,
-            M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
-        FROM WIN W
-        LEFT JOIN SYS_WINDOW S
-        ON W.WINDOW_CONSTRUCTION = S.WINDOW_ID
-        LEFT JOIN SYS_WINDOW_MATERIAL SM
-        ON S.WINDOW_ID = SM.WINDOW_ID
-        LEFT JOIN SYS_APP_MATERIAL M
-        ON SM.MATERIAL_ID = M.APP_MATERIAL_ID
-        "
-    )
-
-    # DOOR -> SYS_DOOR -> SYS_MATERIAL
-    # TODO: GlazedDoor or Door?
-    # NOTE: Doors only have a single layer in DeST. There are 'APP_ID' and
-    # 'APP_FLAG' values to indicate if there are glazings in the door. Here we
-    # form the data in the same format as normal construction: mark the normal
-    # layer as 0 and the glaze layer as 1.
-    door <- DBI::dbGetQuery(dest,
+# Read opaque and transparent door layers while retaining one representative
+# host enclosure for every distinct DeST door construction.
+const__door_layers <- function(dest) {
+    DBI::dbGetQuery(dest,
         "
         WITH DR AS (
-            SELECT DISTINCT DOOR_CONSTRUCTION, MIN(OF_ENCLOSURE) AS OF_ENCLOSURE
+            SELECT DOOR_CONSTRUCTION, MIN(OF_ENCLOSURE) AS OF_ENCLOSURE
             FROM DOOR
             WHERE DOOR_CONSTRUCTION != 0
+            GROUP BY DOOR_CONSTRUCTION
             UNION
             SELECT D.LONG AS DOOR_CONSTRUCTION, DR.OF_ENCLOSURE
             FROM DOOR DR
@@ -322,10 +192,157 @@ destep_conv_const <- function(dest, ep) {
             LEFT JOIN SYS_DOOR S
             ON D.DOOR_CONSTRUCTION = S.DOOR_ID AND S.APP_ID != 0 AND S.APP_FLAG = 1
             LEFT JOIN SYS_APP_MATERIAL M
-            ON S.MATERIAL_ID = M.APP_MATERIAL_ID
+            -- APP_ID identifies the transparent material; MATERIAL_ID is the
+            -- separate opaque door-body material.
+            ON S.APP_ID = M.APP_MATERIAL_ID
         ) WHERE ID IS NOT NULL -- in case there are no glaze layers
         "
     )
+}
+
+# Read every opaque construction layer referenced by MAIN_ENCLOSURE, resolving
+# DeST's construction table from the enclosure kind.
+const__opaque_layers <- function(dest) {
+    # The construction ID refers to different tables based on the kind of the
+    # construction:
+    #
+    # KIND = 1 -> SYS_OUTWALL     -> SYS_OUTWALL_MATERIAL     -> MATERIAL
+    # KIND = 2 -> SYS_INWALL      -> SYS_INWALL_MATERIAL      -> MATERIAL
+    # KIND = 3 -> SYS_ROOF        -> SYS_ROOF_MATERIAL        -> MATERIAL
+    # KIND = 4 -> SYS_GROUNDFLOOR -> SYS_GROUNDFLOOR_MATERIAL -> MATERIAL
+    # KIND = 5 -> SYS_MIDDLEFLOOR -> SYS_MIDDLEFLOOR_MATERIAL -> MATERIAL
+    # KIND = 6 -> SYS_AIRFLOOR    -> SYS_AIRFLOOR_MATERIAL    -> MATERIAL
+    # TODO: translate Chinese names?
+    DBI::dbGetQuery(dest,
+        "
+        WITH SYS_CONST AS (
+            SELECT STRUCT_ID, CNAME, 1 AS KIND
+            FROM SYS_OUTWALL
+            UNION
+            SELECT STRUCT_ID, CNAME, 2 AS KIND
+            FROM SYS_INWALL
+            UNION
+            SELECT STRUCT_ID, CNAME, 3 AS KIND
+            FROM SYS_ROOF
+            UNION
+            SELECT STRUCT_ID, CNAME, 4 AS KIND
+            FROM SYS_GROUNDFLOOR
+            UNION
+            SELECT STRUCT_ID, CNAME, 5 AS KIND
+            FROM SYS_MIDDLEFLOOR
+            UNION
+            SELECT STRUCT_ID, CNAME, 6 AS KIND
+            FROM SYS_AIRFLOOR
+        ),
+        SYS_CONST_MATERIAL AS (
+            SELECT STRUCT_ID, 1 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_OUTWALL_MATERIAL
+            UNION
+            SELECT STRUCT_ID, 2 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_INWALL_MATERIAL
+            UNION
+            SELECT STRUCT_ID, 3 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_ROOF_MATERIAL
+            UNION
+            SELECT STRUCT_ID, 4 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_GROUNDFLOOR_MATERIAL
+            UNION
+            SELECT STRUCT_ID, 5 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_MIDDLEFLOOR_MATERIAL
+            UNION
+            SELECT STRUCT_ID, 6 AS KIND, MATERIAL_ID, LAYER_NO, LENGTH
+            FROM SYS_AIRFLOOR_MATERIAL
+        ),
+        CONST AS (
+            SELECT DISTINCT CONSTRUCTION, KIND FROM MAIN_ENCLOSURE WHERE CONSTRUCTION != 0
+            UNION
+            SELECT DISTINCT D.LONG AS CONSTRUCTION, E.KIND
+            FROM MAIN_ENCLOSURE E
+            LEFT JOIN DEFAULT_SETTING D
+            -- handle default construction
+            ON E.CONSTRUCTION = 0 AND E.KIND = D.KIND AND
+            D.TABLE_NAME = 'MAIN_ENCLOSURE' AND D.FIELD_NAME = 'CONSTRUCTION' AND D.TYPE = 2
+            WHERE D.LONG IS NOT NULL
+        )
+        SELECT
+            C.STRUCT_ID     AS ID,
+            C.CNAME         AS NAME,
+            CONST.KIND      AS KIND,
+            CM.LAYER_NO     AS LAYER_NO,
+            CM.LENGTH       AS LENGTH,
+            CM.MATERIAL_ID  AS MATERIAL_ID,
+            M.CNAME         AS MATERIAL_NAME,
+            M.CONDUCTIVITY  AS MATERIAL_CONDUCTIVITY,
+            M.DENSITY       AS MATERIAL_DENSITY,
+            M.SPECIFIC_HEAT AS MATERIAL_SPECIFIC_HEAT
+        FROM CONST
+        LEFT JOIN SYS_CONST C
+        ON CONST.CONSTRUCTION = C.STRUCT_ID AND CONST.KIND = C.KIND
+        LEFT JOIN SYS_CONST_MATERIAL CM
+        ON C.STRUCT_ID = CM.STRUCT_ID AND C.KIND = CM.KIND
+        LEFT JOIN SYS_MATERIAL M
+        ON CM.MATERIAL_ID = M.MATERIAL_ID
+        "
+    )
+}
+
+# Read detailed window construction layers used when aggregate type performance
+# is missing or physically invalid.
+const__window_layers <- function(dest) {
+    # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
+    # TODO: handle 'SHADING' in 'WINDOW' table
+    DBI::dbGetQuery(dest,
+        "
+        WITH WIN AS (
+            SELECT DISTINCT WINDOW_CONSTRUCTION FROM WINDOW WHERE WINDOW_CONSTRUCTION != 0
+            UNION
+            SELECT D.LONG AS WINDOW_CONSTRUCTION
+            FROM WINDOW W
+            LEFT JOIN DEFAULT_SETTING D
+            ON W.WINDOW_CONSTRUCTION = 0 AND
+               D.TABLE_NAME = 'WINDOW' AND D.FIELD_NAME = 'WINDOW_CONSTRUCTION' AND D.TYPE = 2
+            WHERE D.LONG IS NOT NULL
+        )
+        SELECT
+            S.WINDOW_ID           AS ID,
+            S.CNAME               AS NAME,
+            -- use KIND = -1 to indicate that the construction is a window
+            -1                    AS KIND,
+            SM.LAYER_NO           AS LAYER_NO,
+            SM.LENGTH             AS LENGTH,
+            SM.MATERIAL_ID        AS MATERIAL_ID,
+            M.CNAME               AS MATERIAL_NAME,
+            M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
+            M.DENSITY             AS MATERIAL_DENSITY,
+            M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+        FROM WIN W
+        LEFT JOIN SYS_WINDOW S
+        ON W.WINDOW_CONSTRUCTION = S.WINDOW_ID
+        LEFT JOIN SYS_WINDOW_MATERIAL SM
+        ON S.WINDOW_ID = SM.WINDOW_ID
+        LEFT JOIN SYS_APP_MATERIAL M
+        ON SM.MATERIAL_ID = M.APP_MATERIAL_ID
+        "
+    )
+}
+
+# Normalize the referenced DeST layers and select detailed-window fallbacks
+# before EnergyPlus object tables are derived from them.
+const__prepare_layers <- function(dest) {
+    const <- const__opaque_layers(dest)
+
+    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
+    # Detailed layers are now retained only for windows that require fallback.
+    window_type <- const__window_type_performance(dest)
+    window <- const__window_layers(dest)
+
+    # DOOR -> SYS_DOOR -> SYS_MATERIAL
+    # TODO: GlazedDoor or Door?
+    # NOTE: Doors only have a single layer in DeST. There are 'APP_ID' and
+    # 'APP_FLAG' values to indicate if there are glazings in the door. Here we
+    # form the data in the same format as normal construction: mark the normal
+    # layer as 0 and the glaze layer as 1.
+    door <- const__door_layers(dest)
 
     assert_unique_name(const$NAME[const$LAYER_NO == 0L], "construction")
     assert_unique_name(window$NAME[window$LAYER_NO == 0L], "window")
@@ -334,6 +351,11 @@ destep_conv_const <- function(dest, ep) {
     data.table::setDT(const)
     data.table::setDT(window)
     data.table::setDT(door)
+    # Layer order is semantic, so make it deterministic before building both
+    # the source-direction and reversed EnergyPlus construction stacks.
+    data.table::setorderv(const, c("ID", "KIND", "LAYER_NO"))
+    data.table::setorderv(window, c("ID", "LAYER_NO"))
+    data.table::setorderv(door, c("ID", "LAYER_NO"))
 
     # Valid WINDOW_TYPE_DATA records replace the whole detailed glazing stack,
     # so only load SYS_WINDOW objects still referenced by fallback windows.
@@ -376,7 +398,7 @@ destep_conv_const <- function(dest, ep) {
     # each material binds to a specific thickness. During conversion, we have to
     # create a new material with each thickness. Appending the thickness to the
     # material name should make them unique, since duplicated names have been
-    # handled by 'destep_update_name()'
+    # handled by 'conv__update_names()'
     if (nrow(const) > 0L) {
         data.table::set(const, NULL, "MATERIAL_NAME",
             with(const, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
@@ -387,125 +409,212 @@ destep_conv_const <- function(dest, ep) {
             with(window, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
-    # only rename glaze layers for doors
+    # Door body and glazing materials can also vary by thickness, so apply the
+    # same stable suffix used for opaque and window materials.
     if (nrow(door) > 0L) {
-        # door should have the same thickness as the parent wall
-        if (nrow(const) > 0L) {
-
-        }
-        any(door$LAYER_NO == 1L)
         data.table::set(door, NULL, "MATERIAL_NAME",
             with(door, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
 
-    # normal construction
-    norm_const <- list()
-    norm_mat <- list()
-
-    # window construction
-    win_const <- list()
-    win_glaze <- list()
-    win_air <- list()
-
-    # aggregate window-type construction
-    win_type_const <- list()
-    win_type_glazing <- unique(
-        window_type[TYPE_DATA_VALID == TRUE],
-        by = "TYPE_ID"
+    list(
+        const = const, window = window,
+        window_type = window_type, door = door
     )
+}
 
-    # door construction
-    door_const <- list()
-    door_glaze <- list()
-    door_mat <- list()
-
-    # columns to be used in the material input
-    col_mat <- c(
+# Return the normalized columns shared by opaque, glazing, and gas material
+# object tables.
+const__material_columns <- function() {
+    c(
         "MATERIAL_ID", "LENGTH", "MATERIAL_NAME", "MATERIAL_CONDUCTIVITY",
         "MATERIAL_DENSITY", "MATERIAL_SPECIFIC_HEAT"
     )
-    if (nrow(const) > 0L) {
-        norm_const <- const[,
-            by = c("ID", "KIND"),
-            list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+}
 
-        # construct normal Material input
-        norm_mat <- unique(const[, .SD, .SDcols = col_mat], by = c("MATERIAL_ID", "LENGTH"))
+# Build the normal and reversed EnergyPlus Construction objects for a layered
+# DeST construction. The optional kind marks non-opaque construction classes.
+const__layered_constructions <- function(layer, by, kind = NULL) {
+    if (nrow(layer) == 0L) return(data.table::data.table())
+
+    normal <- layer[,
+        by = by,
+        list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+    ]
+    # SIDE1 looks against the stored DeST layer direction and therefore needs
+    # an explicit reverse-stack Construction object.
+    reverse <- layer[,
+        by = by,
+        list(
+            name = sprintf("%s [Reverse]", NAME[[1L]]),
+            value = list(c(
+                sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
+            ))
+        )
+    ]
+    if (!is.null(kind)) {
+        data.table::set(normal, NULL, "KIND", kind)
+        data.table::set(reverse, NULL, "KIND", kind)
     }
 
-    if (nrow(window) > 0L) {
-        win_const <- window[, by = "ID",
-            # use KIND = -1 to indicate that the construction is a window
-            list(KIND = -1L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+    data.table::rbindlist(list(normal, reverse), use.names = TRUE, fill = TRUE)
+}
 
-        win_glaze <- unique(
-            window[MATERIAL_ID != 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
+# Select one material record for each material-and-thickness combination after
+# applying an optional row mask for glazing, gas, or door-layer roles.
+const__material_table <- function(layer, rows = NULL) {
+    if (nrow(layer) == 0L) return(data.table::data.table())
+    if (!is.null(rows)) layer <- layer[rows]
+    unique(
+        layer[, .SD, .SDcols = const__material_columns()],
+        by = c("MATERIAL_ID", "LENGTH")
+    )
+}
 
-        win_air <- unique(
-            window[MATERIAL_ID == 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
+# Build aggregate simple-glazing constructions and retain the validated source
+# rows used later to create WindowMaterial:SimpleGlazingSystem objects.
+const__window_type_objects <- function(window_type) {
+    glazing <- unique(
+        window_type[TYPE_DATA_VALID == TRUE],
+        by = "TYPE_ID"
+    )
+    if (nrow(glazing) == 0L) {
+        return(list(
+            construction = data.table::data.table(), glazing = glazing
+        ))
     }
 
-    if (nrow(win_type_glazing) > 0L) {
-        assert_unique_name(
-            win_type_glazing$TYPE_CONSTRUCTION_NAME,
-            "window type construction"
+    assert_unique_name(
+        glazing$TYPE_CONSTRUCTION_NAME,
+        "window type construction"
+    )
+    assert_unique_name(
+        glazing$SIMPLE_GLAZING_NAME,
+        "simple glazing material"
+    )
+    normal <- glazing[, list(
+        ID = TYPE_ID,
+        KIND = -3L,
+        name = TYPE_CONSTRUCTION_NAME,
+        value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
+    )]
+    # Whole-window simple glazing is direction-independent, but reciprocal
+    # interzone windows retain an explicit reverse construction name.
+    reverse <- glazing[, list(
+        ID = TYPE_ID,
+        KIND = -3L,
+        name = sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+        value = Map(
+            c,
+            sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+            SIMPLE_GLAZING_NAME
         )
-        assert_unique_name(
-            win_type_glazing$SIMPLE_GLAZING_NAME,
-            "simple glazing material"
-        )
-        win_type_const <- win_type_glazing[, list(
-            ID = TYPE_ID,
-            KIND = -3L,
-            name = TYPE_CONSTRUCTION_NAME,
-            value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
-        )]
+    )]
+
+    list(
+        construction = data.table::rbindlist(list(normal, reverse)),
+        glazing = glazing
+    )
+}
+
+# Build door constructions and separate their opaque body from the optional
+# glazing layer used by WindowMaterial:Glazing.
+const__door_objects <- function(door) {
+    if (nrow(door) == 0L) {
+        empty <- data.table::data.table()
+        return(list(construction = empty, material = empty, glazing = empty))
     }
 
-    if (nrow(door) > 0L) {
-        # construct normal Material input
-        door_const <- door[, by = "ID",
-            # use KIND = -2 to indicate that the construction is a door
-            list(KIND = -2L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+    construction <- door[, by = "ID",
+        # KIND = -2 distinguishes doors from other construction classes.
+        list(KIND = -2L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+    ]
 
-        door_mat <- unique(
-            door[LAYER_NO == 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
+    list(
+        construction = construction,
+        material = const__material_table(door, door$LAYER_NO == 0L),
+        glazing = const__material_table(door, door$LAYER_NO == 1L)
+    )
+}
 
-        door_glaze <- unique(
-            door[LAYER_NO == 1L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
-    }
+# Derive deduplicated EnergyPlus construction and material tables from the
+# normalized DeST source layers.
+const__object_tables <- function(source) {
+    opaque_const <- const__layered_constructions(
+        source$const, c("ID", "KIND")
+    )
+    window_const <- const__layered_constructions(
+        source$window, "ID", kind = -1L
+    )
+    window_type <- const__window_type_objects(source$window_type)
+    door <- const__door_objects(source$door)
 
     dt_const <- unique(
-        data.table::rbindlist(
-            list(norm_const, win_const, win_type_const, door_const), TRUE
-        ),
+        data.table::rbindlist(list(
+            opaque_const, window_const,
+            window_type$construction, door$construction
+        ), use.names = TRUE, fill = TRUE),
         by = c("ID", "KIND", "name")
     )
-    dt_mat   <- unique(
-        data.table::rbindlist(list(norm_mat, door_mat), TRUE),
+    dt_mat <- unique(
+        data.table::rbindlist(list(
+            const__material_table(source$const), door$material
+        ), use.names = TRUE, fill = TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
     dt_glaze <- unique(
-        data.table::rbindlist(list(win_glaze, door_glaze), TRUE),
+        data.table::rbindlist(list(
+            const__material_table(
+                source$window, source$window$MATERIAL_ID != 0L
+            ),
+            door$glazing
+        ), use.names = TRUE, fill = TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
-    dt_air <- data.table::rbindlist(list(win_air), fill = TRUE)
+    dt_air <- const__material_table(
+        source$window, source$window$MATERIAL_ID == 0L
+    )
     if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
 
-    out <- eval(as.call(c(
-        destep_add, dest, ep,
+    list(
+        construction = dt_const,
+        material = dt_mat,
+        glazing = dt_glaze,
+        air = dt_air,
+        simple_glazing = window_type$glazing
+    )
+}
+
+# MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
+const__convert <- function(dest, ep) {
+    if (!db_has_rows(dest, "MAIN_ENCLOSURE")) return(NULL)
+
+    source <- const__prepare_layers(dest)
+    object <- const__object_tables(source)
+    out <- const__assemble_objects(
+        dest, ep, object$material, object$simple_glazing,
+        object$glazing, object$air, object$construction
+    )
+
+    # always attach the table to the output in case it is useful later
+    attr(out, "table") <- data.table::rbindlist(
+        list(
+            source$const, source$window,
+            object$simple_glazing, source$door
+        ),
+        fill = TRUE
+    )
+
+    out
+}
+
+# Assemble the heterogeneous material and construction classes after the
+# converter has normalized every source table and resolved its fallbacks.
+const__assemble_objects <- function(
+    dest, ep, dt_mat, win_type_glazing, dt_glaze, dt_air, dt_const
+) {
+    eval(as.call(c(
+        conv__add, dest, ep,
 
         # Material
         bquote(
@@ -542,20 +651,8 @@ destep_conv_const <- function(dest, ep) {
         }),
 
         if (nrow(dt_glaze) > 0L) {
-            # NOTE: It is not an one-to-one match between the glazing optical
-            # properties in DeST and EnergyPlus.
-            #
-            # We can found 2.5mm, 3mm, 6mm and 12mm clear glazing in the dataset
-            # 'WindowGlassMaterials.idf' distributed from EnergyPlus
-            #
-            # However, the entries in 'SYS_APP_MATERIAL' in DeST have thickness of
-            # 3mm, 5mm and 18mm.
-            #
-            # An approach is to use the LBNL Window program to extract the optical
-            # properties of the glazing. But haven't try this yet.
-            #
-            # Here we will use the optical properties of a 3mm clear glazing for all
-            # glazing in DeST and issue a message
+            # Detailed DeST optical fields have no direct EnergyPlus match, so
+            # retain the established 3 mm clear-glazing approximation.
             clear3mm <- list(
                 Name = "CLEAR 3MM", Conductivity = 0.9, Thickness = 0.003,
                 `Optical Data Type` = "SpectralAverage",
@@ -595,13 +692,8 @@ destep_conv_const <- function(dest, ep) {
         },
 
         # Construction
-        lapply(dt_const$value, function(con) bquote("Construction" := as.list(.(con))))
+        lapply(dt_const$value, function(con) {
+            bquote("Construction" := as.list(.(con)))
+        })
     )))
-
-    # always attach the table to the output in case it is useful later
-    attr(out, "table") <- data.table::rbindlist(
-        list(const, window, win_type_glazing, door), fill = TRUE
-    )
-
-    out
 }

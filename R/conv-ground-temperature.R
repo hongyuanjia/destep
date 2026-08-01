@@ -2,16 +2,16 @@
 # EnergyPlus uses this object for building surfaces whose outside boundary
 # condition is Ground, so DeST's hourly user-defined ground temperatures are
 # reduced to the 12 monthly values required by the IDD.
-destep_conv_ground_temperature <- function(dest, ep) {
-    if (!destep_has_rows(dest, "GROUND_DATA")) return(NULL)
+ground_temperature__convert <- function(dest, ep) {
+    if (!db_has_rows(dest, "GROUND_DATA")) return(NULL)
 
-    ground <- destep_ground_temperature_table(dest)
-    monthly <- destep_monthly_ground_temperature(ground)
+    ground <- ground_temperature__table(dest)
+    monthly <- ground_temperature__monthly(ground)
 
-    out <- destep_add(
+    out <- conv__add(
         dest, ep,
         "Site:GroundTemperature:BuildingSurface" :=
-            destep_ground_temperature_value(monthly)
+            ground_temperature__value(monthly)
     )
     attr(out, "table") <- monthly
 
@@ -21,8 +21,8 @@ destep_conv_ground_temperature <- function(dest, ep) {
 # Select one GROUND_DATA series and return the validated hourly table used by
 # the converter.  The selection mirrors the DeST library path when available
 # and keeps the unique-ID fallback explicit for models like the current fixture.
-destep_ground_temperature_table <- function(dest) {
-    ground_id <- destep_select_ground_data_id(dest)
+ground_temperature__table <- function(dest) {
+    ground_id <- ground_temperature__select_data_id(dest)
     if (is.null(ground_id)) return(data.table::data.table())
 
     ground <- DBI::dbGetQuery(
@@ -41,8 +41,8 @@ destep_ground_temperature_table <- function(dest) {
         )
     )
     data.table::setDT(ground)
-    destep_force_numeric(ground, c("ID", "HOUR", "T"))
-    destep_validate_ground_temperature_table(ground, ground_id)
+    dt_force_numeric(ground, c("ID", "HOUR", "T"))
+    ground_temperature__validate_table(ground, ground_id)
 
     ground
 }
@@ -50,8 +50,8 @@ destep_ground_temperature_table <- function(dest) {
 # Resolve the ground-temperature data set from ENVIRONMENT/SYS_CITY first.
 # If that bridge is absent or points outside GROUND_DATA, a single available
 # GROUND_DATA.ID is safe; multiple IDs need a deliberate selection rule.
-destep_select_ground_data_id <- function(dest) {
-    resolved <- destep_resolve_city_ground_data_ids(dest)
+ground_temperature__select_data_id <- function(dest) {
+    resolved <- ground_temperature__resolve_city_data_ids(dest)
     if (length(resolved) == 1L) return(resolved[[1L]])
     if (length(resolved) > 1L) {
         stop(sprintf(
@@ -79,12 +79,12 @@ destep_select_ground_data_id <- function(dest) {
 
 # Keep the ENVIRONMENT/SYS_CITY bridge optional because ad hoc fixtures and some
 # DeST exports may carry GROUND_DATA without a resolvable city-library row.
-destep_resolve_city_ground_data_ids <- function(dest) {
+ground_temperature__resolve_city_data_ids <- function(dest) {
     if (!all(c("ENVIRONMENT", "SYS_CITY", "GROUND_DATA") %in% DBI::dbListTables(dest))) {
         return(numeric())
     }
-    if (!destep_table_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !destep_table_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
+    if (!db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+        !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
         return(numeric())
     }
 
@@ -105,15 +105,9 @@ destep_resolve_city_ground_data_ids <- function(dest) {
     ids[!is.na(ids)]
 }
 
-# Check a table's columns before running optional bridge SQL.  This avoids
-# turning small unit-test fixtures into schema-completeness tests.
-destep_table_has_fields <- function(dest, table, fields) {
-    all(fields %in% DBI::dbListFields(dest, table))
-}
-
 # A BuildingSurface ground-temperature object has no room for gaps or duplicate
 # hours, so the selected DeST series must be exactly one non-leap 8760-hour year.
-destep_validate_ground_temperature_table <- function(ground, ground_id) {
+ground_temperature__validate_table <- function(ground, ground_id) {
     issues <- character()
     hour <- ground$HOUR
 
@@ -133,19 +127,19 @@ destep_validate_ground_temperature_table <- function(ground, ground_id) {
         if (length(missing_hours)) {
             issues <- c(issues, sprintf(
                 "missing HOUR value(s): %s",
-                destep_format_integer_sample(missing_hours)
+                fmt_integer_sample(missing_hours)
             ))
         }
         if (length(duplicate_hours)) {
             issues <- c(issues, sprintf(
                 "duplicate HOUR value(s): %s",
-                destep_format_integer_sample(duplicate_hours)
+                fmt_integer_sample(duplicate_hours)
             ))
         }
         if (length(unexpected_hours)) {
             issues <- c(issues, sprintf(
                 "unexpected HOUR value(s): %s",
-                destep_format_integer_sample(unexpected_hours)
+                fmt_integer_sample(unexpected_hours)
             ))
         }
     }
@@ -164,18 +158,9 @@ destep_validate_ground_temperature_table <- function(ground, ground_id) {
     invisible(ground)
 }
 
-# Show enough hour IDs for a useful error while keeping long validation messages
-# readable.
-destep_format_integer_sample <- function(x, n = 10L) {
-    x <- sort(unique(as.integer(x)))
-    out <- paste(utils::head(x, n), collapse = ", ")
-    if (length(x) > n) out <- paste0(out, ", ...")
-    out
-}
-
 # Aggregate the validated hourly series using the standard non-leap calendar
 # implied by DeST's HOUR = 0:8759 convention.
-destep_monthly_ground_temperature <- function(ground) {
+ground_temperature__monthly <- function(ground) {
     month_hours <- c(31L, 28L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L) * 24L
     month <- rep(seq_along(month_hours), month_hours)
 
@@ -188,7 +173,7 @@ destep_monthly_ground_temperature <- function(ground) {
 }
 
 # Build the exact EnergyPlus field list for Site:GroundTemperature:BuildingSurface.
-destep_ground_temperature_value <- function(monthly) {
+ground_temperature__value <- function(monthly) {
     values <- as.list(monthly$GROUND_TEMPERATURE)
     names(values) <- paste0(
         tolower(month.name),
