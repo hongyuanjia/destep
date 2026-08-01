@@ -21,6 +21,8 @@ to_eplus(dest, ver = "latest", copy = TRUE, verbose = FALSE)
   can be `"latest"`, which is the default, to indicate using the latest
   EnergyPlus version supported by the
   {[eplusr](https://cran.r-project.org/package=eplusr)} package.
+  Geometry compatibility has been validated against EnergyPlus 23.1;
+  other versions currently reuse that profile with an explicit warning.
 
 - copy:
 

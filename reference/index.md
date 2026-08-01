@@ -9,3 +9,5 @@
 - [`read_dest()`](read_dest.md) : Read tables from a DeST model and
   convert to SQLite
 - [`to_eplus()`](to_eplus.md) : Convert a DeST model to EnergyPlus model
+- [`to_epw()`](to_epw.md) : Convert DeST climate data to an EnergyPlus
+  weather object
