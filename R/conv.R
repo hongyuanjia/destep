@@ -338,6 +338,228 @@ conv__idd_field_name <- function(ep, class, field) {
     fields$field_name[[1L]]
 }
 
+# Resolve requested DeST name-bearing tables and enforce the dependency order
+# required by room and surface prefixes.
+conv__resolve_name_tables <- function(dest, tables) {
+    if (is.null(tables)) {
+        # It is possible that some supported tables are absent from a model.
+        tables <- MAP_ID_NAME[names(MAP_ID_NAME) %in% DBI::dbListTables(dest)]
+    } else {
+        if (!is_character(tables)) {
+            stop(sprintf(
+                "'tables' should be NULL or a character vector but found '%s'",
+                class(tables)[1L]
+            ))
+        }
+
+        tables <- unique(tables)
+        matched <- match(tables, names(MAP_ID_NAME), 0L)
+        if (any(matched == 0L)) {
+            warning(sprintf(
+                "Ignore table(s) that do not have name or currently not supported: %s",
+                paste(tables[matched == 0L], collapse = ", ")
+            ))
+        }
+        tables <- MAP_ID_NAME[matched]
+    }
+
+    if (length(tables) == 0L) return(tables)
+
+    dependencies <- intersect(
+        c("OUTSIDE", "GROUND", "ROOM", "SURFACE"), names(tables)
+    )
+    c(tables[dependencies], tables[setdiff(names(tables), dependencies)])
+}
+
+# Fill missing DeST names with table-specific defaults while preserving the
+# special storey numbering convention for above- and below-ground levels.
+conv__fill_missing_names <- function(dest, table, input) {
+    missing <- DBI::dbGetQuery(dest, sprintf(
+        "SELECT COUNT(*) AS N FROM `%s` WHERE `%s` = '.' OR `%s` IS NULL",
+        table, input["name"], input["name"]
+    ))$N
+    if (missing == 0L) return(invisible(NULL))
+
+    if (table == "STOREY") {
+        DBI::dbExecute(dest, sprintf(
+            "
+            UPDATE `%s`
+            SET `%s` = CASE
+                WHEN `%s` IS NULL OR `%s` = '.'
+                THEN
+                    '%s ' || CASE
+                    WHEN NO >= 0 THEN CAST(NO + 1 AS TEXT)
+                    ELSE 'B' || CAST(NO AS TEXT)
+                    END
+                ELSE `%s`
+                END
+            ",
+            table, input["name"], input["name"], input["name"],
+            input["prefix"], input["name"]
+        ))
+    } else {
+        DBI::dbExecute(dest, sprintf(
+            "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
+            table, input["name"], input["name"], input["name"],
+            input["prefix"], input["name"]
+        ))
+    }
+
+    invisible(NULL)
+}
+
+# Prefix room names with their owning building when DeST contains more than one
+# building and bare room names would otherwise collide across the model.
+conv__prefix_room_names <- function(dest, input) {
+    DBI::dbExecute(dest, sprintf(
+        "
+        WITH TMP AS (
+            SELECT ROOM.`%s`, BUILDING.`%s` FROM ROOM
+            LEFT JOIN STOREY ON ROOM.OF_STOREY = STOREY.`%s`
+            LEFT JOIN BUILDING ON STOREY.OF_BUILDING = BUILDING.`%s`
+        )
+        UPDATE ROOM
+        SET `%s` = (
+            SELECT TMP.`%s` FROM TMP WHERE TMP.`%s` = ROOM.`%s`
+        ) || ' ' || `%s`
+        ",
+        input["id"], MAP_ID_NAME$BUILDING["name"],
+        MAP_ID_NAME$STOREY["id"], MAP_ID_NAME$BUILDING["id"],
+        input["name"], MAP_ID_NAME$BUILDING["name"],
+        input["id"], input["id"], input["name"]
+    ))
+}
+
+# Prefix storey names with their owning building in multi-building models.
+conv__prefix_storey_names <- function(dest, input) {
+    DBI::dbExecute(dest, sprintf(
+        "
+        UPDATE STOREY
+        SET `%s` = (
+            SELECT NAME FROM BUILDING
+            WHERE STOREY.OF_BUILDING = BUILDING.`%s`
+        ) || ' ' || `%s`
+        ",
+        input["name"], MAP_ID_NAME$BUILDING["id"], input["name"]
+    ))
+}
+
+# Derive surface names from the adjacent room or boundary plus the DeST
+# enclosure kind, then fall back to the generic surface prefix.
+conv__prefix_surface_names <- function(dest, table, input) {
+    DBI::dbExecute(dest, sprintf(
+        "
+        WITH TMP AS (
+            SELECT
+                `%s`,
+                COALESCE(
+                    ROOM.`%s`, OUTSIDE.`%s`, GROUND.`%s`, SHADING.`%s`
+                ) AS ROOM_NAME,
+                CASE
+                    WHEN E.KIND = 1 OR E.KIND = 2 THEN 'Wall'
+                    WHEN E.KIND = 3 OR E.KIND = 6 THEN 'Roof'
+                    WHEN E.KIND = 4 THEN 'Floor'
+                    WHEN E.KIND = 5 THEN 'Ceiling'
+                END AS SURFACE_KIND
+            FROM SURFACE S
+            LEFT JOIN (
+                SELECT SIDE1 AS SIDE, KIND FROM MAIN_ENCLOSURE
+                UNION
+                SELECT SIDE2 AS SIDE, KIND FROM MAIN_ENCLOSURE
+            ) E
+            ON S.SURFACE_ID = E.SIDE
+            LEFT JOIN ROOM
+            ON S.OF_ROOM = ROOM.`%s`
+            LEFT JOIN OUTSIDE
+            ON S.TYPE = 1 AND S.OF_ROOM = OUTSIDE.`%s`
+            LEFT JOIN GROUND
+            ON S.TYPE = 2 AND S.OF_ROOM = GROUND.`%s`
+            LEFT JOIN SHADING
+            ON S.TYPE = 3 AND S.OF_ROOM = SHADING.`%s`
+        )
+        UPDATE SURFACE
+        SET `%s` = (
+            SELECT TMP.ROOM_NAME || ' ' || TMP.SURFACE_KIND
+            FROM TMP
+            WHERE SURFACE.`%s` = TMP.`%s`
+        )
+        ",
+        input["id"],
+        MAP_ID_NAME$ROOM["name"], MAP_ID_NAME$OUTSIDE["name"],
+        MAP_ID_NAME$GROUND["name"], MAP_ID_NAME$SHADING["name"],
+        MAP_ID_NAME$ROOM["id"], MAP_ID_NAME$OUTSIDE["id"],
+        MAP_ID_NAME$GROUND["id"], MAP_ID_NAME$SHADING["id"],
+        input["name"], input["id"], input["id"]
+    ))
+
+    DBI::dbExecute(dest, sprintf(
+        "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
+        table, input["name"], input["name"], input["name"],
+        input["prefix"], input["name"]
+    ))
+}
+
+# Add the enclosure kind to construction-library names because one DeST
+# construction identifier can occur in several EnergyPlus construction scopes.
+conv__prefix_construction_names <- function(dest, table, input) {
+    prefixes <- c(
+        SYS_OUTWALL = "ExtWall", SYS_INWALL = "IntWall",
+        SYS_ROOF = "Roof", SYS_GROUNDFLOOR = "GroundFloor",
+        SYS_MIDDLEFLOOR = "Ceiling", SYS_AIRFLOOR = "Airfloor"
+    )
+    prefix <- unname(prefixes[table])
+    if (length(prefix) == 0L || is.na(prefix)) return(invisible(NULL))
+
+    DBI::dbExecute(dest, sprintf(
+        "UPDATE `%s` SET `%s` = '%s - ' || `%s`",
+        table, input["name"], prefix, input["name"]
+    ))
+    invisible(NULL)
+}
+
+# Apply table-specific contextual prefixes after empty names have been filled.
+conv__prefix_contextual_names <- function(dest, table, input) {
+    if (table == "ROOM" &&
+        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
+        conv__prefix_room_names(dest, input)
+    } else if (table == "STOREY" &&
+        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
+        conv__prefix_storey_names(dest, input)
+    } else if (table == "SURFACE" &&
+        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM")$N > 1L) {
+        conv__prefix_surface_names(dest, table, input)
+    } else {
+        conv__prefix_construction_names(dest, table, input)
+    }
+    invisible(NULL)
+}
+
+# Add stable numeric suffixes to duplicate names using each table's primary key
+# as the deterministic ordering column.
+conv__deduplicate_names <- function(dest, table, input) {
+    DBI::dbExecute(dest, sprintf(
+        "-- create a temporary table to store the name suffix for duplicated names
+        WITH TMP AS (
+            SELECT
+                `%s`,
+                CASE WHEN SUFFIX = 1 THEN '' ELSE ' ' || CAST(SUFFIX - 1 AS TEXT) END AS SUFFIX
+            FROM
+            (
+                SELECT
+                    `%s`,
+                    ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS SUFFIX
+                FROM `%s`
+            )
+        )
+
+        -- add suffix to the names
+        UPDATE `%s`
+        SET `%s` = `%s` || (SELECT SUFFIX FROM TMP WHERE `%s`.`%s` = TMP.`%s`)",
+        input["id"], input["id"], input["name"], input["id"], table,
+        table, input["name"], input["name"], table, input["id"], input["id"]
+    ))
+}
+
 #' Update NAME column in DeST tables
 #'
 #' @details
@@ -361,42 +583,12 @@ conv__idd_field_name <- function(ep, class, field) {
 #'
 #' @keywords internal
 conv__update_names <- function(dest, tables = NULL) {
-    if (is.null(tables)) {
-        # it is possible that some tables are not in the database
-        tables <- MAP_ID_NAME[names(MAP_ID_NAME) %in% DBI::dbListTables(dest)]
-    } else {
-        if (!is_character(tables)) {
-            stop(sprintf(
-                "'tables' should be NULL or a character vector but found '%s'",
-                class(tables)[1L]
-            ))
-        }
-
-        tables <- unique(tables)
-        m <- match(tables, names(MAP_ID_NAME), 0L)
-        if (any(m == 0L)) {
-            warning(sprintf(
-                "Ignore table(s) that do not have name or currently not supported: %s",
-                paste(tables[m == 0L], collapse = ", ")
-            ))
-        }
-        tables <- MAP_ID_NAME[m]
-
-        if (length(tables) == 0L) {
-            message("No matched table name found. Skip.")
-            return(dest)
-        }
+    tables <- conv__resolve_name_tables(dest, tables)
+    if (length(tables) == 0L) {
+        message("No matched table name found. Skip.")
+        return(dest)
     }
 
-    # first fill empty name column
-    # make sure tables are handled in the following order:
-    # 1. OUTSIDE | GROUND -> they are used in SURFACE$OF_ROOM
-    # 2. ROOM
-    # 3. SURFACE
-    tbls <- intersect(c("OUTSIDE", "GROUND", "ROOM", "SURFACE"), names(tables))
-    # Put dependency-bearing tables first even when callers supplied a
-    # different order; assigning them back to their old positions is a no-op.
-    tables <- c(tables[tbls], tables[setdiff(names(tables), tbls)])
     for (i in seq_along(tables)) {
         table <- names(tables)[[i]]
         input <- tables[[i]]
@@ -413,191 +605,11 @@ conv__update_names <- function(dest, tables = NULL) {
                 DBI::dbBreak()
             }
 
-            # TODO: should it be quicker if we directly update the table in the
-            # database instead of checking first?
-            n <- DBI::dbGetQuery(dest, sprintf(
-                "SELECT COUNT(*) AS N FROM `%s` WHERE `%s` = '.' OR `%s` IS NULL",
-                table, input["name"], input["name"]
-            ))$N
+            conv__fill_missing_names(dest, table, input)
 
-            # fill empty name column first
-            if (n > 0L) {
-                # name storey based on storey number
-                if (table == "STOREY") {
-                    DBI::dbExecute(dest, sprintf(
-                        "
-                        UPDATE `%s`
-                        SET `%s` = CASE
-                            WHEN `%s` IS NULL OR `%s` = '.'
-                            THEN
-                                '%s ' || CASE
-                                WHEN NO >= 0 THEN CAST(NO + 1 AS TEXT)
-                                ELSE 'B' || CAST(NO AS TEXT)
-                                END
-                            ELSE `%s`
-                            END
-                        ",
-                        table, input["name"], input["name"], input["name"], input["prefix"], input["name"]
-                    ))
-                } else {
-                    DBI::dbExecute(dest, sprintf(
-                        "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
-                        table, input["name"], input["name"], input["name"], input["prefix"], input["name"]
-                    ))
-                }
-            }
+            conv__prefix_contextual_names(dest, table, input)
 
-            # if more than one building exist, prefix each zone name with the
-            # corresponding building name
-            if (table == "ROOM" && DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
-                DBI::dbExecute(dest, sprintf(
-                    "
-                    WITH TMP AS (
-                        SELECT ROOM.`%s`, BUILDING.`%s` FROM ROOM
-                        LEFT JOIN STOREY ON ROOM.OF_STOREY = STOREY.`%s`
-                        LEFT JOIN BUILDING ON STOREY.OF_BUILDING = BUILDING.`%s`
-                    )
-                    UPDATE ROOM
-                    SET `%s` = (
-                        SELECT TMP.`%s` FROM TMP WHERE TMP.`%s` = ROOM.`%s`
-                    ) || ' ' || `%s`
-                    ",
-                    input["id"], MAP_ID_NAME$BUILDING["name"],
-                    MAP_ID_NAME$STOREY["id"],
-                    MAP_ID_NAME$BUILDING["id"],
-                    input["name"],
-                    MAP_ID_NAME$BUILDING["name"], input["id"], input["id"],
-                    input["name"]
-                ))
-            # if more than one building exist, prefix each storey name with the
-            # corresponding building name
-            } else if (table == "STOREY" && DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
-                DBI::dbExecute(dest, sprintf(
-                    "
-                    UPDATE STOREY
-                    SET `%s` = (
-                        SELECT NAME FROM BUILDING
-                        WHERE STOREY.OF_BUILDING = BUILDING.`%s`
-                    ) || ' ' || `%s`
-                    ",
-                    input["name"], MAP_ID_NAME$BUILDING["id"], input["name"]
-                ))
-            # prefix each surface name with the corresponding room name
-            } else if (table == "SURFACE" && DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM")$N > 1L) {
-                DBI::dbExecute(dest, sprintf(
-                    "
-                    -- get the corresponding surface type
-                    WITH TMP AS (
-                        SELECT
-                            `%s`,
-                            COALESCE(
-                                ROOM.`%s`, OUTSIDE.`%s`, GROUND.`%s`, SHADING.`%s`
-                            ) AS ROOM_NAME,
-                            CASE
-                                WHEN E.KIND = 1 OR E.KIND = 2 THEN 'Wall'
-                                WHEN E.KIND = 3 OR E.KIND = 6 THEN 'Roof'
-                                WHEN E.KIND = 4 THEN 'Floor'
-                                WHEN E.KIND = 5 THEN 'Ceiling'
-                            END AS SURFACE_KIND
-                        FROM SURFACE S
-                        -- consider both sides of the main enclosure
-                        LEFT JOIN (
-                            SELECT SIDE1 AS SIDE, KIND FROM MAIN_ENCLOSURE
-                            UNION
-                            SELECT SIDE2 AS SIDE, KIND FROM MAIN_ENCLOSURE
-                        ) E
-                        -- NOTE: only consider surfaces that are part of a room,
-                        -- adjacent to the outside, or on the ground, or are
-                        -- shadings
-                        ON S.SURFACE_ID = E.SIDE
-                        LEFT JOIN ROOM
-                        ON S.OF_ROOM = ROOM.`%s`
-                        LEFT JOIN OUTSIDE
-                        ON S.TYPE = 1 AND S.OF_ROOM = OUTSIDE.`%s`
-                        LEFT JOIN GROUND
-                        ON S.TYPE = 2 AND S.OF_ROOM = GROUND.`%s`
-                        LEFT JOIN SHADING
-                        ON S.TYPE = 3 AND S.OF_ROOM = SHADING.`%s`
-                    )
-                    UPDATE SURFACE
-                    SET `%s` = (
-                        SELECT TMP.ROOM_NAME || ' ' || TMP.SURFACE_KIND
-                        FROM TMP
-                        WHERE SURFACE.`%s` = TMP.`%s`
-                    )
-                    ",
-                    input["id"],
-                    MAP_ID_NAME$ROOM["name"], MAP_ID_NAME$OUTSIDE["name"],
-                    MAP_ID_NAME$GROUND["name"], MAP_ID_NAME$SHADING["name"],
-                    MAP_ID_NAME$ROOM["id"], MAP_ID_NAME$OUTSIDE["id"],
-                    MAP_ID_NAME$GROUND["id"], MAP_ID_NAME$SHADING["id"],
-                    input["name"], input["id"], input["id"]
-                ))
-
-                # NOTE: for surface that are not part of a room, adjacent to the
-                # outside, or on the ground, or shadings, the name will be just
-                # the prefix
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
-                    table, input["name"], input["name"], input["name"], input["prefix"], input["name"]
-                ))
-            # NOTE: it is possible that the same construction is used for
-            # different kinds. Here we append the kind to the construction name
-            # to make it unique.
-            } else if (table == "SYS_OUTWALL") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_OUTWALL SET `%s` = 'ExtWall - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            } else if (table == "SYS_INWALL") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_INWALL SET `%s` = 'IntWall - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            } else if (table == "SYS_ROOF") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_ROOF SET `%s` = 'Roof - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            } else if (table == "SYS_GROUNDFLOOR") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_GROUNDFLOOR SET `%s` = 'GroundFloor - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            } else if (table == "SYS_MIDDLEFLOOR") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_MIDDLEFLOOR SET `%s` = 'Ceiling - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            } else if (table == "SYS_AIRFLOOR") {
-                DBI::dbExecute(dest, sprintf(
-                    "UPDATE SYS_AIRFLOOR SET `%s` = 'Airfloor - ' || `%s`",
-                    input["name"], input["name"]
-                ))
-            }
-
-            # add suffix to duplicated names
-            DBI::dbExecute(dest, sprintf(
-                "-- create a temporary table to store the name suffix for duplicated names
-                WITH TMP AS (
-                    SELECT
-                        `%s`,
-                        CASE WHEN SUFFIX = 1 THEN '' ELSE ' ' || CAST(SUFFIX - 1 AS TEXT) END AS SUFFIX
-                    FROM
-                    (
-                        SELECT
-                            `%s`,
-                            ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS SUFFIX
-                        FROM `%s`
-                    )
-                )
-
-                -- add suffix to the names
-                UPDATE `%s`
-                SET `%s` = `%s` || (SELECT SUFFIX FROM TMP WHERE `%s`.`%s` = TMP.`%s`)",
-                input["id"], input["id"], input["name"], input["id"], table,
-                table, input["name"], input["name"], table, input["id"], input["id"]
-            ))
+            conv__deduplicate_names(dest, table, input)
         })
     }
 
