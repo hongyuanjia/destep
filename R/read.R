@@ -1,3 +1,43 @@
+# Normalize requested or discovered Access tables consistently across the ODBC
+# and MDBTools backends, including exclusion of Microsoft system tables.
+read__normalize_tables <- function(tables) {
+    if (!is.character(tables) || anyNA(tables)) {
+        abort(
+            "'tables' should be a character vector with no missing values",
+            "error_invalid_table_names"
+        )
+    }
+
+    tables <- setdiff(unique(tables), c(
+        "MSysAccessStorage",          "MSysAccessXML",
+        "MSysACEs",                   "MSysComplexColumns",
+        "MSysNavPaneGroupCategories", "MSysNavPaneGroups",
+        "MSysNavPaneGroupToObjects",  "MSysNavPaneObjectIDs",
+        "MSysObjects",                "MSysQueries",
+        "MSysRelationships",          "MSysResources"
+    ))
+    if (length(tables) == 0L) {
+        abort("No tables to convert", "error_no_tables_to_convert")
+    }
+    tables
+}
+
+# Own a target SQLite connection until conversion succeeds. On success the
+# caller receives the live connection; on failure no unreachable handle leaks.
+read__with_sqlite_target <- function(sqlite, convert) {
+    conn <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
+    succeeded <- FALSE
+    on.exit({
+        if (!succeeded && DBI::dbIsValid(conn)) {
+            DBI::dbDisconnect(conn)
+        }
+    }, add = TRUE)
+
+    convert(conn)
+    succeeded <- TRUE
+    conn
+}
+
 #' Read tables from a DeST model and convert to SQLite
 #'
 #' @param accdb \[string\] Path to the DeST model file. Usually a Microsoft
@@ -169,69 +209,47 @@ access_to_sqlite_odbc <- function(accdb, sqlite = ":memory:", tables = NULL, dro
                 )
             }
         )
-    } else {
-        if (!is.character(tables) || anyNA(tables)) {
-            abort("'tables' should be a character vector with no missing values", "error_invalid_table_names")
-        }
-        tables <- unique(tables)
     }
+    tables <- read__normalize_tables(tables)
 
-    # exclude MSys* tables
-    tables <- setdiff(
-        tables,
-        c(
-            "MSysAccessStorage",          "MSysAccessXML",
-            "MSysACEs",                   "MSysComplexColumns",
-            "MSysNavPaneGroupCategories", "MSysNavPaneGroups",
-            "MSysNavPaneGroupToObjects",  "MSysNavPaneObjectIDs",
-            "MSysObjects",                "MSysQueries",
-            "MSysRelationships",          "MSysResources"
-        )
-    )
-    if (length(tables) == 0L) {
-        abort("No tables to convert", "error_no_tables_to_convert")
-    }
-
-    conn_sql <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
-
-    tryCatch(
-        DBI::dbWithTransaction(conn_sql, {
-            if (verbose) {
-                i <- 0L
-                n <- length(tables)
-                tbl <- tables[[1L]]
-                step <- cli::cli_progress_step(
-                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
-                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
-                    spinner = TRUE
-                )
-            }
-            for (tbl in tables) {
-                # drop table if exists
-                if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
-
-                # TODO: get the schema
-
-                DBI::dbWriteTable(conn_sql, tbl, DBI::dbReadTable(conn_accdb, tbl))
+    read__with_sqlite_target(sqlite, function(conn_sql) {
+        tryCatch(
+            DBI::dbWithTransaction(conn_sql, {
                 if (verbose) {
-                    i <- i + 1L
-                    cli::cli_progress_update(id = step)
+                    i <- 0L
+                    n <- length(tables)
+                    tbl <- tables[[1L]]
+                    step <- cli::cli_progress_step(
+                        "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
+                        "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
+                        spinner = TRUE
+                    )
+                }
+                for (tbl in tables) {
+                    # drop table if exists
+                    if (drop) DBI::dbExecute(conn_sql, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
+
+                    # TODO: get the schema
+
+                    DBI::dbWriteTable(conn_sql, tbl, DBI::dbReadTable(conn_accdb, tbl))
+                    if (verbose) {
+                        i <- i + 1L
+                        cli::cli_progress_update(id = step)
+                    }
+                }
+            }),
+            error = function(e) {
+                if (grepl("Invalid attribute/option identifier", e$message)) {
+                    abort(
+                        sprintf("Failed to convert Microsoft Access database to SQLite: %s", e$message),
+                        "error_invalid_attribute_option_identifier"
+                    )
+                } else {
+                    stop(e)
                 }
             }
-        }),
-        error = function(e) {
-            if (grepl("Invalid attribute/option identifier", e$message)) {
-                abort(
-                    sprintf("Failed to convert Microsoft Access database to SQLite: %s", e$message),
-                    "error_invalid_attribute_option_identifier"
-                )
-            } else {
-                stop(e)
-            }
-        }
-    )
-
-    conn_sql
+        )
+    })
 }
 
 #' Convert Microsoft Access database to SQLite using mdbtools
@@ -287,9 +305,7 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
         )
     }
 
-    if (!is.null(tables)) {
-        tables <- unique(tables)
-    } else {
+    if (is.null(tables)) {
         if (verbose) cli::cli_progress_message("Listing tables from Microsoft Access database...")
         tables <- system2(
             mdbtools["mdb-tables"],
@@ -301,95 +317,93 @@ access_to_sqlite_mdbtools <- function(accdb, sqlite = ":memory:", tables = NULL,
             abort(sprintf("Failed to list tables from '%s': %s", accdb, tables), "error_mdb_tables_failed")
         }
     }
-
-    # create a SQLite database connection
-    conn <- DBI::dbConnect(RSQLite::SQLite(), sqlite)
+    tables <- read__normalize_tables(tables)
 
     # issue warnings immediately when they occur
     old <- getOption("warn")
     options("warn" = 1L)
     on.exit(options(warn = old), add = TRUE)
 
-    DBI::dbWithTransaction(conn, {
-        if (verbose) {
-            i <- 0L
-            n <- length(tables)
-            tbl <- tables[[1L]]
-            step <- cli::cli_progress_step(
-                "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
-                "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
-                spinner = TRUE
-            )
-        }
-        for (tbl in tables) {
+    read__with_sqlite_target(sqlite, function(conn) {
+        DBI::dbWithTransaction(conn, {
             if (verbose) {
-                i <- i + 1L
-                cli::cli_progress_update(id = step)
-            }
-
-            # drop table if exists
-            if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
-
-            # dump the table schema in SQLite format
-            schema <- system2(
-                mdbtools["mdb-schema"], c(mdb_schema_args, "-T", shQuote(tbl), shQuote(accdb), "sqlite"),
-                stdout = TRUE, stderr = TRUE
-            )
-            if (!is.null(attr(schema, "status"))) {
-                abort(
-                    sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema),
-                    "error_mdb_schema_failed"
+                i <- 0L
+                n <- length(tables)
+                tbl <- tables[[1L]]
+                step <- cli::cli_progress_step(
+                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]: {.code {tbl}} ",
+                    "Converting Microsoft Access database to SQLite [{i}/{n} table{?s}]",
+                    spinner = TRUE
                 )
             }
-            # remove empty lines
-            schema_clean <- schema[nzchar(schema)]
-            # remove comments
-            schema_clean <- schema_clean[!startsWith(schema_clean, "--")]
-            DBI::dbExecute(conn, paste0(schema_clean, collapse = "\n"))
-
-            # export table data in SQLite format
-            data <- system2(
-                mdbtools["mdb-export"],
-                c("-I", "sqlite", "-b", "hex", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), shQuote(accdb), shQuote(tbl)),
-                stdout = TRUE, stderr = TRUE
-            )
-            if (!is.null(attr(data, "status"))) {
-                abort(
-                    sprintf("Failed to export data of table '%s' from '%s': %s", tbl, accdb, data),
-                    "error_mdb_export_failed"
-                )
-            }
-
-            # skip if empty table
-            if (length(data) == 0L) next()
-
-            # NOTE: 'mdb-export' trunks the data by 1000. 'dbExecute()'
-            #       could not handle multiple statements.
-            #       See: https://github.com/r-dbi/RSQLite/issues/313
-            #
-            #       Export data in some table, e.g. "ROOM_TYPE_DATA", is
-            #       split at wired places.
-            #       Here we first concatenate all data into a single
-            #       string and then split
-            data <- unlist(lapply(
-                strsplit(
-                    paste0(data, collapse = ""), ";INSERT INTO",
-                    fixed = TRUE, useBytes = TRUE
-                ),
-                function(stmt) {
-                    if ((len <- length(stmt)) > 1L) {
-                        stmt[1L] <- paste0(stmt[1L], ";")
-                        stmt[-1L] <- paste0("INSERT INTO", stmt[-1L])
-                        stmt[-c(1L, len)] <- paste0(stmt[-c(1L, len)], ";")
-                    }
-                    stmt
+            for (tbl in tables) {
+                if (verbose) {
+                    i <- i + 1L
+                    cli::cli_progress_update(id = step)
                 }
-            ))
 
-            # insert data to the table if not empty
-            for (d in data) DBI::dbExecute(conn, paste0(d, collapse = "\n"))
-        }
+                # drop table if exists
+                if (drop) DBI::dbExecute(conn, sprintf("DROP TABLE IF EXISTS `%s`", tbl))
+
+                # dump the table schema in SQLite format
+                schema <- system2(
+                    mdbtools["mdb-schema"], c(mdb_schema_args, "-T", shQuote(tbl), shQuote(accdb), "sqlite"),
+                    stdout = TRUE, stderr = TRUE
+                )
+                if (!is.null(attr(schema, "status"))) {
+                    abort(
+                        sprintf("Failed to dump schema of table '%s' from '%s': %s", tbl, accdb, schema),
+                        "error_mdb_schema_failed"
+                    )
+                }
+                # remove empty lines
+                schema_clean <- schema[nzchar(schema)]
+                # remove comments
+                schema_clean <- schema_clean[!startsWith(schema_clean, "--")]
+                DBI::dbExecute(conn, paste0(schema_clean, collapse = "\n"))
+
+                # export table data in SQLite format
+                data <- system2(
+                    mdbtools["mdb-export"],
+                    c("-I", "sqlite", "-b", "hex", "-D", "%F", "-T", shQuote("%F %H:%M:%S"), shQuote(accdb), shQuote(tbl)),
+                    stdout = TRUE, stderr = TRUE
+                )
+                if (!is.null(attr(data, "status"))) {
+                    abort(
+                        sprintf("Failed to export data of table '%s' from '%s': %s", tbl, accdb, data),
+                        "error_mdb_export_failed"
+                    )
+                }
+
+                # skip if empty table
+                if (length(data) == 0L) next()
+
+                # NOTE: 'mdb-export' trunks the data by 1000. 'dbExecute()'
+                #       could not handle multiple statements.
+                #       See: https://github.com/r-dbi/RSQLite/issues/313
+                #
+                #       Export data in some table, e.g. "ROOM_TYPE_DATA", is
+                #       split at wired places.
+                #       Here we first concatenate all data into a single
+                #       string and then split
+                data <- unlist(lapply(
+                    strsplit(
+                        paste0(data, collapse = ""), ";INSERT INTO",
+                        fixed = TRUE, useBytes = TRUE
+                    ),
+                    function(stmt) {
+                        if ((len <- length(stmt)) > 1L) {
+                            stmt[1L] <- paste0(stmt[1L], ";")
+                            stmt[-1L] <- paste0("INSERT INTO", stmt[-1L])
+                            stmt[-c(1L, len)] <- paste0(stmt[-c(1L, len)], ";")
+                        }
+                        stmt
+                    }
+                ))
+
+                # insert data to the table if not empty
+                for (d in data) DBI::dbExecute(conn, paste0(d, collapse = "\n"))
+            }
+        })
     })
-
-    conn
 }
