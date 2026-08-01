@@ -423,159 +423,157 @@ const__prepare_layers <- function(dest) {
     )
 }
 
-# Derive deduplicated EnergyPlus construction and material tables from the
-# normalized DeST source layers.
-const__object_tables <- function(source) {
-    const <- source$const
-    window <- source$window
-    window_type <- source$window_type
-    door <- source$door
-
-    # normal construction
-    norm_const <- list()
-    reverse_const <- list()
-    norm_mat <- list()
-
-    # window construction
-    win_const <- list()
-    reverse_win_const <- list()
-    win_glaze <- list()
-    win_air <- list()
-
-    # aggregate window-type construction
-    win_type_const <- list()
-    reverse_win_type_const <- list()
-    win_type_glazing <- unique(
-        window_type[TYPE_DATA_VALID == TRUE],
-        by = "TYPE_ID"
-    )
-
-    # door construction
-    door_const <- list()
-    door_glaze <- list()
-    door_mat <- list()
-
-    # columns to be used in the material input
-    col_mat <- c(
+# Return the normalized columns shared by opaque, glazing, and gas material
+# object tables.
+const__material_columns <- function() {
+    c(
         "MATERIAL_ID", "LENGTH", "MATERIAL_NAME", "MATERIAL_CONDUCTIVITY",
         "MATERIAL_DENSITY", "MATERIAL_SPECIFIC_HEAT"
     )
-    if (nrow(const) > 0L) {
-        norm_const <- const[,
-            by = c("ID", "KIND"),
-            list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+}
 
-        # SIDE1 faces look from SIDE2 back toward SIDE1, opposite the stored
-        # DeST layer direction, and therefore require an explicit reversed
-        # Construction object instead of silently reusing the original stack.
-        reverse_const <- const[,
-            by = c("ID", "KIND"),
-            list(
-                name = sprintf("%s [Reverse]", NAME[[1L]]),
-                value = list(c(
-                    sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
-                ))
-            )
-        ]
+# Build the normal and reversed EnergyPlus Construction objects for a layered
+# DeST construction. The optional kind marks non-opaque construction classes.
+const__layered_constructions <- function(layer, by, kind = NULL) {
+    if (nrow(layer) == 0L) return(data.table::data.table())
 
-        # construct normal Material input
-        norm_mat <- unique(const[, .SD, .SDcols = col_mat], by = c("MATERIAL_ID", "LENGTH"))
+    normal <- layer[,
+        by = by,
+        list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+    ]
+    # SIDE1 looks against the stored DeST layer direction and therefore needs
+    # an explicit reverse-stack Construction object.
+    reverse <- layer[,
+        by = by,
+        list(
+            name = sprintf("%s [Reverse]", NAME[[1L]]),
+            value = list(c(
+                sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
+            ))
+        )
+    ]
+    if (!is.null(kind)) {
+        normal[, KIND := kind]
+        reverse[, KIND := kind]
     }
 
-    if (nrow(window) > 0L) {
-        win_const <- window[, by = "ID",
-            # use KIND = -1 to indicate that the construction is a window
-            list(KIND = -1L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+    data.table::rbindlist(list(normal, reverse), use.names = TRUE, fill = TRUE)
+}
 
-        reverse_win_const <- window[, by = "ID",
-            list(
-                KIND = -1L,
-                name = sprintf("%s [Reverse]", NAME[[1L]]),
-                value = list(c(
-                    sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
-                ))
-            )
-        ]
+# Select one material record for each material-and-thickness combination after
+# applying an optional row mask for glazing, gas, or door-layer roles.
+const__material_table <- function(layer, rows = NULL) {
+    if (nrow(layer) == 0L) return(data.table::data.table())
+    if (!is.null(rows)) layer <- layer[rows]
+    unique(
+        layer[, .SD, .SDcols = const__material_columns()],
+        by = c("MATERIAL_ID", "LENGTH")
+    )
+}
 
-        win_glaze <- unique(
-            window[MATERIAL_ID != 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
-
-        win_air <- unique(
-            window[MATERIAL_ID == 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
+# Build aggregate simple-glazing constructions and retain the validated source
+# rows used later to create WindowMaterial:SimpleGlazingSystem objects.
+const__window_type_objects <- function(window_type) {
+    glazing <- unique(
+        window_type[TYPE_DATA_VALID == TRUE],
+        by = "TYPE_ID"
+    )
+    if (nrow(glazing) == 0L) {
+        return(list(
+            construction = data.table::data.table(), glazing = glazing
+        ))
     }
 
-    if (nrow(win_type_glazing) > 0L) {
-        assert_unique_name(
-            win_type_glazing$TYPE_CONSTRUCTION_NAME,
-            "window type construction"
+    assert_unique_name(
+        glazing$TYPE_CONSTRUCTION_NAME,
+        "window type construction"
+    )
+    assert_unique_name(
+        glazing$SIMPLE_GLAZING_NAME,
+        "simple glazing material"
+    )
+    normal <- glazing[, list(
+        ID = TYPE_ID,
+        KIND = -3L,
+        name = TYPE_CONSTRUCTION_NAME,
+        value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
+    )]
+    # Whole-window simple glazing is direction-independent, but reciprocal
+    # interzone windows retain an explicit reverse construction name.
+    reverse <- glazing[, list(
+        ID = TYPE_ID,
+        KIND = -3L,
+        name = sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+        value = Map(
+            c,
+            sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
+            SIMPLE_GLAZING_NAME
         )
-        assert_unique_name(
-            win_type_glazing$SIMPLE_GLAZING_NAME,
-            "simple glazing material"
-        )
-        win_type_const <- win_type_glazing[, list(
-            ID = TYPE_ID,
-            KIND = -3L,
-            name = TYPE_CONSTRUCTION_NAME,
-            value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
-        )]
-        # Whole-window simple glazing is direction-independent, but reciprocal
-        # interzone windows still use an explicit reverse name so side mapping
-        # remains uniform across aggregate and detailed constructions.
-        reverse_win_type_const <- win_type_glazing[, list(
-            ID = TYPE_ID,
-            KIND = -3L,
-            name = sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
-            value = Map(
-                c,
-                sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
-                SIMPLE_GLAZING_NAME
-            )
-        )]
+    )]
+
+    list(
+        construction = data.table::rbindlist(list(normal, reverse)),
+        glazing = glazing
+    )
+}
+
+# Build door constructions and separate their opaque body from the optional
+# glazing layer used by WindowMaterial:Glazing.
+const__door_objects <- function(door) {
+    if (nrow(door) == 0L) {
+        empty <- data.table::data.table()
+        return(list(construction = empty, material = empty, glazing = empty))
     }
 
-    if (nrow(door) > 0L) {
-        # construct normal Material input
-        door_const <- door[, by = "ID",
-            # use KIND = -2 to indicate that the construction is a door
-            list(KIND = -2L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
-        ]
+    construction <- door[, by = "ID",
+        # KIND = -2 distinguishes doors from other construction classes.
+        list(KIND = -2L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+    ]
 
-        door_mat <- unique(
-            door[LAYER_NO == 0L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
+    list(
+        construction = construction,
+        material = const__material_table(door, door$LAYER_NO == 0L),
+        glazing = const__material_table(door, door$LAYER_NO == 1L)
+    )
+}
 
-        door_glaze <- unique(
-            door[LAYER_NO == 1L, .SD, .SDcols = col_mat],
-            by = c("MATERIAL_ID", "LENGTH")
-        )
-    }
+# Derive deduplicated EnergyPlus construction and material tables from the
+# normalized DeST source layers.
+const__object_tables <- function(source) {
+    opaque_const <- const__layered_constructions(
+        source$const, c("ID", "KIND")
+    )
+    window_const <- const__layered_constructions(
+        source$window, "ID", kind = -1L
+    )
+    window_type <- const__window_type_objects(source$window_type)
+    door <- const__door_objects(source$door)
 
     dt_const <- unique(
         data.table::rbindlist(list(
-            norm_const, reverse_const,
-            win_const, reverse_win_const,
-            win_type_const, reverse_win_type_const,
-            door_const
-        ), TRUE),
+            opaque_const, window_const,
+            window_type$construction, door$construction
+        ), use.names = TRUE, fill = TRUE),
         by = c("ID", "KIND", "name")
     )
-    dt_mat   <- unique(
-        data.table::rbindlist(list(norm_mat, door_mat), TRUE),
+    dt_mat <- unique(
+        data.table::rbindlist(list(
+            const__material_table(source$const), door$material
+        ), use.names = TRUE, fill = TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
     dt_glaze <- unique(
-        data.table::rbindlist(list(win_glaze, door_glaze), TRUE),
+        data.table::rbindlist(list(
+            const__material_table(
+                source$window, source$window$MATERIAL_ID != 0L
+            ),
+            door$glazing
+        ), use.names = TRUE, fill = TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
-    dt_air <- data.table::rbindlist(list(win_air), fill = TRUE)
+    dt_air <- const__material_table(
+        source$window, source$window$MATERIAL_ID == 0L
+    )
     if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
 
     list(
@@ -583,7 +581,7 @@ const__object_tables <- function(source) {
         material = dt_mat,
         glazing = dt_glaze,
         air = dt_air,
-        simple_glazing = win_type_glazing
+        simple_glazing = window_type$glazing
     )
 }
 
