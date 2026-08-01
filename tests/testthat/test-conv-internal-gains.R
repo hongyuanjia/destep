@@ -119,6 +119,39 @@ test_that("can convert internal gains", {
     )
 })
 
+test_that("rejects internal gain minimum values above their maximum", {
+    people <- data.frame(
+        NAME = "Invalid People", SCHEDULE_NAME = "Always On",
+        METHOD = "People", NUMBER_OF_PEOPLE = 1,
+        MIN_NUMBER_OF_PEOPLE = 2
+    )
+    lights <- data.frame(
+        NAME = "Invalid Lights", SCHEDULE_NAME = "Always On",
+        METHOD = "LightingLevel", LIGHTING_LEVEL = 5,
+        MIN_LIGHTING_LEVEL = 6
+    )
+    equipment <- data.frame(
+        NAME = "Invalid Equipment", SCHEDULE_NAME = "Always On",
+        METHOD = "EquipmentLevel", DESIGN_LEVEL = 10,
+        MIN_DESIGN_LEVEL = 11
+    )
+
+    expect_error(
+        destep_people_values(people, 1L, "Minimum"),
+        "Invalid People.*minimum.*exceeds maximum"
+    )
+    expect_error(
+        destep_light_values(lights, 1L, "watts_per_floor_area", "Minimum"),
+        "Invalid Lights.*minimum.*exceeds maximum"
+    )
+    expect_error(
+        destep_equipment_values(
+            equipment, 1L, "watts_per_floor_area", "Minimum"
+        ),
+        "Invalid Equipment.*minimum.*exceeds maximum"
+    )
+})
+
 test_that("nonzero equipment moisture is rejected until it can be mapped", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")

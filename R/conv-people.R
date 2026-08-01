@@ -8,6 +8,45 @@ destep_conv_internal_gains <- function(dest, ep) {
     destep_combine_outputs(conv)
 }
 
+# Split one DeST internal gain into a scheduled maximum-minus-minimum object and
+# an optional always-on minimum object, with shared source-value validation.
+internal_gains__split_minimum <- function(
+    gain, i, max_value, min_value, field, always_on, value_factory
+) {
+    min_value <- destep_zero_if_na(min_value)
+    name <- gain$NAME[[i]]
+    if (!is.finite(max_value) || !is.finite(min_value)) {
+        stop(sprintf(
+            "Internal gain '%s' has a non-finite minimum or maximum value.",
+            name
+        ), call. = FALSE)
+    }
+    if (min_value > max_value) {
+        stop(sprintf(
+            "Internal gain '%s' minimum (%s) exceeds maximum (%s).",
+            name, min_value, max_value
+        ), call. = FALSE)
+    }
+
+    variable_value <- max_value - min_value
+    out <- list()
+    if (variable_value > 0 || min_value <= 0) {
+        value <- value_factory(
+            gain, i, name, gain$SCHEDULE_NAME[[i]]
+        )
+        value[[field]] <- variable_value
+        out <- c(out, list(value))
+    }
+    if (min_value > 0) {
+        value <- value_factory(
+            gain, i, paste(name, "Minimum"), always_on
+        )
+        value[[field]] <- min_value
+        out <- c(out, list(value))
+    }
+    out
+}
+
 # OCCUPANT_GAINS -> People
 # MIN_REQUIRE_FRESH_AIR is handled separately by
 # destep_conv_design_specification_outdoor_air() so People remains focused on
@@ -126,32 +165,18 @@ destep_conv_people <- function(dest, ep) {
 destep_people_values <- function(people, i, always_on) {
     if (people$METHOD[[i]] == "People") {
         max_value <- people$NUMBER_OF_PEOPLE[[i]]
-        min_value <- destep_zero_if_na(people$MIN_NUMBER_OF_PEOPLE[[i]])
+        min_value <- people$MIN_NUMBER_OF_PEOPLE[[i]]
         field <- "number_of_people"
     } else {
         max_value <- people$PEOPLE_PER_AREA[[i]]
-        min_value <- destep_zero_if_na(people$MIN_PEOPLE_PER_AREA[[i]])
+        min_value <- people$MIN_PEOPLE_PER_AREA[[i]]
         field <- "people_per_floor_area"
     }
 
-    variable_value <- max_value - min_value
-
-    out <- list()
-    if (variable_value > 0 || min_value <= 0) {
-        val <- destep_people_value(people, i, people$NAME[[i]], people$SCHEDULE_NAME[[i]])
-        val[[field]] <- variable_value
-        out <- c(out, list(val))
-    }
-
-    if (min_value > 0) {
-        val <- destep_people_value(
-            people, i, paste(people$NAME[[i]], "Minimum"), always_on
-        )
-        val[[field]] <- min_value
-        out <- c(out, list(val))
-    }
-
-    out
+    internal_gains__split_minimum(
+        people, i, max_value, min_value, field, always_on,
+        destep_people_value
+    )
 }
 
 destep_people_value <- function(people, i, name, schedule) {
@@ -255,32 +280,18 @@ destep_conv_lights <- function(dest, ep) {
 destep_light_values <- function(lights, i, watts_per_area_field, always_on) {
     if (lights$METHOD[[i]] == "LightingLevel") {
         max_value <- lights$LIGHTING_LEVEL[[i]]
-        min_value <- destep_zero_if_na(lights$MIN_LIGHTING_LEVEL[[i]])
+        min_value <- lights$MIN_LIGHTING_LEVEL[[i]]
         field <- "lighting_level"
     } else {
         max_value <- lights$WATTS_PER_AREA[[i]]
-        min_value <- destep_zero_if_na(lights$MIN_WATTS_PER_AREA[[i]])
+        min_value <- lights$MIN_WATTS_PER_AREA[[i]]
         field <- watts_per_area_field
     }
 
-    variable_value <- max_value - min_value
-
-    out <- list()
-    if (variable_value > 0 || min_value <= 0) {
-        val <- destep_light_value(lights, i, lights$NAME[[i]], lights$SCHEDULE_NAME[[i]])
-        val[[field]] <- variable_value
-        out <- c(out, list(val))
-    }
-
-    if (min_value > 0) {
-        val <- destep_light_value(
-            lights, i, paste(lights$NAME[[i]], "Minimum"), always_on
-        )
-        val[[field]] <- min_value
-        out <- c(out, list(val))
-    }
-
-    out
+    internal_gains__split_minimum(
+        lights, i, max_value, min_value, field, always_on,
+        destep_light_value
+    )
 }
 
 destep_light_value <- function(lights, i, name, schedule) {
@@ -405,34 +416,18 @@ equipment__assert_no_moisture <- function(equipment) {
 destep_equipment_values <- function(equipment, i, watts_per_area_field, always_on) {
     if (equipment$METHOD[[i]] == "EquipmentLevel") {
         max_value <- equipment$DESIGN_LEVEL[[i]]
-        min_value <- destep_zero_if_na(equipment$MIN_DESIGN_LEVEL[[i]])
+        min_value <- equipment$MIN_DESIGN_LEVEL[[i]]
         field <- "design_level"
     } else {
         max_value <- equipment$WATTS_PER_AREA[[i]]
-        min_value <- destep_zero_if_na(equipment$MIN_WATTS_PER_AREA[[i]])
+        min_value <- equipment$MIN_WATTS_PER_AREA[[i]]
         field <- watts_per_area_field
     }
 
-    variable_value <- max_value - min_value
-
-    out <- list()
-    if (variable_value > 0 || min_value <= 0) {
-        val <- destep_equipment_value(
-            equipment, i, equipment$NAME[[i]], equipment$SCHEDULE_NAME[[i]]
-        )
-        val[[field]] <- variable_value
-        out <- c(out, list(val))
-    }
-
-    if (min_value > 0) {
-        val <- destep_equipment_value(
-            equipment, i, paste(equipment$NAME[[i]], "Minimum"), always_on
-        )
-        val[[field]] <- min_value
-        out <- c(out, list(val))
-    }
-
-    out
+    internal_gains__split_minimum(
+        equipment, i, max_value, min_value, field, always_on,
+        destep_equipment_value
+    )
 }
 
 destep_equipment_value <- function(equipment, i, name, schedule) {
