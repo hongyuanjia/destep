@@ -1,9 +1,3 @@
-# Store DeST hourly schedule data in the BLOB shape that readBin() expects when
-# `schedule__convert()` reads SCHEDULE_YEAR.DATA from SQLite.
-destep_test_schedule_blob <- function(values) {
-    writeBin(as.double(values), raw(), size = 8L)
-}
-
 test_that("schedule conversion writes resolvable week day references", {
     ep <- ensure_empty_idf()
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")

@@ -48,15 +48,29 @@ schedule__convert <- function(dest, ep) {
     # DeST's sentinel for a default or unused schedule. Neither value names a
     # SCHEDULE_YEAR row, and retaining NA would emit it as a SQL identifier.
     ids_ref <- ids_ref[!is.na(ids_ref) & ids_ref != 0L]
-    if (length(ids_ref) == 0L) return(NULL)
+    if (length(ids_ref) > 0L) {
+        schedule <- data.table::setDT(DBI::dbGetQuery(
+            dest,
+            sprintf("SELECT * FROM SCHEDULE_YEAR WHERE SCHEDULE_ID IN (%s)", paste(ids_ref, collapse = ", "))
+        ))
+        # In DeST, the actual schedule data is stored as doubles in a raw vector.
+        data.table::set(
+            schedule, NULL, "DATA",
+            lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L)
+        )
+        schedule <- schedule__scale_relative_humidity(dest, schedule)
+    } else {
+        schedule <- data.table::data.table()
+    }
 
-    schedule <- data.table::setDT(DBI::dbGetQuery(
-        dest,
-        sprintf("SELECT * FROM SCHEDULE_YEAR WHERE SCHEDULE_ID IN (%s)", paste(ids_ref, collapse = ", "))
-    ))
-    # In DeST, the actual schedule data is stored as doubles in a raw vector.
-    data.table::set(schedule, NULL, "DATA", lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L))
-    schedule <- schedule__scale_relative_humidity(dest, schedule)
+    # Range ventilation needs a normalized max-minus-min schedule because an
+    # EnergyPlus ventilation availability schedule is a fraction, not an ACH
+    # value. Generate that portable Schedule:Year input alongside source rows.
+    derived <- ventilation__range_schedule_rows(dest)
+    schedule <- data.table::rbindlist(
+        list(schedule, derived), use.names = TRUE, fill = TRUE
+    )
+    if (nrow(schedule) == 0L) return(NULL)
 
     type_limits <- schedule__convert_type_limits(dest, ep, schedule)
     days <- schedule__convert_day(dest, ep, schedule, type_limits)
