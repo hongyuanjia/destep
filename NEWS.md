@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Preserved DeST surface convection coefficients, solar absorptance, and
+  blackness using per-surface convection objects and deduplicated exposed-layer
+  construction clones, while retaining reciprocal interzone layer order.
 - Fixed Calload control mapping to resolve availability, temperature, and
   humidity schedules through `ROOM.TYPE` and `ROOM_TYPE_DATA`, while retaining
   `ROOM_GROUP.IS_AC_ROOM` as the room-conditioning eligibility flag.
