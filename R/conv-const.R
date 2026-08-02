@@ -326,10 +326,45 @@ const__window_layers <- function(dest) {
     )
 }
 
+# Append the soil layer that DeST adds automatically when serializing a
+# ground-floor construction for Calload. Source ACCDB construction tables omit
+# this layer, so it must be restored before normal/reverse stacks are derived.
+const__append_dest_ground_soil <- function(layer) {
+    data.table::setDT(layer)
+    ground <- layer[KIND == 4L]
+    if (nrow(ground) == 0L) return(layer)
+
+    material_id <- -900000004L
+    material_name <- "DeST Automatic Soil"
+    already_added <- ground[
+        MATERIAL_ID == material_id & MATERIAL_NAME == material_name
+    ]
+    if (nrow(already_added) > 0L) return(layer)
+
+    # DeST stores ground-floor source layers from the room side towards the
+    # ground. Appending soil here consequently places it first in the reversed
+    # outside-to-inside EnergyPlus construction used by the room-side surface.
+    soil <- ground[, list(
+        NAME = NAME[[1L]],
+        LAYER_NO = max(LAYER_NO, na.rm = TRUE) + 1L
+    ), by = c("ID", "KIND")]
+    soil[, `:=`(
+        LENGTH = 1200.0,
+        MATERIAL_ID = material_id,
+        MATERIAL_NAME = material_name,
+        MATERIAL_CONDUCTIVITY = 0.93,
+        MATERIAL_DENSITY = 1800.0,
+        MATERIAL_SPECIFIC_HEAT = 1010.0
+    )]
+
+    data.table::rbindlist(list(layer, soil), use.names = TRUE, fill = TRUE)
+}
+
 # Normalize the referenced DeST layers and select detailed-window fallbacks
 # before EnergyPlus object tables are derived from them.
 const__prepare_layers <- function(dest) {
     const <- const__opaque_layers(dest)
+    const <- const__append_dest_ground_soil(const)
 
     # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
     # Detailed layers are now retained only for windows that require fallback.

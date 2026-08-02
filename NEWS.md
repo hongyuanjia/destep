@@ -1,5 +1,16 @@
 # destep 0.0.0.9000
 
+- Fixed Calload control mapping to resolve availability, temperature, and
+  humidity schedules through `ROOM.TYPE` and `ROOM_TYPE_DATA`, while retaining
+  `ROOM_GROUP.IS_AC_ROOM` as the room-conditioning eligibility flag.
+- Restored the 1.2 m soil layer that DeST automatically appends to serialized
+  ground-floor constructions but does not store in the source ACCDB tables.
+- Resolved `ROOM_RELATION.VENT_SET_MAX` as the maximum-ACH schedule for DeST
+  ventilation-range control and now warn when only its minimum schedule can be
+  represented by the current EnergyPlus conversion.
+- Removed the practical IdealLoads supply-humidity limitation from load-only
+  models, and set an explicit 12-timestep-per-hour resolution so converted
+  hourly relative-humidity bounds converge reproducibly.
 - Reduced converted geometry fragmentation by preserving planar convex surfaces
   and rectangular windows, while making reciprocal interzone-window partitions
   deterministic and centralizing EnergyPlus geometry tolerances (#32).

@@ -12,8 +12,8 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
         NAME = "DefaultOutside"
     ))
     DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = 20L,
-        NAME = "Ventilation 0.5 ACH"
+        SCHEDULE_ID = c(20L, 22L),
+        NAME = c("Ventilation 0.5 ACH", "Ventilation 10 ACH")
     ))
     DBI::dbWriteTable(dest, "ROOM_RELATION", data.frame(
         ID = c(100L, 101L),
@@ -29,7 +29,10 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
         EXT_PROPERTY = 0L
     ))
 
-    ventilation <- ventilation__convert(dest, ep)
+    expect_warning(
+        ventilation <- ventilation__convert(dest, ep),
+        "minimum ACH schedule only for 1 DeST ventilation-range"
+    )
 
     expect_type(ventilation, "list")
     expect_named(ventilation, c("object", "value"))
@@ -50,6 +53,13 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
             ventilation$value$field_name == "Air Changes per Hour"
         ],
         c(1, 1)
+    )
+    expect_equal(
+        attr(ventilation, "table")[VENT_TYPE == 1L, MAX_SCHEDULE_NAME],
+        "Ventilation 10 ACH"
+    )
+    expect_false(
+        attr(ventilation, "table")[VENT_TYPE == 1L, RANGE_CONTROL_CONVERTED]
     )
 })
 
@@ -106,7 +116,10 @@ test_that("can convert ROOM_RELATION from a real DeST model", {
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
-    ventilation <- ventilation__convert(dest, ep)
+    expect_warning(
+        ventilation <- ventilation__convert(dest, ep),
+        "ventilation-range ROOM_RELATION"
+    )
     tab <- attr(ventilation, "table")
 
     expect_equal(unique(ventilation$object$class_name), "ZoneVentilation:DesignFlowRate")
@@ -117,6 +130,11 @@ test_that("can convert ROOM_RELATION from a real DeST model", {
     expect_true(all(tab$IS_OUTDOOR_RELATION))
     expect_true(all(tab$VENT_TYPE == 1L))
     expect_equal(unique(tab$SCHEDULE_NAME), "通风全0.5")
+    expect_equal(
+        unique(tab$MAX_SCHEDULE_NAME),
+        "房间与外界最大通风能力"
+    )
+    expect_false(any(tab$RANGE_CONTROL_CONVERTED))
     expect_equal(unique(tab$AIR_CHANGES_PER_HOUR), 1)
     expect_false(anyNA(tab$ROOM_NAME))
     expect_false(anyNA(tab$SCHEDULE_NAME))

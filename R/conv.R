@@ -155,6 +155,13 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         daylighting_reference_point_coordinate_system = "Relative"
     ))
 
+    # Use a five-minute solver step so IdealLoads humidity control converges
+    # within the converted hourly DeST control bounds. This is explicit for
+    # reproducibility instead of relying on EnergyPlus's four-step default.
+    ep$add("Timestep" := list(
+        number_of_timesteps_per_hour = 12L
+    ))
+
     # DeST stores model inputs but no EnergyPlus simulation period.  Add a
     # calendar-year period so each converted model can run against an EPW file.
     ep$add("RunPeriod" := list(
@@ -205,10 +212,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         ventilation = ventilation__convert(tmpdb, ep)
     )
 
-    if (any(vapply(
-        c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
-        db_has_rows, logical(1L), dest = tmpdb
-    ))) {
+    if (internal_gains__has_room_type_data(tmpdb)) {
         conv$internal_gains <- internal_gains__convert(tmpdb, ep)
     }
     conv <- Filter(Negate(is.null), conv)
