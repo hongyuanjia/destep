@@ -138,7 +138,10 @@ test_that("to_eplus() works", {
     # can convert 'BuildingSurface:Detailed'
     expect_type(surface <- surface__convert(dest, ep), "list")
     expect_named(surface, c("object", "value"))
-    expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
+    expect_setequal(
+        unique(surface$object$class_name),
+        c("BuildingSurface:Detailed", "SurfaceProperty:ConvectionCoefficients")
+    )
     expect_s3_class(attr(surface, "table"), "data.table")
 
     # can convert a DeST model to a valid EnergyPlus model

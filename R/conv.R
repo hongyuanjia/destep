@@ -204,7 +204,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         zone     = zone__convert(tmpdb, ep),
         surface  = surface,
         window   = window,
-        const    = const__convert(tmpdb, ep),
+        const    = const__convert(tmpdb, ep, attr(surface, "table")),
         schedule = schedule__convert(tmpdb, ep),
         thermostat = thermostat__convert(tmpdb, ep),
         outdoor_air = outdoor_air__convert(tmpdb, ep),

@@ -56,6 +56,14 @@ surface__source_table <- function(dest, geometry_profile) {
             -- from DeST geometry instead of assuming SIDE 1 or SIDE 2 is out.
             S.AZIMUTH                                      AS AZIMUTH,
             S.TILT                                         AS TILT,
+            -- The current DeST SURFACE row is the room-side face. Its peer
+            -- supplies exterior properties only when that peer is outdoors.
+            S.ABSORB_COEF                                  AS INSIDE_SOLAR_ABSORPTANCE,
+            S.BLACKNESS                                    AS INSIDE_THERMAL_ABSORPTANCE,
+            S.VENTILATION_COEF                             AS INSIDE_CONVECTION_COEFFICIENT,
+            PEER.ABSORB_COEF                               AS OUTSIDE_SOLAR_ABSORPTANCE,
+            PEER.BLACKNESS                                 AS OUTSIDE_THERMAL_ABSORPTANCE,
+            PEER.VENTILATION_COEF                          AS OUTSIDE_CONVECTION_COEFFICIENT,
             L.POINT_NO                                     AS POINT_NO,
             ROUND(P.X, 3)                                  AS POINT_X,
             ROUND(P.Y, 3)                                  AS POINT_Y,
@@ -194,6 +202,181 @@ surface__object_values <- function(surface, ep) {
     value
 }
 
+# Validate one coefficient per exported surface and reduce duplicated vertex
+# rows to the object-level property records used by the following converters.
+surface_property__object_table <- function(surface) {
+    fields <- c(
+        "OUTPUT_ID", "NAME", "CONSTRUCTION", "BOUNDARY", "BOUNDARY_OBJECT",
+        "INSIDE_SOLAR_ABSORPTANCE", "INSIDE_THERMAL_ABSORPTANCE",
+        "INSIDE_CONVECTION_COEFFICIENT", "OUTSIDE_SOLAR_ABSORPTANCE",
+        "OUTSIDE_THERMAL_ABSORPTANCE", "OUTSIDE_CONVECTION_COEFFICIENT"
+    )
+    missing <- setdiff(fields, names(surface))
+    if (length(missing) > 0L) {
+        stop(sprintf(
+            "Surface property fields are missing: %s.",
+            paste(missing, collapse = ", ")
+        ), call. = FALSE)
+    }
+
+    object <- unique(surface[, fields, with = FALSE])
+    duplicate <- object[, .N, by = "OUTPUT_ID"][N != 1L, OUTPUT_ID]
+    if (length(duplicate) > 0L) {
+        stop(sprintf(
+            "Exported DeST surface(s) have inconsistent properties: %s.",
+            paste(utils::head(duplicate, 10L), collapse = ", ")
+        ), call. = FALSE)
+    }
+
+    numeric_fields <- setdiff(fields, c(
+        "OUTPUT_ID", "NAME", "CONSTRUCTION", "BOUNDARY", "BOUNDARY_OBJECT"
+    ))
+    dt_force_numeric(object, numeric_fields)
+    object
+}
+
+# Give each distinct exposed-face absorptance tuple a deterministic construction
+# name. The matching material and Construction clones are created later by the
+# construction converter, after all source layers have been resolved.
+surface_property__assign_constructions <- function(surface) {
+    surface <- data.table::copy(surface)
+    object <- surface_property__object_table(surface)
+
+    outside_fields <- c(
+        "OUTSIDE_SOLAR_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE"
+    )
+    invalid_inside <- object[
+        !is.finite(INSIDE_SOLAR_ABSORPTANCE) |
+            INSIDE_SOLAR_ABSORPTANCE < 0.0 |
+            INSIDE_SOLAR_ABSORPTANCE > 1.0 |
+            !is.finite(INSIDE_THERMAL_ABSORPTANCE) |
+            INSIDE_THERMAL_ABSORPTANCE < 0.0 |
+            INSIDE_THERMAL_ABSORPTANCE > 1.0,
+        OUTPUT_ID
+    ]
+    invalid_outside <- object[
+        BOUNDARY == "Outdoors" & (
+            !is.finite(OUTSIDE_SOLAR_ABSORPTANCE) |
+                OUTSIDE_SOLAR_ABSORPTANCE < 0.0 |
+                OUTSIDE_SOLAR_ABSORPTANCE > 1.0 |
+                !is.finite(OUTSIDE_THERMAL_ABSORPTANCE) |
+                OUTSIDE_THERMAL_ABSORPTANCE < 0.0 |
+                OUTSIDE_THERMAL_ABSORPTANCE > 1.0
+        ),
+        OUTPUT_ID
+    ]
+    invalid <- unique(c(invalid_inside, invalid_outside))
+    if (length(invalid) > 0L) {
+        stop(sprintf(
+            "Invalid DeST surface absorptance or blackness for surface(s): %s.",
+            paste(utils::head(invalid, 10L), collapse = ", ")
+        ), call. = FALSE)
+    }
+
+    # An interzone construction must remain the exact reverse of its peer.
+    # Populate its outside material face from the peer's room-side properties;
+    # ground is the only boundary without a radiatively exposed second face.
+    peer_index <- match(object$BOUNDARY_OBJECT, object$NAME)
+    interzone <- object$BOUNDARY == "Surface" &
+        object$NAME != object$BOUNDARY_OBJECT
+    if (any(interzone & is.na(peer_index))) {
+        stop("Could not resolve an interzone surface property peer.", call. = FALSE)
+    }
+    object[interzone, `:=`(
+        OUTSIDE_SOLAR_ABSORPTANCE =
+            object$INSIDE_SOLAR_ABSORPTANCE[peer_index[interzone]],
+        OUTSIDE_THERMAL_ABSORPTANCE =
+            object$INSIDE_THERMAL_ABSORPTANCE[peer_index[interzone]]
+    )]
+    self_reference <- object$BOUNDARY == "Surface" &
+        object$NAME == object$BOUNDARY_OBJECT
+    object[self_reference, `:=`(
+        OUTSIDE_SOLAR_ABSORPTANCE = INSIDE_SOLAR_ABSORPTANCE,
+        OUTSIDE_THERMAL_ABSORPTANCE = INSIDE_THERMAL_ABSORPTANCE
+    )]
+    object[BOUNDARY == "Ground", (outside_fields) := NA_real_]
+    has_outside <- is.finite(object$OUTSIDE_SOLAR_ABSORPTANCE) &
+        is.finite(object$OUTSIDE_THERMAL_ABSORPTANCE)
+    object[, BASE_CONSTRUCTION := CONSTRUCTION]
+    object[, CONSTRUCTION := sprintf(
+        "%s [DeST i-a%.15g-e%.15g%s]",
+        BASE_CONSTRUCTION,
+        INSIDE_SOLAR_ABSORPTANCE,
+        INSIDE_THERMAL_ABSORPTANCE,
+        ifelse(
+            has_outside,
+            sprintf(
+                " o-a%.15g-e%.15g",
+                OUTSIDE_SOLAR_ABSORPTANCE,
+                OUTSIDE_THERMAL_ABSORPTANCE
+            ),
+            ""
+        )
+    )]
+
+    # Reuse the original construction only when DeST requests the exact
+    # EnergyPlus defaults on every exposed face.
+    object[
+        INSIDE_SOLAR_ABSORPTANCE == 0.7 &
+            INSIDE_THERMAL_ABSORPTANCE == 0.9 &
+            (!has_outside | (
+                OUTSIDE_SOLAR_ABSORPTANCE == 0.7 &
+                    OUTSIDE_THERMAL_ABSORPTANCE == 0.9
+            )),
+        CONSTRUCTION := BASE_CONSTRUCTION
+    ]
+    surface[object, on = "OUTPUT_ID", `:=`(
+        BASE_CONSTRUCTION = i.BASE_CONSTRUCTION,
+        CONSTRUCTION = i.CONSTRUCTION,
+        OUTSIDE_SOLAR_ABSORPTANCE = i.OUTSIDE_SOLAR_ABSORPTANCE,
+        OUTSIDE_THERMAL_ABSORPTANCE = i.OUTSIDE_THERMAL_ABSORPTANCE
+    )]
+    surface
+}
+
+# Convert DeST's fixed room-side and outdoor-side film coefficients to one
+# SurfaceProperty object per exported opaque surface.
+surface_property__convection_values <- function(surface) {
+    object <- surface_property__object_table(surface)
+    invalid_inside <- object[
+        !is.finite(INSIDE_CONVECTION_COEFFICIENT) |
+            INSIDE_CONVECTION_COEFFICIENT < 0.1,
+        OUTPUT_ID
+    ]
+    invalid_outside <- object[
+        BOUNDARY == "Outdoors" & (
+            !is.finite(OUTSIDE_CONVECTION_COEFFICIENT) |
+                OUTSIDE_CONVECTION_COEFFICIENT < 0.1
+        ),
+        OUTPUT_ID
+    ]
+    invalid <- unique(c(invalid_inside, invalid_outside))
+    if (length(invalid) > 0L) {
+        stop(sprintf(
+            "Invalid DeST convection coefficient for surface(s): %s.",
+            paste(utils::head(invalid, 10L), collapse = ", ")
+        ), call. = FALSE)
+    }
+
+    lapply(seq_len(nrow(object)), function(index) {
+        row <- object[index]
+        value <- list(
+            surface_name = row$NAME,
+            convection_coefficient_1_location = "Inside",
+            convection_coefficient_1_type = "Value",
+            convection_coefficient_1 = row$INSIDE_CONVECTION_COEFFICIENT
+        )
+        if (row$BOUNDARY == "Outdoors") {
+            value <- c(value, list(
+                convection_coefficient_2_location = "Outside",
+                convection_coefficient_2_type = "Value",
+                convection_coefficient_2 = row$OUTSIDE_CONVECTION_COEFFICIENT
+            ))
+        }
+        value
+    })
+}
+
 # SURFACE|MAIN_ENCLOSURE|PLANE -> BuildingSurface:Detailed
 surface__convert <- function(
     dest, ep, geometry_profile = eplus_geom__profile(ep$version())
@@ -210,6 +393,9 @@ surface__convert <- function(
     surface <- surface__apply_typical_storey_boundaries(
         surface, window, geometry_profile
     )
+    # Construction names depend on the final boundary role because only an
+    # outdoor face has an exposed exterior absorptance.
+    surface <- surface_property__assign_constructions(surface)
 
     # Orient every polygon from DeST's source azimuth and tilt. This also makes
     # exposed floors face downward without relying on enclosure side numbers.
@@ -223,7 +409,17 @@ surface__convert <- function(
     # TODO: how does EnergyPlus handle "empty floor slab"?
 
     value <- surface__object_values(surface, ep)
-    out <- conv__add_objects(dest, ep, "BuildingSurface:Detailed", value)
+    building_surface <- conv__add_objects(
+        dest, ep, "BuildingSurface:Detailed", value
+    )
+    convection <- conv__add_objects(
+        dest, ep, "SurfaceProperty:ConvectionCoefficients",
+        surface_property__convection_values(surface)
+    )
+    out <- conv__combine_outputs(
+        list(surface = building_surface, convection = convection),
+        table = surface
+    )
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- surface

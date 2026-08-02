@@ -597,6 +597,15 @@ const__object_tables <- function(source) {
         ), use.names = TRUE, fill = TRUE),
         by = c("MATERIAL_ID", "LENGTH")
     )
+    if (nrow(dt_mat) > 0L) {
+        # Store EnergyPlus defaults explicitly so exposed-layer clones can
+        # change only the DeST properties that have direct thermal meanings.
+        dt_mat[, `:=`(
+            THERMAL_ABSORPTANCE = 0.9,
+            SOLAR_ABSORPTANCE = 0.7,
+            VISIBLE_ABSORPTANCE = 0.7
+        )]
+    }
     dt_glaze <- unique(
         data.table::rbindlist(list(
             const__material_table(
@@ -620,12 +629,127 @@ const__object_tables <- function(source) {
     )
 }
 
+# Clone only the exposed layers needed by distinct DeST surface properties.
+# Original materials and constructions remain available to windows, doors, or
+# other surfaces that do not request the same absorptance tuple.
+const__apply_surface_properties <- function(object, surface) {
+    if (is.null(surface) || nrow(surface) == 0L ||
+        !"BASE_CONSTRUCTION" %in% names(surface)) return(object)
+
+    variant <- unique(surface[
+        CONSTRUCTION != BASE_CONSTRUCTION,
+        .(
+            BASE_CONSTRUCTION, CONSTRUCTION,
+            INSIDE_SOLAR_ABSORPTANCE, INSIDE_THERMAL_ABSORPTANCE,
+            OUTSIDE_SOLAR_ABSORPTANCE, OUTSIDE_THERMAL_ABSORPTANCE
+        )
+    ])
+    if (nrow(variant) == 0L) return(object)
+
+    material <- data.table::copy(object$material)
+    construction <- data.table::copy(object$construction)
+    for (index in seq_len(nrow(variant))) {
+        property <- variant[index]
+        source_index <- which(
+            construction$name == property$BASE_CONSTRUCTION
+        )
+        if (length(source_index) != 1L) {
+            stop(sprintf(
+                "Could not resolve one base construction named '%s'.",
+                property$BASE_CONSTRUCTION
+            ), call. = FALSE)
+        }
+
+        source <- construction[source_index]
+        layer <- source$value[[1L]][-1L]
+        source_layer <- layer
+        has_outside <- is.finite(property$OUTSIDE_SOLAR_ABSORPTANCE) &&
+            is.finite(property$OUTSIDE_THERMAL_ABSORPTANCE)
+        if (length(layer) == 1L && has_outside && (
+            property$OUTSIDE_SOLAR_ABSORPTANCE !=
+                property$INSIDE_SOLAR_ABSORPTANCE ||
+            property$OUTSIDE_THERMAL_ABSORPTANCE !=
+                property$INSIDE_THERMAL_ABSORPTANCE
+        )) {
+            stop(sprintf(
+                paste(
+                    "DeST construction '%s' has one material layer but its",
+                    "inside and outside absorptances differ; EnergyPlus cannot",
+                    "represent both values on one Material object."
+                ),
+                property$BASE_CONSTRUCTION
+            ), call. = FALSE)
+        }
+
+        exposed <- list(list(
+            position = length(layer),
+            solar = property$INSIDE_SOLAR_ABSORPTANCE,
+            thermal = property$INSIDE_THERMAL_ABSORPTANCE
+        ))
+        if (has_outside) {
+            exposed <- c(list(list(
+                position = 1L,
+                solar = property$OUTSIDE_SOLAR_ABSORPTANCE,
+                thermal = property$OUTSIDE_THERMAL_ABSORPTANCE
+            )), exposed)
+        }
+
+        for (face in exposed) {
+            # Read from the immutable source stack because a one-layer
+            # construction can expose the same material on both faces.
+            base_name <- source_layer[[face$position]]
+            material_index <- which(material$MATERIAL_NAME == base_name)
+            if (length(material_index) != 1L) {
+                stop(sprintf(
+                    "Could not resolve one base material named '%s'.",
+                    base_name
+                ), call. = FALSE)
+            }
+            clone_name <- sprintf(
+                "%s [DeST a%.15g-e%.15g]",
+                base_name, face$solar, face$thermal
+            )
+            clone_index <- which(material$MATERIAL_NAME == clone_name)
+            if (length(clone_index) == 0L) {
+                clone <- data.table::copy(material[material_index])
+                clone[, `:=`(
+                    MATERIAL_NAME = clone_name,
+                    SOLAR_ABSORPTANCE = face$solar,
+                    THERMAL_ABSORPTANCE = face$thermal
+                )]
+                material <- data.table::rbindlist(
+                    list(material, clone), use.names = TRUE, fill = TRUE
+                )
+            } else if (length(clone_index) > 1L) {
+                stop(sprintf(
+                    "Duplicated cloned material name '%s'.", clone_name
+                ), call. = FALSE)
+            }
+            layer[[face$position]] <- clone_name
+        }
+
+        clone <- data.table::copy(source)
+        clone[, `:=`(
+            name = property$CONSTRUCTION,
+            value = list(c(property$CONSTRUCTION, layer))
+        )]
+        construction <- data.table::rbindlist(
+            list(construction, clone), use.names = TRUE, fill = TRUE
+        )
+    }
+
+    object$material <- material
+    object$construction <- construction
+    object
+}
+
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-const__convert <- function(dest, ep) {
+const__convert <- function(dest, ep, surface = NULL) {
     if (!db_has_rows(dest, "MAIN_ENCLOSURE")) return(NULL)
 
     source <- const__prepare_layers(dest)
     object <- const__object_tables(source)
+    object <- const__apply_surface_properties(object, surface)
     out <- const__assemble_objects(
         dest, ep, object$material, object$simple_glazing,
         object$glazing, object$air, object$construction
@@ -663,10 +787,10 @@ const__assemble_objects <- function(
                 conductivity        = .(dt_mat$MATERIAL_CONDUCTIVITY),
                 density             = .(dt_mat$MATERIAL_DENSITY),
                 specific_heat       = .(dt_mat$MATERIAL_SPECIFIC_HEAT),
-                # use EnergyPlus defaults for the rest
-                thermal_absorptance = 0.9,
-                solar_absorptance   = 0.7,
-                visible_absorptance = 0.7
+                thermal_absorptance = .(dt_mat$THERMAL_ABSORPTANCE),
+                solar_absorptance   = .(dt_mat$SOLAR_ABSORPTANCE),
+                # DeST has no separately evidenced visible absorptance field.
+                visible_absorptance = .(dt_mat$VISIBLE_ABSORPTANCE)
             )
         ),
 

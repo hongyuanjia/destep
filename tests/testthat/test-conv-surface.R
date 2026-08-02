@@ -8,8 +8,119 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     # can convert 'BuildingSurface:Detailed'
     expect_type(surface <- surface__convert(dest, ep), "list")
     expect_named(surface, c("object", "value"))
-    expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
-    expect_s3_class(attr(surface, "table"), "data.table")
+    expect_setequal(
+        unique(surface$object$class_name),
+        c("BuildingSurface:Detailed", "SurfaceProperty:ConvectionCoefficients")
+    )
+    table <- attr(surface, "table")
+    expect_s3_class(table, "data.table")
+    convection <- surface$value[
+        class_name == "SurfaceProperty:ConvectionCoefficients"
+    ]
+    inside <- convection[
+        field_name == "Convection Coefficient 1 Location"
+    ]
+    outside <- convection[
+        field_name == "Convection Coefficient 2 Location"
+    ]
+    expect_equal(nrow(inside), data.table::uniqueN(table$OUTPUT_ID))
+    expect_true(all(inside$value_chr == "Inside"))
+    expect_equal(
+        nrow(outside), data.table::uniqueN(table[BOUNDARY == "Outdoors"]$OUTPUT_ID)
+    )
+    expect_true(all(outside$value_chr == "Outside"))
+    expect_equal(
+        unique(convection[
+            field_name == "Convection Coefficient 2", value_num
+        ]),
+        23.3,
+        tolerance = 1e-6
+    )
+})
+
+test_that("maps DeST surface coefficients by room-side boundary semantics", {
+    surface <- data.table::data.table(
+        OUTPUT_ID = c("out", "a", "b"),
+        NAME = c("Exterior", "Partition A", "Partition B"),
+        CONSTRUCTION = c("Wall", "Partition", "Partition [Reverse]"),
+        BOUNDARY = c("Outdoors", "Surface", "Surface"),
+        BOUNDARY_OBJECT = c(NA, "Partition B", "Partition A"),
+        INSIDE_SOLAR_ABSORPTANCE = c(0.55, 0.40, 0.60),
+        INSIDE_THERMAL_ABSORPTANCE = c(0.85, 0.80, 0.75),
+        INSIDE_CONVECTION_COEFFICIENT = c(3.5, 3.5, 3.5),
+        OUTSIDE_SOLAR_ABSORPTANCE = c(0.55, 0.1, 0.2),
+        OUTSIDE_THERMAL_ABSORPTANCE = c(0.85, 0.1, 0.2),
+        OUTSIDE_CONVECTION_COEFFICIENT = c(23.3, 3.5, 3.5)
+    )
+
+    mapped <- surface_property__assign_constructions(surface)
+    convection <- surface_property__convection_values(mapped)
+
+    # Interzone outside faces are the peer's room-side faces, not the raw peer
+    # columns inherited through later geometry rewiring.
+    expect_equal(
+        mapped[NAME == "Partition A", OUTSIDE_SOLAR_ABSORPTANCE], 0.60
+    )
+    expect_equal(
+        mapped[NAME == "Partition B", OUTSIDE_THERMAL_ABSORPTANCE], 0.80
+    )
+    expect_match(mapped[NAME == "Exterior", CONSTRUCTION], "o-a0.55-e0.85")
+    expect_equal(convection[[1L]]$convection_coefficient_2, 23.3)
+    expect_null(convection[[2L]]$convection_coefficient_2)
+})
+
+test_that("surface construction clones preserve reciprocal layer order", {
+    surface <- data.table::data.table(
+        OUTPUT_ID = c("a", "b"), NAME = c("A", "B"),
+        CONSTRUCTION = c("Partition", "Partition [Reverse]"),
+        BOUNDARY = "Surface", BOUNDARY_OBJECT = c("B", "A"),
+        INSIDE_SOLAR_ABSORPTANCE = c(0.40, 0.60),
+        INSIDE_THERMAL_ABSORPTANCE = c(0.80, 0.75),
+        INSIDE_CONVECTION_COEFFICIENT = 3.5,
+        OUTSIDE_SOLAR_ABSORPTANCE = c(0.1, 0.2),
+        OUTSIDE_THERMAL_ABSORPTANCE = c(0.1, 0.2),
+        OUTSIDE_CONVECTION_COEFFICIENT = 3.5
+    )
+    mapped <- surface_property__assign_constructions(surface)
+    material <- data.table::data.table(
+        MATERIAL_ID = 1:3, LENGTH = 100,
+        MATERIAL_NAME = c("Outer", "Core", "Inner"),
+        MATERIAL_CONDUCTIVITY = 1.0,
+        MATERIAL_DENSITY = 1000,
+        MATERIAL_SPECIFIC_HEAT = 1000,
+        THERMAL_ABSORPTANCE = 0.9,
+        SOLAR_ABSORPTANCE = 0.7,
+        VISIBLE_ABSORPTANCE = 0.7
+    )
+    construction <- data.table::data.table(
+        ID = 1L, KIND = 2L,
+        name = c("Partition", "Partition [Reverse]"),
+        value = list(
+            c("Partition", "Outer", "Core", "Inner"),
+            c("Partition [Reverse]", "Inner", "Core", "Outer")
+        )
+    )
+
+    converted <- const__apply_surface_properties(
+        list(material = material, construction = construction), mapped
+    )
+    forward_name <- mapped[NAME == "A", CONSTRUCTION]
+    reverse_name <- mapped[NAME == "B", CONSTRUCTION]
+    forward <- converted$construction[name == forward_name, value][[1L]][-1L]
+    reverse <- converted$construction[name == reverse_name, value][[1L]][-1L]
+
+    expect_equal(reverse, rev(forward))
+    expect_equal(
+        converted$material[
+            MATERIAL_NAME == forward[[1L]],
+            .(SOLAR_ABSORPTANCE, THERMAL_ABSORPTANCE)
+        ],
+        data.table::data.table(
+            SOLAR_ABSORPTANCE = 0.60,
+            THERMAL_ABSORPTANCE = 0.75
+        )
+    )
+    expect_true(all(converted$material$VISIBLE_ABSORPTANCE == 0.7))
 })
 
 test_that("surface polygon simplification removes only redundant vertices", {
@@ -451,6 +562,9 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
         idf <- to_eplus(dest, 23.1),
         "Skipped 9 ROOM row\\(s\\)"
     )
+    # Geometry and reciprocal-construction diagnostics are emitted during
+    # input processing, so one simulation day covers them without a full year.
+    idf$set(Annual = list(end_month = 1L, end_day_of_month = 1L))
     idf$add("Output:Diagnostics" := list(key_1 = "DisplayExtraWarnings"))
     idf$save(tempfile(fileext = ".idf"))
     job <- idf$run(
