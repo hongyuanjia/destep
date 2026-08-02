@@ -1,8 +1,9 @@
 # ROOM_RELATION -> ZoneVentilation:DesignFlowRate for relations connected to OUTSIDE.
 # VENT_SCHEDULE_ID is a foreign key to SCHEDULE_YEAR. The Access field comment
 # says that the referenced 8760-value schedule corresponds to air changes, so
-# those hourly schedule values are treated as hourly ACH values. VENT_SET_MAX is
-# retained in the diagnostic table until its unit is confirmed from DeST.
+# those hourly schedule values are treated as hourly ACH values. For
+# VENT_TYPE=1, VENT_SET_MAX is a second SCHEDULE_YEAR foreign key containing the
+# maximum ACH; DeST selects between the two through its ventilation-range rule.
 ventilation__convert <- function(dest, ep) {
     if (!db_has_rows(dest, "ROOM_RELATION")) return(NULL)
 
@@ -20,6 +21,7 @@ ventilation__convert <- function(dest, ep) {
             RR.VENT_SCHEDULE_ID,
             S.NAME AS SCHEDULE_NAME,
             RR.VENT_SET_MAX,
+            SMAX.NAME AS MAX_SCHEDULE_NAME,
             RR.VENT_TYPE,
             RR.START_POINT_ID,
             RR.END_POINT_ID,
@@ -31,6 +33,8 @@ ventilation__convert <- function(dest, ep) {
         ON RR.RELA_ROOM_ID = O.OUTSIDE_ID
         LEFT JOIN SCHEDULE_YEAR S
         ON RR.VENT_SCHEDULE_ID = S.SCHEDULE_ID
+        LEFT JOIN SCHEDULE_YEAR SMAX
+        ON RR.VENT_TYPE = 1 AND RR.VENT_SET_MAX = SMAX.SCHEDULE_ID
         ORDER BY RR.ID
         "
     )
@@ -45,6 +49,10 @@ ventilation__convert <- function(dest, ep) {
     skip_reason[is.na(relation$SCHEDULE_NAME)] <- "VENT_SCHEDULE_ID does not reference SCHEDULE_YEAR"
     data.table::set(relation, NULL, "SKIP_REASON", skip_reason)
     data.table::set(relation, NULL, "CAN_CONVERT", is.na(skip_reason))
+    data.table::set(
+        relation, NULL, "RANGE_CONTROL_CONVERTED",
+        relation$VENT_TYPE != 1L
+    )
     # EnergyPlus multiplies the ACH design level by the schedule fraction/value;
     # use a unit ACH design level so the referenced DeST schedule DATA values
     # pass through as the actual hourly ACH sequence.
@@ -55,6 +63,16 @@ ventilation__convert <- function(dest, ep) {
         warn(sprintf(
             "Skipped %i ROOM_RELATION row(s) that do not describe supported outdoor ventilation.",
             sum(!relation$CAN_CONVERT)
+        ))
+    }
+    if (any(relation$CAN_CONVERT & !relation$RANGE_CONTROL_CONVERTED)) {
+        warn(sprintf(
+            paste0(
+                "Converted the minimum ACH schedule only for %i DeST ",
+                "ventilation-range ROOM_RELATION row(s); VENT_SET_MAX and ",
+                "DeST's state-dependent range control are not yet represented."
+            ),
+            sum(relation$CAN_CONVERT & !relation$RANGE_CONTROL_CONVERTED)
         ))
     }
 

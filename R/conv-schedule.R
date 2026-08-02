@@ -182,23 +182,32 @@ schedule__scale_relative_humidity <- function(dest, schedule) {
     schedule
 }
 
-# Check every complete ROOM_GROUP humidity pair hour by hour before scaling;
-# an inverted lower/upper bound is invalid in both DeST and EnergyPlus.
+# Check every complete ROOM_GROUP or ROOM_TYPE_DATA humidity pair hour by hour
+# before scaling; an inverted lower/upper bound is invalid in both simulators.
 schedule__assert_relative_humidity_bounds <- function(dest, schedule) {
-    if (!"ROOM_GROUP" %in% DBI::dbListTables(dest)) return(invisible(NULL))
-    fields <- DBI::dbListFields(dest, "ROOM_GROUP")
     required <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
-    if (!all(required %in% fields) || !db_has_rows(dest, "ROOM_GROUP")) {
-        return(invisible(NULL))
-    }
-
-    pairs <- data.table::as.data.table(DBI::dbGetQuery(
-        dest,
-        paste(
-            "SELECT DISTINCT SET_RH_MIN_SCHEDULE AS MIN_ID,",
-            "SET_RH_MAX_SCHEDULE AS MAX_ID FROM ROOM_GROUP"
-        )
-    ))
+    tables <- intersect(
+        c("ROOM_GROUP", "ROOM_TYPE_DATA"),
+        DBI::dbListTables(dest)
+    )
+    pairs <- data.table::rbindlist(lapply(tables, function(table) {
+        fields <- DBI::dbListFields(dest, table)
+        if (!all(required %in% fields) || !db_has_rows(dest, table)) {
+            return(NULL)
+        }
+        data.table::as.data.table(DBI::dbGetQuery(
+            dest,
+            sprintf(
+                paste(
+                    "SELECT DISTINCT SET_RH_MIN_SCHEDULE AS MIN_ID,",
+                    "SET_RH_MAX_SCHEDULE AS MAX_ID FROM `%s`"
+                ),
+                table
+            )
+        ))
+    }))
+    if (nrow(pairs) == 0L) return(invisible(NULL))
+    pairs <- unique(pairs)
     keep <- !is.na(pairs$MIN_ID) & pairs$MIN_ID != 0L &
         !is.na(pairs$MAX_ID) & pairs$MAX_ID != 0L
     pairs <- pairs[keep]

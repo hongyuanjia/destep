@@ -151,6 +151,37 @@ test_that("returns a stable aggregate window type schema without windows", {
     ) %in% names(type)))
 })
 
+test_that("appends DeST's automatic soil only to ground-floor constructions", {
+    layer <- data.table::data.table(
+        ID = c(10L, 10L, 20L),
+        NAME = c("Ground", "Ground", "Wall"),
+        KIND = c(4L, 4L, 1L),
+        LAYER_NO = c(0L, 1L, 0L),
+        LENGTH = c(20, 40, 200),
+        MATERIAL_ID = c(1L, 2L, 3L),
+        MATERIAL_NAME = c("Cement", "Gravel", "Brick"),
+        MATERIAL_CONDUCTIVITY = c(0.93, 1.547, 0.81),
+        MATERIAL_DENSITY = c(1800, 2200, 1800),
+        MATERIAL_SPECIFIC_HEAT = c(837, 837, 1050)
+    )
+
+    actual <- const__append_dest_ground_soil(layer)
+    soil <- actual[MATERIAL_NAME == "DeST Automatic Soil"]
+
+    expect_equal(nrow(actual), 4L)
+    expect_equal(soil$ID, 10L)
+    expect_equal(soil$KIND, 4L)
+    expect_equal(soil$LAYER_NO, 2L)
+    expect_equal(soil$LENGTH, 1200)
+    expect_equal(soil$MATERIAL_CONDUCTIVITY, 0.93)
+    expect_equal(soil$MATERIAL_DENSITY, 1800)
+    expect_equal(soil$MATERIAL_SPECIFIC_HEAT, 1010)
+    expect_equal(
+        nrow(const__append_dest_ground_soil(actual)),
+        nrow(actual)
+    )
+})
+
 test_that("can convert 'Construction' and 'Material'", {
     skip_on_cran()
 
@@ -180,8 +211,15 @@ test_that("can convert 'Construction' and 'Material'", {
         class_name == "Material" & field_name == "Thickness",
         value_num
     ]
-    expect_equal(max(material_thickness, na.rm = TRUE), 0.2)
+    expect_equal(max(material_thickness, na.rm = TRUE), 1.2)
     expect_true(any(material_thickness == 0.02))
+    expect_true(any(material_thickness == 1.2))
+    table <- attr(const, "table")
+    soil <- table[
+        KIND == 4L & MATERIAL_NAME == "DeST Automatic Soil 1200mm"
+    ]
+    expect_gt(nrow(soil), 0L)
+    expect_equal(unique(soil$LENGTH), 1200)
     construction <- const$value[class_name == "Construction"]
     layer_count <- construction[field_name != "Name", .N, by = "rleid"]
     regular_id <- layer_count[N > 1L]$rleid[[1L]]
@@ -197,5 +235,5 @@ test_that("can convert 'Construction' and 'Material'", {
         construction[rleid == reverse_id & field_name != "Name", value_chr],
         rev(construction[rleid == regular_id & field_name != "Name", value_chr])
     )
-    expect_s3_class(attr(const, "table"), "data.table")
+    expect_s3_class(table, "data.table")
 })

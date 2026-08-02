@@ -154,6 +154,13 @@ test_that("to_eplus() works", {
         ],
         "Monday"
     )
+    timestep <- idf$to_table(class = "Timestep", all = TRUE)
+    expect_equal(
+        timestep$value[
+            timestep$field == "Number of Timesteps per Hour"
+        ],
+        "12"
+    )
     geometry_rules <- idf$to_table(class = "GlobalGeometryRules", all = TRUE)
     expect_equal(
         geometry_rules$value[
