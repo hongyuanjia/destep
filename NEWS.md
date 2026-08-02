@@ -5,9 +5,12 @@
   `ROOM_GROUP.IS_AC_ROOM` as the room-conditioning eligibility flag.
 - Restored the 1.2 m soil layer that DeST automatically appends to serialized
   ground-floor constructions but does not store in the source ACCDB tables.
-- Resolved `ROOM_RELATION.VENT_SET_MAX` as the maximum-ACH schedule for DeST
-  ventilation-range control and now warn when only its minimum schedule can be
-  represented by the current EnergyPlus conversion.
+- Mapped `ROOM_RELATION.VENT_TYPE=1` to a minimum-ACH
+  `ZoneVentilation:DesignFlowRate` plus a normalized max-minus-min supplement
+  enabled while outdoor temperature lies between the room-type heating and
+  cooling setpoint schedules. This implements DeST's documented range rule but
+  deliberately does not infer an HVAC-availability gate or claim equivalence
+  to DeST's undocumented solver-state coupling.
 - Removed the practical IdealLoads supply-humidity limitation from load-only
   models, and set an explicit 12-timestep-per-hour resolution so converted
   hourly relative-humidity bounds converge reproducibly.
