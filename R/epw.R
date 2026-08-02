@@ -86,7 +86,37 @@ epw__climate_data <- function(dest) {
     )
     data.table::setDT(climate)
     dt_force_numeric(climate, names(climate))
+    climate <- epw__expand_sparse_wind(climate)
     epw__validate_climate(climate, climate_id)
+    climate
+}
+
+# Expand the six-hourly wind observations stored by DeST Access models using
+# the same zero-initialized last-observation rule found in DeST's solver input.
+epw__expand_sparse_wind <- function(climate) {
+    missing <- vapply(c("WS", "WD"), function(field) {
+        sum(is.na(climate[[field]]))
+    }, integer(1L))
+    for (field in names(missing)) {
+        value <- climate[[field]]
+        previous <- 0
+        for (index in seq_along(value)) {
+            if (is.na(value[[index]])) {
+                value[[index]] <- previous
+            } else {
+                previous <- value[[index]]
+            }
+        }
+        data.table::set(climate, NULL, field, value)
+    }
+    attr(climate, "destep_wind_audit") <- list(
+        wind_speed_filled_hours = unname(missing[["WS"]]),
+        wind_direction_filled_hours = unname(missing[["WD"]]),
+        wind_fill_method = paste(
+            "zero-initialized last observation carried forward",
+            "matching DeST solver serialization"
+        )
+    )
     climate
 }
 
@@ -464,6 +494,7 @@ epw__data <- function(climate, environment, missing) {
                 epw_minute = 60L,
                 time_zone = epw__time_zone(environment)
             ),
+            attr(climate, "destep_wind_audit"),
             humidity$audit,
             radiation$audit
         )

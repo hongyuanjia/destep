@@ -130,6 +130,25 @@ test_that("to_epw() writes hour-ending minute 60", {
     expect_equal(fields[[5L]], "60")
 })
 
+test_that("to_epw() expands sparse DeST wind observations", {
+    dest <- epw_test__database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    DBI::dbExecute(dest, paste(
+        "UPDATE CLIMATE_DATA SET WS = NULL, WD = NULL",
+        "WHERE HOUR IN (0, 1, 3, 4, 5, 6, 7)"
+    ))
+
+    epw <- to_epw(dest)
+    data <- epw$data()
+    audit <- attr(epw, "destep_audit")
+
+    expect_equal(data$wind_speed[1:8], c(0, 0, rep(2, 6)))
+    expect_equal(data$wind_direction[1:8], c(0, 0, rep(22.5, 6)))
+    expect_equal(audit$wind_speed_filled_hours, 7L)
+    expect_equal(audit$wind_direction_filled_hours, 7L)
+    expect_match(audit$wind_fill_method, "last observation carried forward")
+})
+
 test_that("to_epw() selects a city-linked climate series", {
     dest <- epw_test__database(ids = c(1L, 2L), offsets = c(0, 10))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
