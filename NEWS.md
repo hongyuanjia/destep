@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Fixed direct-normal radiation derived from hourly DeST weather by using the
+  centered-hour mean solar altitude, avoiding nonphysical sunrise and sunset
+  values in official prototype models.
 - Preserved DeST surface convection coefficients, solar absorptance, and
   blackness using per-surface convection objects and deduplicated exposed-layer
   construction clones, while retaining reciprocal interzone layer order.
