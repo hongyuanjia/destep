@@ -118,6 +118,28 @@ test_that("to_epw() derives finite direct normal radiation and source flags", {
     expect_lt(attr(epw, "destep_audit")$maximum_derived_dni_w_m2, 1500)
 })
 
+test_that("DNI uses centered-hour solar geometry near sunrise", {
+    environment <- epw_test__environment(latitude = 39.8, longitude = 116.4667)
+    hour <- (80L - 1L) * 24L + 6L
+    interval <- epw__solar_interval_sine(
+        hour, environment$LATITUDE, environment$LONGITUDE, 8
+    )
+    expected_dni <- 900
+    beam_horizontal <- expected_dni * interval$mean_sunlit_sine
+    climate <- data.frame(
+        HOUR = hour,
+        HORI_TOTAL_RAD = beam_horizontal + 20,
+        HORI_SCATTER_RAD = 20
+    )
+
+    radiation <- epw__radiation(climate, environment)
+
+    expect_equal(radiation$direct_normal, expected_dni, tolerance = 1e-10)
+    expect_true(radiation$daylight)
+    expect_equal(radiation$audit$solar_interval_samples, 60L)
+    expect_match(radiation$audit$solar_representative_time, "centered")
+})
+
 test_that("to_epw() writes hour-ending minute 60", {
     dest <- epw_test__database()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -239,9 +261,10 @@ test_that("to_epw() converts the real DeST climate series", {
     expect_equal(data$diffuse_horizontal_radiation, raw$HORI_SCATTER_RAD)
     expect_true(all(is.finite(data$direct_normal_radiation)))
     expect_equal(audit$supersaturation_hours, 125L)
-    expect_equal(audit$maximum_derived_dni_w_m2, 1174.677, tolerance = 0.01)
+    expect_equal(audit$maximum_derived_dni_w_m2, 1173.582, tolerance = 0.01)
     expect_equal(
         audit$positive_beam_horizontal_at_nonpositive_solar_altitude_hours,
-        6L
+        0L
     )
+    expect_equal(audit$solar_interval_samples, 60L)
 })
