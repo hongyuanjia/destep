@@ -30,10 +30,16 @@ surface__source_table <- function(dest, geometry_profile) {
                 WHEN E.KIND = 6               THEN 'Floor'
             END                                            AS TYPE,
             E.SIDE                                         AS SIDE,
-            -- DeST construction layers run from SIDE1 (left/upper) to SIDE2
-            -- (right/lower). EnergyPlus lists layers outside-to-inside for
-            -- each zone face, so the SIDE1 face needs the reversed stack.
+            -- DeST exterior-wall and roof libraries are already stored from
+            -- outdoors to indoors. Preserve that order only on a true outdoor
+            -- boundary; the same roof kind can also occur between rooms, where
+            -- the reciprocal SIDE1 reversal is still required. Inner-wall
+            -- layers ascend from SIDE1 to SIDE2, so EnergyPlus's
+            -- outside-to-inside convention likewise requires SIDE1 to use the
+            -- reverse stack and SIDE2 to retain the source stack.
             CASE
+                WHEN E.KIND IN (1, 3) AND PEER.TYPE = 1
+                    THEN E.CONSTRUCTION
                 WHEN E.SIDE = 1 THEN E.CONSTRUCTION || ' [Reverse]'
                 ELSE E.CONSTRUCTION
             END                                            AS CONSTRUCTION,

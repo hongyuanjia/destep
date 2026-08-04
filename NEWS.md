@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Fixed exterior-wall and roof layer order by retaining DeST's stored
+  outside-to-inside sequence, while keeping reversed constructions for
+  room-to-ground and reciprocal interzone faces.
 - Fixed direct-normal radiation derived from hourly DeST weather by using the
   centered-hour mean solar altitude, avoiding nonphysical sunrise and sunset
   values in official prototype models.
@@ -36,8 +39,9 @@
 - Preserved aggregate window area across partitioned host surfaces by choosing
   window-aware surface triangulations and applying an infinitesimal inward
   boundary offset accepted by EnergyPlus geometry checks (#32).
-- Preserved DeST construction layer direction by emitting explicit reversed
-  constructions for `SIDE1` surfaces and reciprocal interzone windows (#32).
+- Preserved reciprocal DeST construction direction by emitting explicit
+  reversed constructions for room-to-peer `SIDE1` surfaces and interzone
+  windows (#32).
 - Preserved distinct opaque and transparent door constructions, including
   thickness-dependent material identities and transparent-door material lookup
   through DeST application identifiers (#32).

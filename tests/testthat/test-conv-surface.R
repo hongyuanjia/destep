@@ -14,6 +14,36 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     )
     table <- attr(surface, "table")
     expect_s3_class(table, "data.table")
+    # Exterior wall and roof libraries are already outside-to-inside in DeST;
+    # ground and room-to-room faces still need reciprocal directional stacks.
+    expect_false(any(table[
+        KIND_ENCLOSURE %in% c(1L, 3L) & BOUNDARY == "Outdoors",
+        grepl(" \\[Reverse\\]", CONSTRUCTION)
+    ]))
+    expect_true(all(table[
+        KIND_ENCLOSURE == 4L,
+        grepl(" \\[Reverse\\]", CONSTRUCTION)
+    ]))
+    interior_wall <- table[
+        KIND_ENCLOSURE == 2L & BOUNDARY == "Surface",
+        .(HAS_REVERSE = grepl(" \\[Reverse\\]", CONSTRUCTION)),
+        by = ENCLOSURE_ID
+    ]
+    expect_gt(nrow(interior_wall), 0L)
+    expect_true(all(interior_wall[, .(
+        RECIPROCAL = identical(sort(unique(HAS_REVERSE)), c(FALSE, TRUE))
+    ), by = ENCLOSURE_ID]$RECIPROCAL))
+    # DeST inner-wall layers ascend from SIDE1 to SIDE2. EnergyPlus lists each
+    # room-side construction outside-to-inside, so SIDE1 must receive the
+    # reverse stack and SIDE2 must retain the source stack.
+    expect_true(all(table[
+        KIND_ENCLOSURE == 2L & BOUNDARY == "Surface" & SIDE == 1L,
+        grepl(" \\[Reverse\\]", CONSTRUCTION)
+    ]))
+    expect_false(any(table[
+        KIND_ENCLOSURE == 2L & BOUNDARY == "Surface" & SIDE == 2L,
+        grepl(" \\[Reverse\\]", CONSTRUCTION)
+    ]))
     convection <- surface$value[
         class_name == "SurfaceProperty:ConvectionCoefficients"
     ]
