@@ -476,8 +476,8 @@ const__layered_constructions <- function(layer, by, kind = NULL) {
         by = by,
         list(name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
     ]
-    # SIDE1 looks against the stored DeST layer direction and therefore needs
-    # an explicit reverse-stack Construction object.
+    # Retain an explicit reciprocal stack for ground and interzone SIDE1
+    # faces. Exterior walls and roofs use the normal outside-to-inside stack.
     reverse <- layer[,
         by = by,
         list(
