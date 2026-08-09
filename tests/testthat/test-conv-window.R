@@ -13,7 +13,7 @@ window__area <- function(value) {
 }
 
 test_that("can convert 'WINDOW'", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -121,7 +121,7 @@ test_that("can convert 'WINDOW'", {
 })
 
 test_that("skips window conversion without WINDOW records", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -214,7 +214,7 @@ test_that("interzone window pieces use the same canonical partition", {
 test_that("can convert windows from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

@@ -1,7 +1,7 @@
 test_that("can convert 'BuildingSurface:Detailed'", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- ensure_dest_sqlite_file(TRUE)
     conv__update_names(dest)
 
@@ -14,10 +14,11 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     )
     table <- attr(surface, "table")
     expect_s3_class(table, "data.table")
-    # Exterior wall and roof libraries are already outside-to-inside in DeST;
-    # ground and room-to-room faces still need reciprocal directional stacks.
+    # Exterior wall, roof, and exposed-floor libraries are already
+    # outside-to-inside in DeST; ground and room-to-room faces still need
+    # reciprocal directional stacks.
     expect_false(any(table[
-        KIND_ENCLOSURE %in% c(1L, 3L) & BOUNDARY == "Outdoors",
+        KIND_ENCLOSURE %in% c(1L, 3L, 6L) & BOUNDARY == "Outdoors",
         grepl(" \\[Reverse\\]", CONSTRUCTION)
     ]))
     expect_true(all(table[
@@ -503,7 +504,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
-    surface <- attr(surface__convert(dest, ensure_empty_idf()), "table")
+    surface <- attr(surface__convert(dest, eplusr::empty_idf(23.1)), "table")
     # Keep the fixture close to DeST's 560 SURFACE rows while allowing the
     # separate room-side objects required by EnergyPlus interzone boundaries.
     expect_lte(data.table::uniqueN(surface$OUTPUT_ID), 700L)

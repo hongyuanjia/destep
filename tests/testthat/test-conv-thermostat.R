@@ -46,7 +46,7 @@ destep_test_thermostat_db <- function() {
 }
 
 test_that("can convert ROOM_TYPE_DATA setpoints with shared dual setpoints", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_thermostat_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -101,7 +101,7 @@ test_that("can convert ROOM_TYPE_DATA setpoints with shared dual setpoints", {
 })
 
 test_that("stops when ROOM_TYPE_DATA setpoint schedules cannot be resolved", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -147,7 +147,7 @@ test_that("stops when ROOM_TYPE_DATA setpoint schedules cannot be resolved", {
 })
 
 test_that("skips rooms without complete ROOM_TYPE_DATA setpoints", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_thermostat_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -170,7 +170,7 @@ test_that("skips rooms without complete ROOM_TYPE_DATA setpoints", {
 test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

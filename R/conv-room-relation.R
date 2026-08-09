@@ -141,16 +141,17 @@ ventilation__convert <- function(dest, ep) {
 
     ventilation <- relation[relation$CAN_CONVERT]
     if (nrow(ventilation) == 0L) return(NULL)
+    zone_field_name <- ventilation__zone_field_name(ep)
 
     base_values <- lapply(seq_len(nrow(ventilation)), function(i) {
-        ventilation__value(ventilation, i)
+        ventilation__value(ventilation, i, zone_field_name)
     })
     supplement <- ventilation[
         ventilation$VENT_TYPE == 1L &
             ventilation$INCREMENT_AIR_CHANGES_PER_HOUR > 0
     ]
     supplement_values <- lapply(seq_len(nrow(supplement)), function(i) {
-        ventilation__range_value(supplement, i)
+        ventilation__range_value(supplement, i, zone_field_name)
     })
     out <- conv__combine_outputs(
         list(
@@ -165,6 +166,11 @@ ventilation__convert <- function(dest, ep) {
     )
 
     out
+}
+
+# Resolve the version-specific zone-reference label at its stable IDD position.
+ventilation__zone_field_name <- function(ep) {
+    conv__idd_field_name(ep, "ZoneVentilation:DesignFlowRate", 2L)
 }
 
 # Allocate deterministic derived names without renaming any source schedule or
@@ -413,27 +419,23 @@ ventilation__names <- function(relation) {
 
 # Create the EnergyPlus ventilation object value list for one external
 # ROOM_RELATION row.
-ventilation__value <- function(ventilation, i) {
-    list(
+ventilation__value <- function(ventilation, i, zone_field_name) {
+    value <- list(
         name = ventilation$ENERGYPLUS_NAME[[i]],
-        zone_or_zonelist_or_space_or_spacelist_name = ventilation$ROOM_NAME[[i]],
         schedule_name = ventilation$SCHEDULE_NAME[[i]],
         design_flow_rate_calculation_method = "AirChanges/Hour",
-        design_flow_rate = NULL,
-        flow_rate_per_floor_area = NULL,
-        flow_rate_per_person = NULL,
         air_changes_per_hour = ventilation$AIR_CHANGES_PER_HOUR[[i]],
         ventilation_type = "Natural"
     )
+    value[[zone_field_name]] <- ventilation$ROOM_NAME[[i]]
+    value
 }
 
 # Create the supplemental EnergyPlus ventilation object whose fractional
 # schedule supplies max-minus-min ACH only inside the documented outdoor band.
-ventilation__range_value <- function(ventilation, i) {
-    list(
+ventilation__range_value <- function(ventilation, i, zone_field_name) {
+    value <- list(
         name = ventilation$RANGE_ENERGYPLUS_NAME[[i]],
-        zone_or_zonelist_or_space_or_spacelist_name =
-            ventilation$ROOM_NAME[[i]],
         schedule_name = ventilation$INCREMENT_SCHEDULE_NAME[[i]],
         design_flow_rate_calculation_method = "AirChanges/Hour",
         air_changes_per_hour =
@@ -454,4 +456,6 @@ ventilation__range_value <- function(ventilation, i) {
             ventilation$COOLING_SCHEDULE_NAME[[i]],
         maximum_wind_speed = 40
     )
+    value[[zone_field_name]] <- ventilation$ROOM_NAME[[i]]
+    value
 }

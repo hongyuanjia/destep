@@ -47,7 +47,7 @@ destep_test_ideal_loads_db <- function() {
 }
 
 test_that("can convert ROOM_TYPE_DATA ideal loads for air-conditioned rooms", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ideal_loads_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -142,8 +142,33 @@ test_that("can convert ROOM_TYPE_DATA ideal loads for air-conditioned rooms", {
     ))
 })
 
+test_that("ideal loads follow target equipment-list fields", {
+    skip_if_not("9.0.1" %in% eplusr::avail_eplus())
+
+    ep <- eplusr::empty_idf("9.0.1")
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    ideal <- ideal_loads__convert(dest, ep)
+    value <- ideal$value
+
+    expect_false(any(
+        value$class_name == "Schedule:Constant" &
+            value$value_chr == "DeST Ideal Loads Sequential Fraction",
+        na.rm = TRUE
+    ))
+    expect_false(any(grepl(
+        "Sequential .* Fraction Schedule Name",
+        value$field_name
+    ), na.rm = TRUE))
+    expect_equal(
+        sum(ideal$object$class_name == "ZoneHVAC:EquipmentList"),
+        2L
+    )
+})
+
 test_that("ideal loads disable synthetic latent control without humidity setpoints", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ideal_loads_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -171,7 +196,7 @@ test_that("ideal loads disable synthetic latent control without humidity setpoin
 })
 
 test_that("ideal loads reference ROOM_TYPE_DATA outdoor-air requirements", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ideal_loads_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -188,7 +213,7 @@ test_that("ideal loads reference ROOM_TYPE_DATA outdoor-air requirements", {
 })
 
 test_that("stops when ROOM_TYPE_DATA AC schedules cannot be resolved", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -235,7 +260,7 @@ test_that("stops when ROOM_TYPE_DATA AC schedules cannot be resolved", {
 })
 
 test_that("stops on incomplete or dangling ROOM_TYPE_DATA humidity schedules", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ideal_loads_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -261,7 +286,7 @@ test_that("stops on incomplete or dangling ROOM_TYPE_DATA humidity schedules", {
 })
 
 test_that("skips air-conditioned rooms without availability schedules", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ideal_loads_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -284,7 +309,7 @@ test_that("skips air-conditioned rooms without availability schedules", {
 test_that("can convert ROOM_TYPE_DATA ideal loads from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

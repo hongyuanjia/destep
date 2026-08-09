@@ -59,7 +59,7 @@ test_that("conv__update_names prefixes storeys in multi-building models", {
 })
 
 test_that("conv__add_objects expands one EnergyPlus class", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     values <- list(
         list(name = "First", hourly_value = 1),
         list(name = "Second", hourly_value = 2)
@@ -76,6 +76,39 @@ test_that("conv__add_objects expands one EnergyPlus class", {
         c("First", "Second")
     )
     expect_null(conv__add_objects(NULL, ep, "Schedule:Constant", list()))
+})
+
+test_that("EnergyPlus 9.0.1 object names remain executable", {
+    ep <- eplusr::empty_idf("9.0.1")
+    ep$add(
+        Schedule_Constant = list(
+            name = "全天开启",
+            hourly_value = 1
+        ),
+        ThermostatSetpoint_SingleHeating = list(
+            name = "供暖设定点",
+            setpoint_temperature_schedule_name = "全天开启"
+        )
+    )
+
+    conv__normalize_object_names(ep)
+
+    objects <- unique(ep$to_table()[!is.na(name), .(id, name)])
+    expect_false(any(grepl("[^\\x01-\\x7f]", objects$name, perl = TRUE)))
+    setpoint <- ep$to_table(
+        class = "ThermostatSetpoint:SingleHeating",
+        wide = TRUE,
+        string_value = TRUE
+    )
+    schedule <- ep$to_table(
+        class = "Schedule:Constant",
+        wide = TRUE,
+        string_value = TRUE
+    )
+    expect_equal(
+        setpoint[["Setpoint Temperature Schedule Name"]],
+        schedule$Name
+    )
 })
 
 test_that("to_eplus() works", {
