@@ -79,14 +79,19 @@ read__with_sqlite_target <- function(sqlite, convert) {
 #'    - Reads the entire table from Access
 #'    - Writes the data to SQLite
 #'
-#' 5. **Schema Handling**: Table structure (columns and types) is automatically
-#'    preserved during the transfer process
+#' 5. **Schema Handling**:
+#'    - Column names and data values are transferred to SQLite
+#'    - SQLite column types are inferred from the imported data
+#'    - Access-specific indexes, relationships, constraints, default values,
+#'      queries, forms, reports, and macros are not preserved
 #'
-#' For systems without proper ODBC drivers (especially some Linux distributions),
+#' For systems without proper ODBC drivers (especially on macOS and Linux),
 #' consider installing one of the following:
 #' - `MDBTools`: Open-source utilities for reading Access databases
-#' - `LibreOffice Base`: Provides ODBC drivers for Access
-#' - Commercial drivers: `Actual Technologies` or `Easysoft ODBC drivers`
+#' - Commercial drivers: `Actual Technologies` (macOS, read-only),
+#'   `Easysoft ODBC-Access` (Linux/UNIX, read-write),
+#'   `Devart ODBC Driver for Microsoft Access` (Windows/macOS/Linux, read-write),
+#'   or `CData ODBC Driver for Microsoft Access` (Windows/macOS/Linux, read-write)'
 #'
 #' @export
 read_dest <- function(accdb, tables = NULL, sqlite = ":memory:", verbose = FALSE, drop = TRUE) {
