@@ -176,6 +176,67 @@ test_that("surface polygon simplification removes only redundant vertices", {
     )
 })
 
+test_that("surface polygons start at EnergyPlus's declared upper-left corner", {
+    polygon <- list(
+        east = rbind(
+            c(8, 4.5, 0.2), c(8, 4.5, 2.2),
+            c(8, 1.5, 2.2), c(8, 1.5, 0.2)
+        ),
+        west = rbind(
+            c(0, 1.5, 0.2), c(0, 1.5, 2.2),
+            c(0, 4.5, 2.2), c(0, 4.5, 0.2)
+        ),
+        north = rbind(
+            c(0, 6, 0), c(0, 6, 2.7),
+            c(8, 6, 2.7), c(8, 6, 0)
+        ),
+        south = rbind(
+            c(8, 0, 0), c(8, 0, 2.7),
+            c(0, 0, 2.7), c(0, 0, 0)
+        ),
+        roof = rbind(
+            c(8, 0, 2.7), c(8, 6, 2.7),
+            c(0, 6, 2.7), c(0, 0, 2.7)
+        ),
+        floor = rbind(
+            c(8, 6, 0), c(8, 0, 0),
+            c(0, 0, 0), c(0, 6, 0)
+        )
+    )
+    expected <- list(
+        east = c(8, 1.5, 2.2),
+        west = c(0, 4.5, 2.2),
+        north = c(8, 6, 2.7),
+        south = c(0, 0, 2.7),
+        roof = c(0, 6, 2.7),
+        floor = c(0, 0, 0)
+    )
+
+    for (name in names(polygon)) {
+        input <- data.table::as.data.table(polygon[[name]])
+        data.table::setnames(input, c("POINT_X", "POINT_Y", "POINT_Z"))
+        input[, POINT_NO := seq_len(.N) - 1L]
+        normal_before <- geom__unit_normal(input)
+        area_before <- geom__polygon_area(input)
+
+        normalized <- geom__rotate_polygon_upper_left(input)
+
+        expect_equal(
+            unname(unlist(normalized[1L, .(POINT_X, POINT_Y, POINT_Z)])),
+            expected[[name]],
+            info = name
+        )
+        expect_equal(geom__unit_normal(normalized), normal_before, info = name)
+        expect_equal(geom__polygon_area(normalized), area_before, info = name)
+        expect_setequal(
+            do.call(paste, c(input[, .(POINT_X, POINT_Y, POINT_Z)], sep = ":")),
+            do.call(paste, c(
+                normalized[, .(POINT_X, POINT_Y, POINT_Z)], sep = ":"
+            ))
+        )
+    }
+})
+
 test_that("EnergyPlus geometry assumptions are versioned in one profile", {
     reference <- expect_silent(eplus_geom__profile("23.1"))
     expect_true(reference$validated)
