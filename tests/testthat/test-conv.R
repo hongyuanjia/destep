@@ -177,6 +177,13 @@ test_that("to_eplus() works", {
     )
     expect_s3_class(attr(surface, "table"), "data.table")
 
+    # Preserve the exact source value so the integration assertion covers the
+    # Access/SQLite numeric representation instead of a rounded decimal.
+    expected_ground_reflectance <- as.numeric(DBI::dbGetQuery(
+        dest,
+        "SELECT GROUND_REFLECT_COEF FROM ENVIRONMENT"
+    )$GROUND_REFLECT_COEF)
+
     # can convert a DeST model to a valid EnergyPlus model
     expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf")
     expect_true(idf$is_valid())
@@ -196,6 +203,18 @@ test_that("to_eplus() works", {
             timestep$field == "Number of Timesteps per Hour"
         ],
         "12"
+    )
+    ground_reflectance <- idf$to_table(
+        class = "Site:GroundReflectance", all = TRUE
+    )
+    expect_equal(
+        as.numeric(ground_reflectance$value[
+            grepl(
+                "Ground Reflectance", ground_reflectance$field,
+                fixed = TRUE
+            )
+        ]),
+        rep(expected_ground_reflectance, 12L)
     )
     geometry_rules <- idf$to_table(class = "GlobalGeometryRules", all = TRUE)
     expect_equal(

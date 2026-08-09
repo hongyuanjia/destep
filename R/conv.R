@@ -199,6 +199,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
         location = location__convert(tmpdb, ep),
+        ground_reflectance = ground_reflectance__convert(tmpdb, ep),
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
         zone     = zone__convert(tmpdb, ep),
