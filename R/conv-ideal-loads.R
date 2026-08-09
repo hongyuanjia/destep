@@ -53,18 +53,36 @@ ideal_loads__convert <- function(dest, ep) {
 
     converted <- ideal[ideal$CAN_CONVERT]
     if (nrow(converted) == 0L) return(NULL)
+    # Handle optional equipment-list fields using the selected target IDD.
+    use_sequential_fraction <-
+        ideal_loads__supports_sequential_fraction(ep)
 
     out <- conv__combine_outputs(list(
         humidistat = ideal_loads__humidistat_objects(
             dest, ep, converted[converted$HUMIDITY_CONTROL]
         ),
         ideal_loads = ideal_loads__objects(dest, ep, converted),
-        sequential_fraction = ideal_loads__sequential_fraction_schedule(dest, ep),
-        equipment_list = ideal_loads__equipment_lists(dest, ep, converted),
+        sequential_fraction = ideal_loads__sequential_fraction_schedule(
+            dest, ep, use_sequential_fraction
+        ),
+        equipment_list = ideal_loads__equipment_lists(
+            dest, ep, converted, use_sequential_fraction
+        ),
         equipment_connections = ideal_loads__equipment_connections(dest, ep, converted)
     ), table = ideal)
 
     out
+}
+
+# Detect optional equipment-list fields from the selected EnergyPlus IDD so the
+# converter can retain one code path across supported target versions.
+ideal_loads__supports_sequential_fraction <- function(ep) {
+    fields <- c(
+        "Zone Equipment 1 Sequential Cooling Fraction Schedule Name",
+        "Zone Equipment 1 Sequential Heating Fraction Schedule Name"
+    )
+    definition <- ep$definition("ZoneHVAC:EquipmentList")
+    all(definition$is_valid_field_name(fields))
 }
 
 # A supported ROOM_TYPE_DATA humidity boundary needs both the lower and upper
@@ -242,7 +260,13 @@ ideal_loads__value <- function(ideal, i) {
 # The EquipmentList extensible group is complete only when the sequential load
 # fraction schedule names are present, so a single constant-one schedule is
 # shared by every generated IdealLoads equipment list.
-ideal_loads__sequential_fraction_schedule <- function(dest, ep) {
+ideal_loads__sequential_fraction_schedule <- function(
+    dest,
+    ep,
+    use_sequential_fraction
+) {
+    if (!use_sequential_fraction) return(NULL)
+
     conv__add(
         dest, ep,
         "Schedule:Constant" := list(
@@ -255,26 +279,46 @@ ideal_loads__sequential_fraction_schedule <- function(dest, ep) {
 
 # Each conditioned zone gets a one-item equipment list that points to its own
 # IdealLoads system.
-ideal_loads__equipment_lists <- function(dest, ep, ideal) {
+ideal_loads__equipment_lists <- function(
+    dest,
+    ep,
+    ideal,
+    use_sequential_fraction
+) {
     values <- lapply(seq_len(nrow(ideal)), function(i) {
-        ideal_loads__equipment_list_value(ideal, i)
+        ideal_loads__equipment_list_value(
+            ideal, i, use_sequential_fraction
+        )
     })
 
     conv__add_objects(dest, ep, "ZoneHVAC:EquipmentList", values)
 }
 
 # Build one ZoneHVAC:EquipmentList value list.
-ideal_loads__equipment_list_value <- function(ideal, i) {
-    list(
+ideal_loads__equipment_list_value <- function(
+    ideal,
+    i,
+    use_sequential_fraction
+) {
+    value <- list(
         name = ideal$ENERGYPLUS_EQUIPMENT_LIST_NAME[[i]],
         load_distribution_scheme = "SequentialLoad",
         zone_equipment_1_object_type = "ZoneHVAC:IdealLoadsAirSystem",
         zone_equipment_1_name = ideal$ENERGYPLUS_IDEAL_LOADS_NAME[[i]],
         zone_equipment_1_cooling_sequence = 1,
-        zone_equipment_1_heating_or_no_load_sequence = 1,
-        zone_equipment_1_sequential_cooling_fraction_schedule_name = "DeST Ideal Loads Sequential Fraction",
-        zone_equipment_1_sequential_heating_fraction_schedule_name = "DeST Ideal Loads Sequential Fraction"
+        zone_equipment_1_heating_or_no_load_sequence = 1
     )
+
+    # EnergyPlus 9.0.1 ends each extensible equipment group at the heating
+    # sequence; later IDDs add two optional sequential fraction schedules.
+    if (use_sequential_fraction) {
+        value$zone_equipment_1_sequential_cooling_fraction_schedule_name <-
+            "DeST Ideal Loads Sequential Fraction"
+        value$zone_equipment_1_sequential_heating_fraction_schedule_name <-
+            "DeST Ideal Loads Sequential Fraction"
+    }
+
+    value
 }
 
 # ZoneHVAC:EquipmentConnections closes the loop between a Zone, its equipment

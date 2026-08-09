@@ -244,7 +244,30 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
+    # EnergyPlus 9.0.1 rejects non-ASCII object names even when the IDF passes
+    # schema validation. Rename those objects and their references after the
+    # complete object graph has been assembled.
+    conv__normalize_object_names(ep)
+
     ep
+}
+
+# Give non-ASCII objects stable names accepted by the EnergyPlus 9.0.1 parser.
+conv__normalize_object_names <- function(ep) {
+    if (as.numeric_version(ep$version()) > as.numeric_version("9.0.1")) {
+        return(invisible(ep))
+    }
+
+    objects <- unique(ep$to_table()[!is.na(name), .(id, name)])
+    objects <- objects[grepl("[^\\x01-\\x7f]", name, perl = TRUE)]
+    if (nrow(objects) == 0L) return(invisible(ep))
+
+    # Object ids are deterministic within one converted model, remain short,
+    # and avoid collisions between distinct source names after normalization.
+    replacements <- sprintf("DeST Object %d", objects$id)
+    arguments <- as.list(stats::setNames(objects$id, replacements))
+    invisible(do.call(ep$rename, arguments))
+    invisible(ep)
 }
 
 conv__comment <- function(dest, ep, class = NULL, object = NULL, comment) {

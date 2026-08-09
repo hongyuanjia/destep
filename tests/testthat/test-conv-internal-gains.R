@@ -1,5 +1,5 @@
 test_that("can convert internal gains", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -127,6 +127,34 @@ test_that("can convert internal gains", {
     )
 })
 
+test_that("internal gains resolve target zone-reference fields", {
+    skip_if_not("9.0.1" %in% eplusr::avail_eplus())
+
+    old <- eplusr::empty_idf("9.0.1")
+    current <- eplusr::empty_idf(23.1)
+    classes <- c("People", "Lights", "ElectricEquipment")
+
+    expect_identical(
+        vapply(
+            classes,
+            function(class) internal_gains__zone_field_name(old, class),
+            character(1L)
+        ),
+        stats::setNames(rep("Zone or ZoneList Name", 3L), classes)
+    )
+    expect_identical(
+        vapply(
+            classes,
+            function(class) internal_gains__zone_field_name(current, class),
+            character(1L)
+        ),
+        stats::setNames(
+            rep("Zone or ZoneList or Space or SpaceList Name", 3L),
+            classes
+        )
+    )
+})
+
 test_that("rejects internal gain minimum values above their maximum", {
     people <- data.frame(
         NAME = "Invalid People", SCHEDULE_NAME = "Always On",
@@ -161,7 +189,7 @@ test_that("rejects internal gain minimum values above their maximum", {
 })
 
 test_that("nonzero equipment moisture is rejected until it can be mapped", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -198,7 +226,7 @@ test_that("nonzero equipment moisture is rejected until it can be mapped", {
 test_that("can convert internal gains from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

@@ -96,6 +96,12 @@ internal_gains__split_minimum <- function(
     out
 }
 
+# Resolve the version-specific zone-reference label shared by internal-gain
+# objects from field 2 of the selected target IDD class.
+internal_gains__zone_field_name <- function(ep, class) {
+    conv__idd_field_name(ep, class, 2L)
+}
+
 # ROOM.TYPE -> ROOM_TYPE_DATA occupant fields -> People. The outdoor-air field
 # is handled separately by outdoor_air__convert() so People remains focused on
 # internal sensible and latent heat gains.
@@ -191,8 +197,11 @@ internal_gains__convert_people <- function(dest, ep) {
     # the DeST minimum is non-zero, represent the same profile with two People
     # objects: a constant minimum object plus a scheduled (max - min) object.
     always_on <- "Always On - DeST Minimum People"
+    zone_field_name <- internal_gains__zone_field_name(ep, "People")
     people_objects <- unlist(lapply(seq_len(nrow(people)), function(i) {
-        internal_gains__people_values(people, i, always_on)
+        internal_gains__people_values(
+            people, i, always_on, zone_field_name
+        )
     }), recursive = FALSE)
 
     parts <- list(
@@ -222,7 +231,12 @@ internal_gains__convert_people <- function(dest, ep) {
     conv__combine_outputs(parts, table = people)
 }
 
-internal_gains__people_values <- function(people, i, always_on) {
+internal_gains__people_values <- function(
+    people,
+    i,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+) {
     if (people$METHOD[[i]] == "People") {
         max_value <- people$NUMBER_OF_PEOPLE[[i]]
         min_value <- people$MIN_NUMBER_OF_PEOPLE[[i]]
@@ -233,20 +247,26 @@ internal_gains__people_values <- function(people, i, always_on) {
         field <- "people_per_floor_area"
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__people_value(
+            gain, row, name, schedule, zone_field_name
+        )
+    }
     internal_gains__split_minimum(
         people, i, max_value, min_value, field, always_on,
-        internal_gains__people_value
+        value_factory
     )
 }
 
-internal_gains__people_value <- function(people, i, name, schedule) {
-    # NOTE: Older EnergyPlus versions used a shorter People field 2 name before
-    # the Space concept was introduced. eplusr accepts the current canonical
-    # field name for supported IDDs, so keep named fields instead of positional
-    # loading here.
-    list(
+internal_gains__people_value <- function(
+    people,
+    i,
+    name,
+    schedule,
+    zone_field_name
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = people$ROOM_NAME[[i]],
         number_of_people_schedule_name = schedule,
         number_of_people_calculation_method = people$METHOD[[i]],
         number_of_people = NULL,
@@ -256,6 +276,8 @@ internal_gains__people_value <- function(people, i, name, schedule) {
         sensible_heat_fraction = people$SENSIBLE_HEAT_FRACTION[[i]],
         activity_level_schedule_name = people$ACTIVITY_SCHEDULE_NAME[[i]]
     )
+    value[[zone_field_name]] <- people$ROOM_NAME[[i]]
+    value
 }
 
 # ROOM.TYPE -> ROOM_TYPE_DATA lighting fields -> Lights.
@@ -329,8 +351,11 @@ internal_gains__convert_lights <- function(dest, ep) {
     # people. Use a constant minimum Lights object plus a scheduled variable
     # object when MINPOWER is non-zero.
     always_on <- "Always On - DeST Minimum Lights"
+    zone_field_name <- internal_gains__zone_field_name(ep, "Lights")
     light_objects <- unlist(lapply(seq_len(nrow(lights)), function(i) {
-        internal_gains__light_values(lights, i, watts_per_area_field, always_on)
+        internal_gains__light_values(
+            lights, i, watts_per_area_field, always_on, zone_field_name
+        )
     }), recursive = FALSE)
 
     parts <- list()
@@ -346,7 +371,13 @@ internal_gains__convert_lights <- function(dest, ep) {
     conv__combine_outputs(parts, table = lights)
 }
 
-internal_gains__light_values <- function(lights, i, watts_per_area_field, always_on) {
+internal_gains__light_values <- function(
+    lights,
+    i,
+    watts_per_area_field,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+) {
     if (lights$METHOD[[i]] == "LightingLevel") {
         max_value <- lights$LIGHTING_LEVEL[[i]]
         min_value <- lights$MIN_LIGHTING_LEVEL[[i]]
@@ -357,16 +388,26 @@ internal_gains__light_values <- function(lights, i, watts_per_area_field, always
         field <- watts_per_area_field
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__light_value(
+            gain, row, name, schedule, zone_field_name
+        )
+    }
     internal_gains__split_minimum(
         lights, i, max_value, min_value, field, always_on,
-        internal_gains__light_value
+        value_factory
     )
 }
 
-internal_gains__light_value <- function(lights, i, name, schedule) {
-    list(
+internal_gains__light_value <- function(
+    lights,
+    i,
+    name,
+    schedule,
+    zone_field_name
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = lights$ROOM_NAME[[i]],
         schedule_name = schedule,
         design_level_calculation_method = lights$METHOD[[i]],
         lighting_level = NULL,
@@ -377,6 +418,8 @@ internal_gains__light_value <- function(lights, i, name, schedule) {
         fraction_replaceable = lights$FRACTION_REPLACEABLE[[i]],
         end_use_subcategory = "General"
     )
+    value[[zone_field_name]] <- lights$ROOM_NAME[[i]]
+    value
 }
 
 # ROOM.TYPE -> ROOM_TYPE_DATA equipment fields -> ElectricEquipment.
@@ -452,8 +495,13 @@ internal_gains__convert_electric_equipment <- function(dest, ep) {
     # DeST equipment gains also store MINPOWER/MAXPOWER. Use the same
     # minimum-plus-variable representation as people and lights.
     always_on <- "Always On - DeST Minimum Equipment"
+    zone_field_name <- internal_gains__zone_field_name(
+        ep, "ElectricEquipment"
+    )
     equipment_objects <- unlist(lapply(seq_len(nrow(equipment)), function(i) {
-        internal_gains__equipment_values(equipment, i, watts_per_area_field, always_on)
+        internal_gains__equipment_values(
+            equipment, i, watts_per_area_field, always_on, zone_field_name
+        )
     }), recursive = FALSE)
 
     parts <- list()
@@ -494,7 +542,13 @@ equipment__assert_no_moisture <- function(equipment) {
     ), call. = FALSE)
 }
 
-internal_gains__equipment_values <- function(equipment, i, watts_per_area_field, always_on) {
+internal_gains__equipment_values <- function(
+    equipment,
+    i,
+    watts_per_area_field,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+) {
     if (equipment$METHOD[[i]] == "EquipmentLevel") {
         max_value <- equipment$DESIGN_LEVEL[[i]]
         min_value <- equipment$MIN_DESIGN_LEVEL[[i]]
@@ -505,16 +559,26 @@ internal_gains__equipment_values <- function(equipment, i, watts_per_area_field,
         field <- watts_per_area_field
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__equipment_value(
+            gain, row, name, schedule, zone_field_name
+        )
+    }
     internal_gains__split_minimum(
         equipment, i, max_value, min_value, field, always_on,
-        internal_gains__equipment_value
+        value_factory
     )
 }
 
-internal_gains__equipment_value <- function(equipment, i, name, schedule) {
-    list(
+internal_gains__equipment_value <- function(
+    equipment,
+    i,
+    name,
+    schedule,
+    zone_field_name
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = equipment$ROOM_NAME[[i]],
         schedule_name = schedule,
         design_level_calculation_method = equipment$METHOD[[i]],
         design_level = NULL,
@@ -524,6 +588,8 @@ internal_gains__equipment_value <- function(equipment, i, name, schedule) {
         fraction_lost = 0,
         end_use_subcategory = "General"
     )
+    value[[zone_field_name]] <- equipment$ROOM_NAME[[i]]
+    value
 }
 
 internal_gains__has_positive_minimum <- function(x) {

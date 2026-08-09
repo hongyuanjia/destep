@@ -1,5 +1,5 @@
 test_that("can convert 'Zone'", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -35,7 +35,7 @@ test_that("can convert 'Zone'", {
 test_that("can convert real DeST rooms with storey heights", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

@@ -1,5 +1,5 @@
 test_that("can convert ROOM_RELATION outdoor ventilation", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -118,8 +118,21 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
     )
 })
 
+test_that("ventilation resolves the target zone-reference field", {
+    skip_if_not("9.0.1" %in% eplusr::avail_eplus())
+
+    expect_identical(
+        ventilation__zone_field_name(eplusr::empty_idf("9.0.1")),
+        "Zone or ZoneList Name"
+    )
+    expect_identical(
+        ventilation__zone_field_name(eplusr::empty_idf(23.1)),
+        "Zone or ZoneList or Space or SpaceList Name"
+    )
+})
+
 test_that("normalizes a varying DeST ventilation range increment", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -164,7 +177,7 @@ test_that("normalizes a varying DeST ventilation range increment", {
 })
 
 test_that("rejects an inverted DeST ventilation range", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -202,7 +215,7 @@ test_that("rejects an inverted DeST ventilation range", {
 })
 
 test_that("skips ROOM_RELATION rows that are not outdoor ventilation", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -241,7 +254,7 @@ test_that("skips ROOM_RELATION rows that are not outdoor ventilation", {
 test_that("can convert ROOM_RELATION from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 

@@ -1,5 +1,5 @@
 test_that("schedule conversion writes resolvable week day references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -31,7 +31,7 @@ test_that("schedule conversion writes resolvable week day references", {
 })
 
 test_that("schedule conversion preserves weekday and weekend profiles", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -72,7 +72,7 @@ test_that("schedule conversion preserves weekday and weekend profiles", {
 })
 
 test_that("schedule conversion creates a dedicated week for a unique final day", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -127,7 +127,7 @@ test_that("schedule conversion creates a dedicated week for a unique final day",
 })
 
 test_that("schedule conversion ignores missing and zero references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -153,7 +153,7 @@ test_that("schedule conversion ignores missing and zero references", {
 })
 
 test_that("relative-humidity schedules convert DeST fractions to percent", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -180,7 +180,7 @@ test_that("relative-humidity schedules convert DeST fractions to percent", {
 })
 
 test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -204,7 +204,7 @@ test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
 })
 
 test_that("relative-humidity schedule conversion rejects unsupported units", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -227,7 +227,7 @@ test_that("relative-humidity schedule conversion rejects unsupported units", {
 })
 
 test_that("relative-humidity schedule conversion rejects inverted bounds", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -253,7 +253,7 @@ test_that("relative-humidity schedule conversion rejects inverted bounds", {
 })
 
 test_that("schedule conversion returns null without valid references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 

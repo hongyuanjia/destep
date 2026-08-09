@@ -21,7 +21,7 @@ destep_test_outdoor_air_db <- function(
 }
 
 test_that("can convert occupant minimum fresh air to DesignSpecification:OutdoorAir", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_outdoor_air_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -49,7 +49,7 @@ test_that("can convert occupant minimum fresh air to DesignSpecification:Outdoor
 })
 
 test_that("reuses one room-type outdoor-air requirement across rooms", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_outdoor_air_db(
         fresh_air = 25,
         room_type = c(1L, 1L),
@@ -64,7 +64,7 @@ test_that("reuses one room-type outdoor-air requirement across rooms", {
 })
 
 test_that("skips zero or missing occupant outdoor-air requirements", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_outdoor_air_db(fresh_air = c(0, NA_real_))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -72,7 +72,7 @@ test_that("skips zero or missing occupant outdoor-air requirements", {
 })
 
 test_that("stops when ROOM.TYPE outdoor-air references cannot be resolved", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_outdoor_air_db(
         fresh_air = 25,
         room_type = 999L,
@@ -89,7 +89,7 @@ test_that("stops when ROOM.TYPE outdoor-air references cannot be resolved", {
 test_that("can convert occupant outdoor air from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
