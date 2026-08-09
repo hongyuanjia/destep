@@ -73,7 +73,8 @@ test_that("can convert 'WINDOW'", {
     expect_s3_class(attr(window, "table"), "data.table")
     expect_equal(unique(attr(window, "table")$SURFACE_NAME), "Room Wall")
     expect_equal(unique(attr(window, "table")$CONSTRUCTION), "Double Window")
-    expect_equal(attr(window, "table")$POINT_Z, c(3, 3, 1, 1))
+    expect_equal(attr(window, "table")$POINT_X, c(2, 2, 1, 1))
+    expect_equal(attr(window, "table")$POINT_Z, c(3, 1, 1, 3))
 
     # A valid aggregate window type replaces the detailed SYS_WINDOW reference
     # while leaving the fenestration geometry and host assignment unchanged.

@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Normalized surface and window vertex starts to EnergyPlus's declared
+  upper-left corner.
 - Fixed exterior-wall and roof layer order by retaining DeST's stored
   outside-to-inside sequence, while keeping reversed constructions for
   room-to-ground and reciprocal interzone faces.
