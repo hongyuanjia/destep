@@ -767,9 +767,10 @@ const__convert <- function(dest, ep, surface = NULL) {
     out
 }
 
-# Identify DeST's explicit thermally massless material sentinels. Verified DeST
-# inputs use equal density and specific-heat dummies of 0.1 or 10 for R-only
-# layers; a density of 10 with a physical specific heat remains a normal
+# Identify DeST's explicit thermally massless material encodings. Verified DeST
+# inputs use either equal density and specific-heat dummies of 0.1 or 10, or a
+# physical density paired with a specific heat of zero or 1e-5, for R-only
+# layers. A density of 10 with a physical specific heat remains a normal
 # Material.
 const__is_no_mass_material <- function(material) {
     tolerance <- 1e-6
@@ -779,7 +780,12 @@ const__is_no_mass_material <- function(material) {
         abs(material$MATERIAL_DENSITY - value) <= tolerance &
             abs(material$MATERIAL_SPECIFIC_HEAT - value) <= tolerance
     }, logical(length(material$MATERIAL_DENSITY)))
-    finite & rowSums(sentinel) > 0L
+    near_zero_specific_heat <-
+        abs(material$MATERIAL_SPECIFIC_HEAT) <= tolerance |
+        abs(material$MATERIAL_SPECIFIC_HEAT - 1e-5) <= tolerance
+
+    finite & material$MATERIAL_DENSITY > 0.0 &
+        (rowSums(sentinel) > 0L | near_zero_specific_heat)
 }
 
 # Assemble the heterogeneous material and construction classes after the

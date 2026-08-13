@@ -233,6 +233,50 @@ test_that("maps DeST's thermally massless sentinel to Material:NoMass", {
     expect_true(any(converted$object$class_name == "Construction"))
 })
 
+test_that("maps DeST's near-zero heat capacity layers to Material:NoMass", {
+    ep <- eplusr::empty_idf(23.1)
+    material <- data.table::data.table(
+        MATERIAL_ID = 1:3,
+        LENGTH = c(127, 100, 25),
+        MATERIAL_NAME = c(
+            "Insulation 127mm", "Insulation 100mm", "Timber 25mm"
+        ),
+        MATERIAL_CONDUCTIVITY = c(0.047, 0.001, 0.14),
+        MATERIAL_DENSITY = c(30, 30, 650),
+        MATERIAL_SPECIFIC_HEAT = c(1e-5, 0, 1200),
+        THERMAL_ABSORPTANCE = 0.9,
+        SOLAR_ABSORPTANCE = 0.6,
+        VISIBLE_ABSORPTANCE = 0.6
+    )
+    construction <- data.table::data.table(
+        ID = 1L,
+        KIND = 4L,
+        name = "Floor",
+        value = list(c(
+            "Floor", "Insulation 127mm", "Insulation 100mm", "Timber 25mm"
+        ))
+    )
+
+    converted <- const__assemble_objects(
+        TRUE,
+        ep,
+        material,
+        data.table::data.table(),
+        data.table::data.table(),
+        data.table::data.table(),
+        construction
+    )
+    no_mass <- converted$value[class_name == "Material:NoMass"]
+
+    expect_equal(sum(converted$object$class_name == "Material"), 1L)
+    expect_equal(sum(converted$object$class_name == "Material:NoMass"), 2L)
+    expect_equal(
+        no_mass[field_name == "Thermal Resistance", value_num],
+        c(0.127 / 0.047, 100),
+        tolerance = 1e-10
+    )
+})
+
 test_that("can convert 'Construction' and 'Material'", {
     skip_on_cran()
 
