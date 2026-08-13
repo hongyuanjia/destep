@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Preserved DeST schedules shared by humidity and non-humidity fields by
+  generating a separate percent-valued copy for `ZoneControl:Humidistat`.
 - Fixed `People` field generation for EnergyPlus 9.0.1 by resolving the
   version-specific design-level field names from the selected target IDD.
 - Converted supported DeST exterior window overhangs and side fins to
