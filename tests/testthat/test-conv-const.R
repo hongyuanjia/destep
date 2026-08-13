@@ -182,6 +182,57 @@ test_that("appends DeST's automatic soil only to ground-floor constructions", {
     )
 })
 
+test_that("maps DeST's thermally massless sentinel to Material:NoMass", {
+    ep <- eplusr::empty_idf(23.1)
+    material <- data.table::data.table(
+        MATERIAL_ID = 1:4,
+        LENGTH = c(1003, 1007, 245.2, 25),
+        MATERIAL_NAME = c(
+            "Insulation 1003mm", "Insulation 1007mm",
+            "Foam Insulation", "Timber 25mm"
+        ),
+        MATERIAL_CONDUCTIVITY = c(0.04, 0.04, 0.04, 0.14),
+        MATERIAL_DENSITY = c(0.1, 10, 10, 650),
+        MATERIAL_SPECIFIC_HEAT = c(0.1, 10, 1400, 1200),
+        THERMAL_ABSORPTANCE = 0.9,
+        SOLAR_ABSORPTANCE = 0.6,
+        VISIBLE_ABSORPTANCE = 0.6
+    )
+    construction <- data.table::data.table(
+        ID = 1L,
+        KIND = 4L,
+        name = "Floor",
+        value = list(c(
+            "Floor", "Insulation 1003mm", "Insulation 1007mm",
+            "Foam Insulation", "Timber 25mm"
+        ))
+    )
+
+    converted <- const__assemble_objects(
+        TRUE,
+        ep,
+        material,
+        data.table::data.table(),
+        data.table::data.table(),
+        data.table::data.table(),
+        construction
+    )
+    no_mass <- converted$value[class_name == "Material:NoMass"]
+
+    expect_equal(sum(converted$object$class_name == "Material"), 2L)
+    expect_equal(sum(converted$object$class_name == "Material:NoMass"), 2L)
+    expect_equal(
+        no_mass[field_name == "Thermal Resistance", value_num],
+        c(25.075, 25.175),
+        tolerance = 1e-10
+    )
+    expect_equal(
+        no_mass[field_name == "Solar Absorptance", value_num],
+        rep(0.6, 2L)
+    )
+    expect_true(any(converted$object$class_name == "Construction"))
+})
+
 test_that("can convert 'Construction' and 'Material'", {
     skip_on_cran()
 

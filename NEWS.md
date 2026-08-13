@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Converted DeST thermally massless material sentinels to
+  `Material:NoMass`, preserving their resistance-only representation.
 - Normalized surface and window vertex starts to EnergyPlus's declared
   upper-left corner.
 - Preserved `ENVIRONMENT.GROUND_REFLECT_COEF` by writing the same DeST ground
