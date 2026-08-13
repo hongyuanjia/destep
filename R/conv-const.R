@@ -767,16 +767,35 @@ const__convert <- function(dest, ep, surface = NULL) {
     out
 }
 
+# Identify DeST's explicit thermally massless material sentinels. Verified DeST
+# inputs use equal density and specific-heat dummies of 0.1 or 10 for R-only
+# layers; a density of 10 with a physical specific heat remains a normal
+# Material.
+const__is_no_mass_material <- function(material) {
+    tolerance <- 1e-6
+    finite <- is.finite(material$MATERIAL_DENSITY) &
+        is.finite(material$MATERIAL_SPECIFIC_HEAT)
+    sentinel <- vapply(c(0.1, 10.0), function(value) {
+        abs(material$MATERIAL_DENSITY - value) <= tolerance &
+            abs(material$MATERIAL_SPECIFIC_HEAT - value) <= tolerance
+    }, logical(length(material$MATERIAL_DENSITY)))
+    finite & rowSums(sentinel) > 0L
+}
+
 # Assemble the heterogeneous material and construction classes after the
 # converter has normalized every source table and resolved its fallbacks.
 const__assemble_objects <- function(
     dest, ep, dt_mat, win_type_glazing, dt_glaze, dt_air, dt_const
 ) {
-    eval(as.call(c(
+    no_mass_row <- const__is_no_mass_material(dt_mat)
+    no_mass <- dt_mat[no_mass_row]
+    dt_mat <- dt_mat[!no_mass_row]
+
+    base <- eval(as.call(c(
         conv__add, dest, ep,
 
         # Material
-        bquote(
+        if (nrow(dt_mat) > 0L) bquote(
             "Material" := list(
                 name                = .(dt_mat$MATERIAL_NAME),
                 # NOTE: here we use "MediumSmooth" for roughness"
@@ -855,4 +874,25 @@ const__assemble_objects <- function(
             bquote("Construction" := as.list(.(con)))
         })
     )))
+
+    # Material:NoMass objects are assembled through the ordinary list boundary
+    # so a mixed Material/NoMass construction keeps stable object identifiers.
+    no_mass_values <- lapply(seq_len(nrow(no_mass)), function(index) {
+        material <- no_mass[index]
+        list(
+            name = material$MATERIAL_NAME,
+            roughness = "MediumSmooth",
+            # DeST stores the R-only layer as ordinary thickness and
+            # conductivity fields, so preserve R = d / k explicitly.
+            thermal_resistance = material$LENGTH / 1000 /
+                material$MATERIAL_CONDUCTIVITY,
+            thermal_absorptance = material$THERMAL_ABSORPTANCE,
+            solar_absorptance = material$SOLAR_ABSORPTANCE,
+            visible_absorptance = material$VISIBLE_ABSORPTANCE
+        )
+    })
+    no_mass_output <- conv__add_objects(
+        dest, ep, "Material:NoMass", no_mass_values
+    )
+    conv__combine_outputs(list(base = base, no_mass = no_mass_output))
 }
