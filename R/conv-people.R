@@ -102,6 +102,18 @@ internal_gains__zone_field_name <- function(ep, class) {
     conv__idd_field_name(ep, class, 2L)
 }
 
+# Resolve the version-specific People design-level fields from the target IDD.
+internal_gains__people_field_names <- function(ep) {
+    stats::setNames(
+        vapply(
+            5:7,
+            function(field) conv__idd_field_name(ep, "People", field),
+            character(1L)
+        ),
+        c("number", "per_area", "area_per_person")
+    )
+}
+
 # ROOM.TYPE -> ROOM_TYPE_DATA occupant fields -> People. The outdoor-air field
 # is handled separately by outdoor_air__convert() so People remains focused on
 # internal sensible and latent heat gains.
@@ -198,9 +210,10 @@ internal_gains__convert_people <- function(dest, ep) {
     # objects: a constant minimum object plus a scheduled (max - min) object.
     always_on <- "Always On - DeST Minimum People"
     zone_field_name <- internal_gains__zone_field_name(ep, "People")
+    field_names <- internal_gains__people_field_names(ep)
     people_objects <- unlist(lapply(seq_len(nrow(people)), function(i) {
         internal_gains__people_values(
-            people, i, always_on, zone_field_name
+            people, i, always_on, zone_field_name, field_names
         )
     }), recursive = FALSE)
 
@@ -235,21 +248,26 @@ internal_gains__people_values <- function(
     people,
     i,
     always_on,
-    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name",
+    field_names = c(
+        number = "number_of_people",
+        per_area = "people_per_floor_area",
+        area_per_person = "floor_area_per_person"
+    )
 ) {
     if (people$METHOD[[i]] == "People") {
         max_value <- people$NUMBER_OF_PEOPLE[[i]]
         min_value <- people$MIN_NUMBER_OF_PEOPLE[[i]]
-        field <- "number_of_people"
+        field <- field_names[["number"]]
     } else {
         max_value <- people$PEOPLE_PER_AREA[[i]]
         min_value <- people$MIN_PEOPLE_PER_AREA[[i]]
-        field <- "people_per_floor_area"
+        field <- field_names[["per_area"]]
     }
 
     value_factory <- function(gain, row, name, schedule) {
         internal_gains__people_value(
-            gain, row, name, schedule, zone_field_name
+            gain, row, name, schedule, zone_field_name, field_names
         )
     }
     internal_gains__split_minimum(
@@ -263,20 +281,19 @@ internal_gains__people_value <- function(
     i,
     name,
     schedule,
-    zone_field_name
+    zone_field_name,
+    field_names
 ) {
     value <- list(
         name = name,
         number_of_people_schedule_name = schedule,
         number_of_people_calculation_method = people$METHOD[[i]],
-        number_of_people = NULL,
-        people_per_floor_area = NULL,
-        floor_area_per_person = NULL,
         fraction_radiant = people$FRACTION_RADIANT[[i]],
         sensible_heat_fraction = people$SENSIBLE_HEAT_FRACTION[[i]],
         activity_level_schedule_name = people$ACTIVITY_SCHEDULE_NAME[[i]]
     )
     value[[zone_field_name]] <- people$ROOM_NAME[[i]]
+    for (field in field_names) value[[field]] <- NULL
     value
 }
 

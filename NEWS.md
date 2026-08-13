@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Fixed `People` field generation for EnergyPlus 9.0.1 by resolving the
+  version-specific design-level field names from the selected target IDD.
 - Converted supported DeST exterior window overhangs and side fins to
   `Shading:Zone:Detailed` polygons.
 - Resolved missing exterior absorptance sentinels on exposed DeST air floors

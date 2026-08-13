@@ -153,6 +153,22 @@ test_that("internal gains resolve target zone-reference fields", {
             classes
         )
     )
+    expect_identical(
+        unname(internal_gains__people_field_names(old)),
+        c(
+            "Number of People",
+            "People per Zone Floor Area",
+            "Zone Floor Area per Person"
+        )
+    )
+    expect_identical(
+        unname(internal_gains__people_field_names(current)),
+        c(
+            "Number of People",
+            "People per Floor Area",
+            "Floor Area per Person"
+        )
+    )
 })
 
 test_that("rejects internal gain minimum values above their maximum", {
