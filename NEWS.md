@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Preserved full DeST site-coordinate precision and decoded the standard
+  meridian in `ENVIRONMENT.PROPERTY` into the EnergyPlus site time zone.
 - Preserved DeST schedules shared by humidity and non-humidity fields by
   generating a separate percent-valued copy for `ZoneControl:Humidistat`.
 - Fixed `People` field generation for EnergyPlus 9.0.1 by resolving the
