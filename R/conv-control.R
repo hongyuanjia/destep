@@ -54,5 +54,17 @@ control__room_table <- function(dest) {
         "
     )
     data.table::setDT(control)
+    control[, HUMIDIFYING_SCHEDULE_NAME :=
+        schedule__relative_humidity_reference_names(
+            dest,
+            SET_RH_MIN_SCHEDULE,
+            HUMIDIFYING_SCHEDULE_NAME
+        )]
+    control[, DEHUMIDIFYING_SCHEDULE_NAME :=
+        schedule__relative_humidity_reference_names(
+            dest,
+            SET_RH_MAX_SCHEDULE,
+            DEHUMIDIFYING_SCHEDULE_NAME
+        )]
     control
 }

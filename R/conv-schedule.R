@@ -58,7 +58,6 @@ schedule__convert <- function(dest, ep) {
             schedule, NULL, "DATA",
             lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L)
         )
-        schedule <- schedule__scale_relative_humidity(dest, schedule)
     } else {
         schedule <- data.table::data.table()
     }
@@ -70,6 +69,7 @@ schedule__convert <- function(dest, ep) {
     schedule <- data.table::rbindlist(
         list(schedule, derived), use.names = TRUE, fill = TRUE
     )
+    schedule <- schedule__scale_relative_humidity(dest, schedule)
     if (nrow(schedule) == 0L) return(NULL)
 
     type_limits <- schedule__convert_type_limits(dest, ep, schedule)
@@ -118,8 +118,7 @@ schedule__relative_humidity_ids <- function(dest) {
     unique(ids[!is.na(ids) & ids != 0L])
 }
 
-# Collect every schedule reference except the two humidity-limit fields. A
-# shared ID would make in-place unit conversion ambiguous and must fail loudly.
+# Collect every schedule reference except the two humidity-limit fields.
 schedule__nonhumidity_reference_ids <- function(dest) {
     ids <- un_list(recursive = TRUE, lapply(
         setdiff(DBI::dbListTables(dest), "SCHEDULE_YEAR"),
@@ -142,25 +141,63 @@ schedule__nonhumidity_reference_ids <- function(dest) {
     unique(ids[!is.na(ids) & ids != 0L])
 }
 
+# Return humidity schedules that also need to retain their original unit use.
+schedule__shared_relative_humidity_ids <- function(dest) {
+    intersect(
+        schedule__relative_humidity_ids(dest),
+        schedule__nonhumidity_reference_ids(dest)
+    )
+}
+
+# Build deterministic names for percent copies of shared humidity schedules.
+schedule__relative_humidity_name_map <- function(dest) {
+    shared_ids <- schedule__shared_relative_humidity_ids(dest)
+    if (length(shared_ids) == 0L) return(data.table::data.table())
+
+    source <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        sprintf(
+            paste(
+                "SELECT SCHEDULE_ID, NAME FROM SCHEDULE_YEAR",
+                "WHERE SCHEDULE_ID IN (%s) ORDER BY SCHEDULE_ID"
+            ),
+            paste(shared_ids, collapse = ", ")
+        )
+    ))
+    unresolved <- setdiff(shared_ids, source$SCHEDULE_ID)
+    if (length(unresolved) > 0L) {
+        stop(sprintf(
+            "Cannot resolve relative-humidity schedule ID(s): [%s].",
+            paste(unresolved, collapse = ", ")
+        ), call. = FALSE)
+    }
+
+    existing_names <- DBI::dbGetQuery(
+        dest,
+        "SELECT NAME FROM SCHEDULE_YEAR ORDER BY SCHEDULE_ID"
+    )$NAME
+    candidates <- paste(source$NAME, "[Relative Humidity Percent]")
+    reserved <- make_unique_name(c(existing_names, candidates))
+    source[, NAME := utils::tail(reserved, .N)]
+    source[]
+}
+
+# Substitute derived percent-copy names only for shared humidity references.
+schedule__relative_humidity_reference_names <- function(dest, ids, names) {
+    mapping <- schedule__relative_humidity_name_map(dest)
+    if (nrow(mapping) == 0L) return(names)
+
+    index <- match(ids, mapping$SCHEDULE_ID)
+    replace <- !is.na(index)
+    names[replace] <- mapping$NAME[index[replace]]
+    names
+}
+
 # Convert DeST relative-humidity fractions to the percent values required by
 # EnergyPlus schedules while preserving all non-humidity schedules unchanged.
 schedule__scale_relative_humidity <- function(dest, schedule) {
     humidity_ids <- schedule__relative_humidity_ids(dest)
     if (length(humidity_ids) == 0L) return(schedule)
-
-    shared_ids <- intersect(
-        humidity_ids,
-        schedule__nonhumidity_reference_ids(dest)
-    )
-    if (length(shared_ids) > 0L) {
-        stop(sprintf(
-            paste(
-                "Cannot scale relative-humidity schedule ID(s) [%s] because",
-                "they are also referenced by non-humidity fields."
-            ),
-            paste(shared_ids, collapse = ", ")
-        ), call. = FALSE)
-    }
 
     rows <- which(schedule$SCHEDULE_ID %in% humidity_ids)
     unresolved <- setdiff(humidity_ids, schedule$SCHEDULE_ID[rows])
@@ -188,9 +225,33 @@ schedule__scale_relative_humidity <- function(dest, schedule) {
     }
 
     schedule__assert_relative_humidity_bounds(dest, schedule)
-    for (row in rows) {
+    shared_ids <- schedule__shared_relative_humidity_ids(dest)
+    direct_rows <- which(
+        schedule$SCHEDULE_ID %in% setdiff(humidity_ids, shared_ids)
+    )
+    for (row in direct_rows) {
         values <- schedule$DATA[[row]]
         schedule$DATA[[row]] <- values * 100
+    }
+
+    # A shared DeST schedule has two physical roles with different units.
+    # Preserve its original values and add a percent copy for Humidistat.
+    mapping <- schedule__relative_humidity_name_map(dest)
+    if (nrow(mapping) > 0L) {
+        duplicate_rows <- match(mapping$SCHEDULE_ID, schedule$SCHEDULE_ID)
+        duplicate <- data.table::copy(schedule[duplicate_rows])
+        first_id <- min(c(0L, schedule$SCHEDULE_ID), na.rm = TRUE) -
+            nrow(duplicate)
+        duplicate[, `:=`(
+            SCHEDULE_ID = seq.int(first_id, length.out = .N),
+            NAME = mapping$NAME,
+            DATA = lapply(DATA, function(values) values * 100)
+        )]
+        schedule <- data.table::rbindlist(
+            list(schedule, duplicate),
+            use.names = TRUE,
+            fill = TRUE
+        )
     }
 
     schedule

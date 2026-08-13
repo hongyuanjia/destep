@@ -179,7 +179,7 @@ test_that("relative-humidity schedules convert DeST fractions to percent", {
     expect_equal(unique(table[SCHEDULE_ID == 20L]$DATA[[1L]]), 60)
 })
 
-test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
+test_that("relative-humidity schedule conversion duplicates shared units", {
     ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -197,9 +197,29 @@ test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
         AC_SCHEDULE_ID = 10L
     ))
 
-    expect_error(
-        schedule__convert(dest, ep),
-        "also referenced by non-humidity fields"
+    schedule <- schedule__convert(dest, ep)
+    table <- attr(schedule, "table")
+
+    expect_equal(nrow(table), 2L)
+    expect_equal(
+        unique(table[NAME == "Shared Schedule"]$DATA[[1L]]),
+        0.35
+    )
+    expect_equal(
+        unique(
+            table[
+                NAME == "Shared Schedule [Relative Humidity Percent]"
+            ]$DATA[[1L]]
+        ),
+        35
+    )
+    expect_equal(
+        schedule__relative_humidity_reference_names(
+            dest,
+            10L,
+            "Shared Schedule"
+        ),
+        "Shared Schedule [Relative Humidity Percent]"
     )
 })
 
