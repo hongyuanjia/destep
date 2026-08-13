@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Resolved missing exterior absorptance sentinels on exposed DeST air floors
+  without overwriting their independent room-side surface properties.
 - Converted DeST thermally massless material sentinels to
   `Material:NoMass`, preserving their resistance-only representation.
 - Normalized surface and window vertex starts to EnergyPlus's declared

@@ -213,7 +213,8 @@ surface__object_values <- function(surface, ep) {
 # rows to the object-level property records used by the following converters.
 surface_property__object_table <- function(surface) {
     fields <- c(
-        "OUTPUT_ID", "NAME", "CONSTRUCTION", "BOUNDARY", "BOUNDARY_OBJECT",
+        "OUTPUT_ID", "NAME", "KIND_ENCLOSURE", "CONSTRUCTION", "BOUNDARY",
+        "BOUNDARY_OBJECT",
         "INSIDE_SOLAR_ABSORPTANCE", "INSIDE_THERMAL_ABSORPTANCE",
         "INSIDE_CONVECTION_COEFFICIENT", "OUTSIDE_SOLAR_ABSORPTANCE",
         "OUTSIDE_THERMAL_ABSORPTANCE", "OUTSIDE_CONVECTION_COEFFICIENT"
@@ -236,7 +237,8 @@ surface_property__object_table <- function(surface) {
     }
 
     numeric_fields <- setdiff(fields, c(
-        "OUTPUT_ID", "NAME", "CONSTRUCTION", "BOUNDARY", "BOUNDARY_OBJECT"
+        "OUTPUT_ID", "NAME", "KIND_ENCLOSURE", "CONSTRUCTION", "BOUNDARY",
+        "BOUNDARY_OBJECT"
     ))
     dt_force_numeric(object, numeric_fields)
     object
@@ -252,6 +254,28 @@ surface_property__assign_constructions <- function(surface) {
     outside_fields <- c(
         "OUTSIDE_SOLAR_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE"
     )
+    # Some DeST exposed floors serialize 0/0 on the outdoor pseudo-surface as
+    # an absent-property sentinel. Reuse the value shared by the model's other
+    # exterior faces when it is unambiguous; otherwise retain the base
+    # construction's exterior material properties.
+    outdoor_sentinel <- object$KIND_ENCLOSURE == 6L &
+        object$BOUNDARY == "Outdoors" &
+        object$OUTSIDE_SOLAR_ABSORPTANCE == 0.0 &
+        object$OUTSIDE_THERMAL_ABSORPTANCE == 0.0
+    exterior_reference <- unique(object[
+        BOUNDARY == "Outdoors" & !outdoor_sentinel,
+        .(OUTSIDE_SOLAR_ABSORPTANCE, OUTSIDE_THERMAL_ABSORPTANCE)
+    ])
+    unresolved_outdoor_sentinel <- outdoor_sentinel
+    if (any(outdoor_sentinel)) {
+        if (nrow(exterior_reference) == 1L) {
+            object[outdoor_sentinel, (outside_fields) := exterior_reference]
+            unresolved_outdoor_sentinel[] <- FALSE
+        } else {
+            object[outdoor_sentinel, (outside_fields) := NA_real_]
+        }
+    }
+
     invalid_inside <- object[
         !is.finite(INSIDE_SOLAR_ABSORPTANCE) |
             INSIDE_SOLAR_ABSORPTANCE < 0.0 |
@@ -262,7 +286,7 @@ surface_property__assign_constructions <- function(surface) {
         OUTPUT_ID
     ]
     invalid_outside <- object[
-        BOUNDARY == "Outdoors" & (
+        BOUNDARY == "Outdoors" & !unresolved_outdoor_sentinel & (
             !is.finite(OUTSIDE_SOLAR_ABSORPTANCE) |
                 OUTSIDE_SOLAR_ABSORPTANCE < 0.0 |
                 OUTSIDE_SOLAR_ABSORPTANCE > 1.0 |
@@ -278,6 +302,21 @@ surface_property__assign_constructions <- function(surface) {
             "Invalid DeST surface absorptance or blackness for surface(s): %s.",
             paste(utils::head(invalid, 10L), collapse = ", ")
         ), call. = FALSE)
+    }
+
+    # EnergyPlus requires thermal absorptance to be greater than zero and no
+    # greater than 0.99999. Preserve DeST's limiting values using the nearest
+    # representable inputs used by every supported EnergyPlus version.
+    thermal_fields <- c(
+        "INSIDE_THERMAL_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE"
+    )
+    for (field in thermal_fields) {
+        data.table::set(
+            object,
+            which(is.finite(object[[field]])),
+            field,
+            pmin(pmax(object[[field]][is.finite(object[[field]])], 1e-6), 0.99999)
+        )
     }
 
     # An interzone construction must remain the exact reverse of its peer.
@@ -335,6 +374,8 @@ surface_property__assign_constructions <- function(surface) {
     surface[object, on = "OUTPUT_ID", `:=`(
         BASE_CONSTRUCTION = i.BASE_CONSTRUCTION,
         CONSTRUCTION = i.CONSTRUCTION,
+        INSIDE_SOLAR_ABSORPTANCE = i.INSIDE_SOLAR_ABSORPTANCE,
+        INSIDE_THERMAL_ABSORPTANCE = i.INSIDE_THERMAL_ABSORPTANCE,
         OUTSIDE_SOLAR_ABSORPTANCE = i.OUTSIDE_SOLAR_ABSORPTANCE,
         OUTSIDE_THERMAL_ABSORPTANCE = i.OUTSIDE_THERMAL_ABSORPTANCE
     )]
