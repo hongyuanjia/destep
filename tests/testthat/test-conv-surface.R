@@ -73,6 +73,7 @@ test_that("maps DeST surface coefficients by room-side boundary semantics", {
     surface <- data.table::data.table(
         OUTPUT_ID = c("out", "a", "b"),
         NAME = c("Exterior", "Partition A", "Partition B"),
+        KIND_ENCLOSURE = c(1L, 2L, 2L),
         CONSTRUCTION = c("Wall", "Partition", "Partition [Reverse]"),
         BOUNDARY = c("Outdoors", "Surface", "Surface"),
         BOUNDARY_OBJECT = c(NA, "Partition B", "Partition A"),
@@ -100,9 +101,85 @@ test_that("maps DeST surface coefficients by room-side boundary semantics", {
     expect_null(convection[[2L]]$convection_coefficient_2)
 })
 
+test_that("resolves an exposed-floor outdoor-property sentinel", {
+    surface <- data.table::data.table(
+        OUTPUT_ID = c("exposed-floor", "exterior-wall"),
+        NAME = c("Exposed Floor", "Exterior Wall"),
+        KIND_ENCLOSURE = c(6L, 1L),
+        CONSTRUCTION = c("Floor Construction", "Wall Construction"),
+        BOUNDARY = "Outdoors",
+        BOUNDARY_OBJECT = NA_character_,
+        INSIDE_SOLAR_ABSORPTANCE = c(0.1, 0.6),
+        INSIDE_THERMAL_ABSORPTANCE = c(0.9, 0.9),
+        INSIDE_CONVECTION_COEFFICIENT = 3.5,
+        OUTSIDE_SOLAR_ABSORPTANCE = c(0.0, 0.6),
+        OUTSIDE_THERMAL_ABSORPTANCE = c(0.0, 0.9),
+        OUTSIDE_CONVECTION_COEFFICIENT = c(2.2, 23.3)
+    )
+
+    mapped <- surface_property__assign_constructions(surface)
+    floor <- mapped[OUTPUT_ID == "exposed-floor"]
+
+    expect_equal(floor$INSIDE_SOLAR_ABSORPTANCE, 0.1)
+    expect_equal(floor$INSIDE_THERMAL_ABSORPTANCE, 0.9)
+    expect_equal(floor$OUTSIDE_SOLAR_ABSORPTANCE, 0.6)
+    expect_equal(floor$OUTSIDE_THERMAL_ABSORPTANCE, 0.9)
+    expect_match(
+        floor$CONSTRUCTION,
+        "i-a0.1-e0.9 o-a0.6-e0.9",
+        fixed = TRUE
+    )
+})
+
+test_that("keeps an unresolved exposed-floor exterior on the base material", {
+    surface <- data.table::data.table(
+        OUTPUT_ID = "exposed-floor",
+        NAME = "Exposed Floor",
+        KIND_ENCLOSURE = 6L,
+        CONSTRUCTION = "Floor Construction",
+        BOUNDARY = "Outdoors",
+        BOUNDARY_OBJECT = NA_character_,
+        INSIDE_SOLAR_ABSORPTANCE = 0.1,
+        INSIDE_THERMAL_ABSORPTANCE = 0.9,
+        INSIDE_CONVECTION_COEFFICIENT = 3.5,
+        OUTSIDE_SOLAR_ABSORPTANCE = 0.0,
+        OUTSIDE_THERMAL_ABSORPTANCE = 0.0,
+        OUTSIDE_CONVECTION_COEFFICIENT = 2.2
+    )
+
+    mapped <- surface_property__assign_constructions(surface)
+
+    expect_true(is.na(mapped$OUTSIDE_SOLAR_ABSORPTANCE))
+    expect_true(is.na(mapped$OUTSIDE_THERMAL_ABSORPTANCE))
+    expect_false(grepl(" o-a", mapped$CONSTRUCTION, fixed = TRUE))
+})
+
+test_that("maps DeST thermal-emissivity limits to valid EnergyPlus values", {
+    surface <- data.table::data.table(
+        OUTPUT_ID = "exterior-wall",
+        NAME = "Exterior Wall",
+        KIND_ENCLOSURE = 1L,
+        CONSTRUCTION = "Wall Construction",
+        BOUNDARY = "Outdoors",
+        BOUNDARY_OBJECT = NA_character_,
+        INSIDE_SOLAR_ABSORPTANCE = 0.6,
+        INSIDE_THERMAL_ABSORPTANCE = 0.0,
+        INSIDE_CONVECTION_COEFFICIENT = 3.5,
+        OUTSIDE_SOLAR_ABSORPTANCE = 0.6,
+        OUTSIDE_THERMAL_ABSORPTANCE = 1.0,
+        OUTSIDE_CONVECTION_COEFFICIENT = 23.3
+    )
+
+    mapped <- surface_property__assign_constructions(surface)
+
+    expect_equal(mapped$INSIDE_THERMAL_ABSORPTANCE, 1e-6)
+    expect_equal(mapped$OUTSIDE_THERMAL_ABSORPTANCE, 0.99999)
+})
+
 test_that("surface construction clones preserve reciprocal layer order", {
     surface <- data.table::data.table(
         OUTPUT_ID = c("a", "b"), NAME = c("A", "B"),
+        KIND_ENCLOSURE = 2L,
         CONSTRUCTION = c("Partition", "Partition [Reverse]"),
         BOUNDARY = "Surface", BOUNDARY_OBJECT = c("B", "A"),
         INSIDE_SOLAR_ABSORPTANCE = c(0.40, 0.60),
