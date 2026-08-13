@@ -10,6 +10,9 @@
   without overwriting their independent room-side surface properties.
 - Converted DeST thermally massless material sentinels to
   `Material:NoMass`, preserving their resistance-only representation.
+- Converted DeST zero and near-zero specific-heat material encodings to
+  `Material:NoMass`, preserving their source thermal resistance without
+  inventing heat capacity.
 - Normalized surface and window vertex starts to EnergyPlus's declared
   upper-left corner.
 - Preserved `ENVIRONMENT.GROUND_REFLECT_COEF` by writing the same DeST ground
