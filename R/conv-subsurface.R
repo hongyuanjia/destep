@@ -381,7 +381,6 @@ window__object_values <- function(window) {
     ]$value
 }
 
-# TODO: handle window shading
 # WINDOW -> FenestrationSurface:Detailed
 window__convert <- function(
     dest, ep, surface = NULL,

@@ -195,6 +195,9 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     window <- window__convert(
         tmpdb, ep, attr(surface, "table"), geometry_profile
     )
+    shading <- shading__convert(
+        tmpdb, ep, attr(window, "table"), geometry_profile
+    )
 
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
@@ -205,6 +208,7 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         zone     = zone__convert(tmpdb, ep),
         surface  = surface,
         window   = window,
+        shading  = shading,
         const    = const__convert(tmpdb, ep, attr(surface, "table")),
         schedule = schedule__convert(tmpdb, ep),
         thermostat = thermostat__convert(tmpdb, ep),
