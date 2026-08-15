@@ -140,7 +140,11 @@ const__door_layers <- function(dest) {
                 M.CNAME               AS MATERIAL_NAME,
                 M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
                 M.DENSITY             AS MATERIAL_DENSITY,
-                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT,
+                NULL                  AS MATERIAL_GROUP,
+                NULL                  AS MATERIAL_EXTINCTION_COEFFICIENT,
+                NULL                  AS MATERIAL_REFRACTIVE_INDEX,
+                NULL                  AS MATERIAL_EMISSIVITY
             FROM DR D
             LEFT JOIN SYS_DOOR S
             ON D.DOOR_CONSTRUCTION = S.DOOR_ID
@@ -187,7 +191,11 @@ const__door_layers <- function(dest) {
                 M.CNAME               AS MATERIAL_NAME,
                 M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
                 M.DENSITY             AS MATERIAL_DENSITY,
-                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+                M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT,
+                M.GROUP_ID            AS MATERIAL_GROUP,
+                M.EX_COEF             AS MATERIAL_EXTINCTION_COEFFICIENT,
+                M.RF_COEF             AS MATERIAL_REFRACTIVE_INDEX,
+                M.EMISSIVITY          AS MATERIAL_EMISSIVITY
             FROM DOOR D
             LEFT JOIN SYS_DOOR S
             ON D.DOOR_CONSTRUCTION = S.DOOR_ID AND S.APP_ID != 0 AND S.APP_FLAG = 1
@@ -314,7 +322,11 @@ const__window_layers <- function(dest) {
             M.CNAME               AS MATERIAL_NAME,
             M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
             M.DENSITY             AS MATERIAL_DENSITY,
-            M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT
+            M.SPECIFIC_HEAT       AS MATERIAL_SPECIFIC_HEAT,
+            M.GROUP_ID            AS MATERIAL_GROUP,
+            M.EX_COEF             AS MATERIAL_EXTINCTION_COEFFICIENT,
+            M.RF_COEF             AS MATERIAL_REFRACTIVE_INDEX,
+            M.EMISSIVITY          AS MATERIAL_EMISSIVITY
         FROM WIN W
         LEFT JOIN SYS_WINDOW S
         ON W.WINDOW_CONSTRUCTION = S.WINDOW_ID
@@ -463,7 +475,9 @@ const__prepare_layers <- function(dest) {
 const__material_columns <- function() {
     c(
         "MATERIAL_ID", "LENGTH", "MATERIAL_NAME", "MATERIAL_CONDUCTIVITY",
-        "MATERIAL_DENSITY", "MATERIAL_SPECIFIC_HEAT"
+        "MATERIAL_DENSITY", "MATERIAL_SPECIFIC_HEAT", "MATERIAL_GROUP",
+        "MATERIAL_EXTINCTION_COEFFICIENT", "MATERIAL_REFRACTIVE_INDEX",
+        "MATERIAL_EMISSIVITY"
     )
 }
 
@@ -500,8 +514,9 @@ const__layered_constructions <- function(layer, by, kind = NULL) {
 const__material_table <- function(layer, rows = NULL) {
     if (nrow(layer) == 0L) return(data.table::data.table())
     if (!is.null(rows)) layer <- layer[rows]
+    columns <- intersect(const__material_columns(), names(layer))
     unique(
-        layer[, .SD, .SDcols = const__material_columns()],
+        layer[, .SD, .SDcols = columns],
         by = c("MATERIAL_ID", "LENGTH")
     )
 }
@@ -788,6 +803,59 @@ const__is_no_mass_material <- function(material) {
         (rowSums(sentinel) > 0L | near_zero_specific_heat)
 }
 
+# Identify ordinary DeST glazing records that provide every physical input
+# required by WindowMaterial:Glazing:RefractionExtinctionMethod.
+const__is_refraction_glazing <- function(glazing) {
+    required <- c(
+        "MATERIAL_GROUP", "LENGTH", "MATERIAL_CONDUCTIVITY",
+        "MATERIAL_EXTINCTION_COEFFICIENT", "MATERIAL_REFRACTIVE_INDEX",
+        "MATERIAL_EMISSIVITY"
+    )
+    if (!all(required %in% names(glazing))) {
+        return(rep(FALSE, nrow(glazing)))
+    }
+
+    ordinary <- grepl(
+        "普通玻璃|ordinary glass|normal glass|clear glass",
+        glazing$MATERIAL_GROUP,
+        ignore.case = TRUE
+    )
+    ordinary[is.na(ordinary)] <- FALSE
+    ordinary &
+        is.finite(glazing$LENGTH) & glazing$LENGTH > 0.0 &
+        is.finite(glazing$MATERIAL_CONDUCTIVITY) &
+            glazing$MATERIAL_CONDUCTIVITY > 0.0 &
+        is.finite(glazing$MATERIAL_EXTINCTION_COEFFICIENT) &
+            glazing$MATERIAL_EXTINCTION_COEFFICIENT >= 0.0 &
+        is.finite(glazing$MATERIAL_REFRACTIVE_INDEX) &
+            glazing$MATERIAL_REFRACTIVE_INDEX > 1.0 &
+        is.finite(glazing$MATERIAL_EMISSIVITY) &
+            glazing$MATERIAL_EMISSIVITY > 0.0 &
+            glazing$MATERIAL_EMISSIVITY < 1.0
+}
+
+# Warn when SimpleGlazingSystem will be simulated by EnergyPlus releases that
+# predate the angular-reflectance correction introduced in version 9.4.
+const__warn_simple_glazing_version <- function(ep, glazing_count) {
+    if (glazing_count == 0L) return(invisible(NULL))
+
+    version <- numeric_version(as.character(ep$version()))
+    if (version >= numeric_version("9.0.0") &&
+        version < numeric_version("9.4.0")) {
+        warning(
+            paste(
+                "EnergyPlus 9.0-9.3 contain a known",
+                "WindowMaterial:SimpleGlazingSystem angular-reflectance",
+                "defect that was corrected in EnergyPlus 9.4.",
+                "Transition the converted IDF to EnergyPlus 9.4 or later",
+                "before using its simulation results."
+            ),
+            call. = FALSE
+        )
+    }
+    invisible(NULL)
+}
+
 # Assemble the heterogeneous material and construction classes after the
 # converter has normalized every source table and resolved its fallbacks.
 const__assemble_objects <- function(
@@ -796,6 +864,21 @@ const__assemble_objects <- function(
     no_mass_row <- const__is_no_mass_material(dt_mat)
     no_mass <- dt_mat[no_mass_row]
     dt_mat <- dt_mat[!no_mass_row]
+
+    const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+    refraction_row <- const__is_refraction_glazing(dt_glaze)
+    refraction_glazing <- dt_glaze[refraction_row]
+    fallback_glazing <- dt_glaze[!refraction_row]
+
+    if (nrow(fallback_glazing) > 0L) {
+        warning(sprintf(
+            paste(
+                "Using the EnergyPlus 3 mm clear-glass fallback for DeST",
+                "glazing without supported ordinary-glass optical inputs: %s."
+            ),
+            paste(fallback_glazing$MATERIAL_NAME, collapse = ", ")
+        ), call. = FALSE)
+    }
 
     base <- eval(as.call(c(
         conv__add, dest, ep,
@@ -834,9 +917,30 @@ const__assemble_objects <- function(
             bquote("WindowMaterial:SimpleGlazingSystem" := .(value))
         }),
 
-        if (nrow(dt_glaze) > 0L) {
-            # Detailed DeST optical fields have no direct EnergyPlus match, so
-            # retain the established 3 mm clear-glazing approximation.
+        if (nrow(refraction_glazing) > 0L) bquote(
+            "WindowMaterial:Glazing:RefractionExtinctionMethod" := list(
+                name = .(refraction_glazing$MATERIAL_NAME),
+                thickness = .(refraction_glazing$LENGTH / 1000),
+                solar_index_of_refraction =
+                    .(refraction_glazing$MATERIAL_REFRACTIVE_INDEX),
+                # DeST stores EX_COEF per millimetre alongside layer lengths
+                # in millimetres; EnergyPlus requires the coefficient per metre.
+                solar_extinction_coefficient =
+                    .(refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT * 1000),
+                visible_index_of_refraction =
+                    .(refraction_glazing$MATERIAL_REFRACTIVE_INDEX),
+                visible_extinction_coefficient =
+                    .(refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT * 1000),
+                infrared_transmittance_at_normal_incidence = 0.0,
+                infrared_hemispherical_emissivity =
+                    .(refraction_glazing$MATERIAL_EMISSIVITY),
+                conductivity = .(refraction_glazing$MATERIAL_CONDUCTIVITY)
+            )
+        ),
+
+        if (nrow(fallback_glazing) > 0L) {
+            # Keep the established approximation for coated, unknown, or
+            # incomplete records that the refraction-extinction method excludes.
             clear3mm <- list(
                 Name = "CLEAR 3MM", Conductivity = 0.9, Thickness = 0.003,
                 `Optical Data Type` = "SpectralAverage",
@@ -851,19 +955,10 @@ const__assemble_objects <- function(
                 `Back Side Infrared Hemispherical Emissivity` = 0.84
             )
 
-            message(paste(
-                "There are windows in the input DeST model. However, the optical",
-                "properties of the glazing in DeST are not one-to-one match with",
-                "the glazing in EnergyPlus. Here the optical properties of a 3mm",
-                "clear glazing in EnergyPlus dataset 'WindowGlassMaterials.idf'",
-                "will be used for all glazing in DeST. Please check the results in",
-                "the converted IDF file."
-            ))
-
             glaze              <- clear3mm
-            glaze$Name         <- dt_glaze$MATERIAL_NAME
-            glaze$Thickness    <- round(dt_glaze$LENGTH / 1000, 4L)
-            glaze$Conductivity <- dt_glaze$MATERIAL_CONDUCTIVITY
+            glaze$Name         <- fallback_glazing$MATERIAL_NAME
+            glaze$Thickness    <- round(fallback_glazing$LENGTH / 1000, 4L)
+            glaze$Conductivity <- fallback_glazing$MATERIAL_CONDUCTIVITY
             bquote("WindowMaterial:Glazing" := .(glaze))
         },
 

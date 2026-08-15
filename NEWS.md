@@ -1,5 +1,11 @@
 # destep 0.0.0.9000
 
+- Warned when aggregate `WindowMaterial:SimpleGlazingSystem` objects target
+  EnergyPlus 9.0 through 9.3, whose angular-reflectance implementation was
+  corrected in EnergyPlus 9.4.
+- Mapped ordinary-glass `SYS_WINDOW` fallback layers to
+  `WindowMaterial:Glazing:RefractionExtinctionMethod` using DeST thickness,
+  conductivity, refractive index, extinction coefficient, and emissivity.
 - Preserved full DeST site-coordinate precision and decoded the standard
   meridian in `ENVIRONMENT.PROPERTY` into the EnergyPlus site time zone.
 - Preserved DeST schedules shared by humidity and non-humidity fields by

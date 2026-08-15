@@ -33,7 +33,9 @@ const_test__door_db <- function(
     ))
     DBI::dbWriteTable(dest, "SYS_APP_MATERIAL", data.frame(
         APP_MATERIAL_ID = integer(), CNAME = character(), THICK = double(),
-        CONDUCTIVITY = double(), DENSITY = double(), SPECIFIC_HEAT = double()
+        CONDUCTIVITY = double(), DENSITY = double(), SPECIFIC_HEAT = double(),
+        GROUP_ID = character(), EX_COEF = double(), RF_COEF = double(),
+        EMISSIVITY = double()
     ))
     DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
         ID = enclosure,
@@ -90,7 +92,11 @@ test_that("resolves transparent door materials through APP_ID", {
         THICK = 3,
         CONDUCTIVITY = 0.9,
         DENSITY = 2500,
-        SPECIFIC_HEAT = 750
+        SPECIFIC_HEAT = 750,
+        GROUP_ID = "普通玻璃",
+        EX_COEF = 0.045,
+        RF_COEF = 1.5,
+        EMISSIVITY = 0.84
     ), overwrite = TRUE)
 
     door <- const__door_layers(dest)
@@ -100,6 +106,94 @@ test_that("resolves transparent door materials through APP_ID", {
     expect_equal(glazing$MATERIAL_NAME, "3mm Clear Glass")
     expect_equal(glazing$LENGTH, 3)
     expect_equal(glazing$MATERIAL_CONDUCTIVITY, 0.9)
+    expect_equal(glazing$MATERIAL_EXTINCTION_COEFFICIENT, 0.045)
+    expect_equal(glazing$MATERIAL_REFRACTIVE_INDEX, 1.5)
+    expect_equal(glazing$MATERIAL_EMISSIVITY, 0.84)
+})
+
+test_that("maps ordinary SYS_WINDOW glass from refraction inputs", {
+    ep <- eplusr::empty_idf("9.0.1")
+    material <- data.table::data.table(
+        MATERIAL_ID = integer(),
+        LENGTH = double(),
+        MATERIAL_NAME = character(),
+        MATERIAL_CONDUCTIVITY = double(),
+        MATERIAL_DENSITY = double(),
+        MATERIAL_SPECIFIC_HEAT = double(),
+        THERMAL_ABSORPTANCE = double(),
+        SOLAR_ABSORPTANCE = double(),
+        VISIBLE_ABSORPTANCE = double()
+    )
+    glazing <- data.table::data.table(
+        MATERIAL_ID = 1L,
+        LENGTH = 3.0,
+        MATERIAL_NAME = "3mm Clear Glass",
+        MATERIAL_CONDUCTIVITY = 0.756,
+        MATERIAL_DENSITY = 2500.0,
+        MATERIAL_SPECIFIC_HEAT = 837.0,
+        MATERIAL_GROUP = "普通玻璃",
+        MATERIAL_EXTINCTION_COEFFICIENT = 0.045,
+        MATERIAL_REFRACTIVE_INDEX = 1.5,
+        MATERIAL_EMISSIVITY = 0.84
+    )
+    construction <- data.table::data.table(
+        ID = 1L,
+        KIND = -1L,
+        name = "Single Window",
+        value = list(c("Single Window", "3mm Clear Glass"))
+    )
+
+    converted <- const__assemble_objects(
+        TRUE,
+        ep,
+        material,
+        data.table::data.table(),
+        glazing,
+        data.table::data.table(),
+        construction
+    )
+    values <- converted$value[
+        class_name == "WindowMaterial:Glazing:RefractionExtinctionMethod"
+    ]
+
+    expect_equal(
+        unique(converted$object$class_name),
+        c("WindowMaterial:Glazing:RefractionExtinctionMethod", "Construction")
+    )
+    expect_equal(values[field_name == "Thickness", value_num], 0.003)
+    expect_equal(
+        values[field_name == "Solar Extinction Coefficient", value_num],
+        45.0
+    )
+    expect_equal(
+        values[field_name == "Solar Index of Refraction", value_num],
+        1.5
+    )
+    expect_equal(
+        values[field_name == "Infrared Hemispherical Emissivity", value_num],
+        0.84
+    )
+})
+
+test_that("warns about SimpleGlazingSystem in EnergyPlus 9.0 through 9.3", {
+    expect_warning(
+        const__warn_simple_glazing_version(
+            eplusr::empty_idf("9.0.1"),
+            1L
+        ),
+        "corrected in EnergyPlus 9.4"
+    )
+    expect_warning(
+        const__warn_simple_glazing_version(
+            eplusr::empty_idf("9.3.0"),
+            1L
+        ),
+        "corrected in EnergyPlus 9.4"
+    )
+    expect_no_warning(const__warn_simple_glazing_version(
+        eplusr::empty_idf("9.4.0"),
+        1L
+    ))
 })
 
 test_that("resolves aggregate window type performance and fallbacks", {
