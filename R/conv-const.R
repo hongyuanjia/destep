@@ -13,9 +13,13 @@ const__window_type_performance <- function(dest) {
         # Preserve a stable schema so models without windows can pass through
         # the same downstream construction code without special-case branches.
         window[, `:=`(
-            TYPE_NAME = character(), K = double(), SC = double(),
-            LIGHT_TRANS_RATIO = double(), TYPE_RECORD_FOUND = logical(),
-            SHGC = double(), TYPE_DATA_VALID = logical(),
+            TYPE_NAME = character(),
+            K = double(),
+            SC = double(),
+            LIGHT_TRANS_RATIO = double(),
+            TYPE_RECORD_FOUND = logical(),
+            SHGC = double(),
+            TYPE_DATA_VALID = logical(),
             SIMPLE_GLAZING_NAME = character(),
             TYPE_CONSTRUCTION_NAME = character(),
             FALLBACK_REASON = character()
@@ -26,11 +30,15 @@ const__window_type_performance <- function(dest) {
     # A zero construction reference means DeST expects the matching default.
     # Resolve it here because invalid type records must fall back to the same
     # detailed construction that the original window would have used.
-    if ("DEFAULT_SETTING" %in% DBI::dbListTables(dest) &&
-        db_has_fields(
-            dest, "DEFAULT_SETTING",
-            c("TABLE_NAME", "FIELD_NAME", "TYPE", "LONG")
-        )) {
+    if (
+        "DEFAULT_SETTING" %in%
+            DBI::dbListTables(dest) &&
+            db_has_fields(
+                dest,
+                "DEFAULT_SETTING",
+                c("TABLE_NAME", "FIELD_NAME", "TYPE", "LONG")
+            )
+    ) {
         default <- DBI::dbGetQuery(
             dest,
             "SELECT DISTINCT LONG
@@ -44,13 +52,16 @@ const__window_type_performance <- function(dest) {
             stop("Multiple default DeST window constructions were found.")
         }
         if (length(default) == 1L) {
-            window[DETAILED_CONSTRUCTION_ID == 0L,
-                DETAILED_CONSTRUCTION_ID := default[[1L]]]
+            window[
+                DETAILED_CONSTRUCTION_ID == 0L,
+                DETAILED_CONSTRUCTION_ID := default[[1L]]
+            ]
         }
     }
 
     required <- c("ID", "NAME", "K", "SC", "LIGHT_TRANS_RATIO")
-    has_type_data <- "WINDOW_TYPE_DATA" %in% DBI::dbListTables(dest) &&
+    has_type_data <- "WINDOW_TYPE_DATA" %in%
+        DBI::dbListTables(dest) &&
         db_has_fields(dest, "WINDOW_TYPE_DATA", required)
     if (has_type_data) {
         type <- DBI::dbGetQuery(
@@ -61,12 +72,21 @@ const__window_type_performance <- function(dest) {
         )
         data.table::setDT(type)
         type[, TYPE_RECORD_FOUND := TRUE]
-        window <- merge(window, type, by = "TYPE_ID", all.x = TRUE, sort = FALSE)
+        window <- merge(
+            window,
+            type,
+            by = "TYPE_ID",
+            all.x = TRUE,
+            sort = FALSE
+        )
         window[is.na(TYPE_RECORD_FOUND), TYPE_RECORD_FOUND := FALSE]
     } else {
         window[, `:=`(
-            TYPE_NAME = NA_character_, K = NA_real_, SC = NA_real_,
-            LIGHT_TRANS_RATIO = NA_real_, TYPE_RECORD_FOUND = FALSE
+            TYPE_NAME = NA_character_,
+            K = NA_real_,
+            SC = NA_real_,
+            LIGHT_TRANS_RATIO = NA_real_,
+            TYPE_RECORD_FOUND = FALSE
         )]
     }
 
@@ -76,35 +96,49 @@ const__window_type_performance <- function(dest) {
         data.table::set(window, NULL, column, as.double(window[[column]]))
     }
     window[, SHGC := 0.87 * SC]
-    window[, TYPE_DATA_VALID :=
-        is.finite(K) & K > 0.0 & is.finite(SHGC) & SHGC > 0.0 & SHGC <= 1.0]
-    window[!is.finite(LIGHT_TRANS_RATIO) |
-        LIGHT_TRANS_RATIO <= 0.0 | LIGHT_TRANS_RATIO > 1.0,
-        LIGHT_TRANS_RATIO := NA_real_]
+    window[,
+        TYPE_DATA_VALID := is.finite(K) &
+            K > 0.0 &
+            is.finite(SHGC) &
+            SHGC > 0.0 &
+            SHGC <= 1.0
+    ]
+    window[
+        !is.finite(LIGHT_TRANS_RATIO) |
+            LIGHT_TRANS_RATIO <= 0.0 |
+            LIGHT_TRANS_RATIO > 1.0,
+        LIGHT_TRANS_RATIO := NA_real_
+    ]
 
     # EnergyPlus object names are derived from the stable, normalized DeST
     # type name. The suffixes also keep them distinct from SYS_WINDOW objects.
-    window[is.na(TYPE_NAME) | !nzchar(TYPE_NAME),
-        TYPE_NAME := sprintf("Window Type Data %s", TYPE_ID)]
+    window[
+        is.na(TYPE_NAME) | !nzchar(TYPE_NAME),
+        TYPE_NAME := sprintf("Window Type Data %s", TYPE_ID)
+    ]
     window[, `:=`(
         SIMPLE_GLAZING_NAME = sprintf("%s Simple Glazing", TYPE_NAME),
         TYPE_CONSTRUCTION_NAME = sprintf(
-            "%s Simple Glazing Construction", TYPE_NAME
+            "%s Simple Glazing Construction",
+            TYPE_NAME
         )
     )]
     if (!has_type_data) {
-        window[, FALLBACK_REASON :=
-            "missing WINDOW_TYPE_DATA table or required fields"]
+        window[,
+            FALLBACK_REASON := "missing WINDOW_TYPE_DATA table or required fields"
+        ]
     } else {
-        window[, FALLBACK_REASON := data.table::fcase(
-            !TYPE_RECORD_FOUND,
-                "missing WINDOW_TYPE_DATA record",
-            !is.finite(K) | K <= 0.0,
-                "invalid K value",
-            !is.finite(SHGC) | SHGC <= 0.0 | SHGC > 1.0,
-                "invalid SC value",
-            default = NA_character_
-        )]
+        window[,
+            FALLBACK_REASON := data.table::fcase(
+                !TYPE_RECORD_FOUND                          ,
+                "missing WINDOW_TYPE_DATA record"           ,
+                !is.finite(K) | K <= 0.0                    ,
+                "invalid K value"                           ,
+                !is.finite(SHGC) | SHGC <= 0.0 | SHGC > 1.0 ,
+                "invalid SC value"                          ,
+                default = NA_character_
+            )
+        ]
     }
     window
 }
@@ -112,7 +146,8 @@ const__window_type_performance <- function(dest) {
 # Read opaque and transparent door layers while retaining one representative
 # host enclosure for every distinct DeST door construction.
 const__door_layers <- function(dest) {
-    DBI::dbGetQuery(dest,
+    DBI::dbGetQuery(
+        dest,
         "
         WITH DR AS (
             SELECT DOOR_CONSTRUCTION, MIN(OF_ENCLOSURE) AS OF_ENCLOSURE
@@ -221,7 +256,8 @@ const__opaque_layers <- function(dest) {
     # KIND = 5 -> SYS_MIDDLEFLOOR -> SYS_MIDDLEFLOOR_MATERIAL -> MATERIAL
     # KIND = 6 -> SYS_AIRFLOOR    -> SYS_AIRFLOOR_MATERIAL    -> MATERIAL
     # TODO: translate Chinese names?
-    DBI::dbGetQuery(dest,
+    DBI::dbGetQuery(
+        dest,
         "
         WITH SYS_CONST AS (
             SELECT STRUCT_ID, CNAME, 1 AS KIND
@@ -299,7 +335,8 @@ const__opaque_layers <- function(dest) {
 const__window_layers <- function(dest) {
     # WINDOW -> SYS_WINDOW -> SYS_WINDOW_MATERIAL -> SYS_APP_MATERIAL
     # TODO: handle 'SHADING' in 'WINDOW' table
-    DBI::dbGetQuery(dest,
+    DBI::dbGetQuery(
+        dest,
         "
         WITH WIN AS (
             SELECT DISTINCT WINDOW_CONSTRUCTION FROM WINDOW WHERE WINDOW_CONSTRUCTION != 0
@@ -344,22 +381,29 @@ const__window_layers <- function(dest) {
 const__append_dest_ground_soil <- function(layer) {
     data.table::setDT(layer)
     ground <- layer[KIND == 4L]
-    if (nrow(ground) == 0L) return(layer)
+    if (nrow(ground) == 0L) {
+        return(layer)
+    }
 
     material_id <- -900000004L
     material_name <- "DeST Automatic Soil"
     already_added <- ground[
         MATERIAL_ID == material_id & MATERIAL_NAME == material_name
     ]
-    if (nrow(already_added) > 0L) return(layer)
+    if (nrow(already_added) > 0L) {
+        return(layer)
+    }
 
     # DeST stores ground-floor source layers from the room side towards the
     # ground. Appending soil here consequently places it first in the reversed
     # outside-to-inside EnergyPlus construction used by the room-side surface.
-    soil <- ground[, list(
-        NAME = NAME[[1L]],
-        LAYER_NO = max(LAYER_NO, na.rm = TRUE) + 1L
-    ), by = c("ID", "KIND")]
+    soil <- ground[,
+        list(
+            NAME = NAME[[1L]],
+            LAYER_NO = max(LAYER_NO, na.rm = TRUE) + 1L
+        ),
+        by = c("ID", "KIND")
+    ]
     soil[, `:=`(
         LENGTH = 1200.0,
         MATERIAL_ID = material_id,
@@ -428,10 +472,15 @@ const__prepare_layers <- function(dest) {
                 "Using detailed SYS_WINDOW fallback properties for DeST ",
                 "window(s): %s."
             ),
-            paste(sprintf(
-                "%s (type %s: %s)", fallback$WINDOW_ID, fallback$TYPE_ID,
-                fallback$FALLBACK_REASON
-            ), collapse = "; ")
+            paste(
+                sprintf(
+                    "%s (type %s: %s)",
+                    fallback$WINDOW_ID,
+                    fallback$TYPE_ID,
+                    fallback$FALLBACK_REASON
+                ),
+                collapse = "; "
+            )
         ))
     }
 
@@ -447,26 +496,37 @@ const__prepare_layers <- function(dest) {
     # material name should make them unique, since duplicated names have been
     # handled by 'conv__update_names()'
     if (nrow(const) > 0L) {
-        data.table::set(const, NULL, "MATERIAL_NAME",
+        data.table::set(
+            const,
+            NULL,
+            "MATERIAL_NAME",
             with(const, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
     if (nrow(window) > 0L) {
-        data.table::set(window, NULL, "MATERIAL_NAME",
+        data.table::set(
+            window,
+            NULL,
+            "MATERIAL_NAME",
             with(window, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
     # Door body and glazing materials can also vary by thickness, so apply the
     # same stable suffix used for opaque and window materials.
     if (nrow(door) > 0L) {
-        data.table::set(door, NULL, "MATERIAL_NAME",
+        data.table::set(
+            door,
+            NULL,
+            "MATERIAL_NAME",
             with(door, paste0(MATERIAL_NAME, " ", round(LENGTH), "mm"))
         )
     }
 
     list(
-        const = const, window = window,
-        window_type = window_type, door = door
+        const = const,
+        window = window,
+        window_type = window_type,
+        door = door
     )
 }
 
@@ -474,9 +534,15 @@ const__prepare_layers <- function(dest) {
 # object tables.
 const__material_columns <- function() {
     c(
-        "MATERIAL_ID", "LENGTH", "MATERIAL_NAME", "MATERIAL_CONDUCTIVITY",
-        "MATERIAL_DENSITY", "MATERIAL_SPECIFIC_HEAT", "MATERIAL_GROUP",
-        "MATERIAL_EXTINCTION_COEFFICIENT", "MATERIAL_REFRACTIVE_INDEX",
+        "MATERIAL_ID",
+        "LENGTH",
+        "MATERIAL_NAME",
+        "MATERIAL_CONDUCTIVITY",
+        "MATERIAL_DENSITY",
+        "MATERIAL_SPECIFIC_HEAT",
+        "MATERIAL_GROUP",
+        "MATERIAL_EXTINCTION_COEFFICIENT",
+        "MATERIAL_REFRACTIVE_INDEX",
         "MATERIAL_EMISSIVITY"
     )
 }
@@ -484,7 +550,9 @@ const__material_columns <- function() {
 # Build the normal and reversed EnergyPlus Construction objects for a layered
 # DeST construction. The optional kind marks non-opaque construction classes.
 const__layered_constructions <- function(layer, by, kind = NULL) {
-    if (nrow(layer) == 0L) return(data.table::data.table())
+    if (nrow(layer) == 0L) {
+        return(data.table::data.table())
+    }
 
     normal <- layer[,
         by = by,
@@ -497,7 +565,8 @@ const__layered_constructions <- function(layer, by, kind = NULL) {
         list(
             name = sprintf("%s [Reverse]", NAME[[1L]]),
             value = list(c(
-                sprintf("%s [Reverse]", NAME[[1L]]), rev(MATERIAL_NAME)
+                sprintf("%s [Reverse]", NAME[[1L]]),
+                rev(MATERIAL_NAME)
             ))
         )
     ]
@@ -512,8 +581,12 @@ const__layered_constructions <- function(layer, by, kind = NULL) {
 # Select one material record for each material-and-thickness combination after
 # applying an optional row mask for glazing, gas, or door-layer roles.
 const__material_table <- function(layer, rows = NULL) {
-    if (nrow(layer) == 0L) return(data.table::data.table())
-    if (!is.null(rows)) layer <- layer[rows]
+    if (nrow(layer) == 0L) {
+        return(data.table::data.table())
+    }
+    if (!is.null(rows)) {
+        layer <- layer[rows]
+    }
     columns <- intersect(const__material_columns(), names(layer))
     unique(
         layer[, .SD, .SDcols = columns],
@@ -530,7 +603,8 @@ const__window_type_objects <- function(window_type) {
     )
     if (nrow(glazing) == 0L) {
         return(list(
-            construction = data.table::data.table(), glazing = glazing
+            construction = data.table::data.table(),
+            glazing = glazing
         ))
     }
 
@@ -575,9 +649,14 @@ const__door_objects <- function(door) {
         return(list(construction = empty, material = empty, glazing = empty))
     }
 
-    construction <- door[, by = "ID",
+    construction <- door[,
+        by = "ID",
         # KIND = -2 distinguishes doors from other construction classes.
-        list(KIND = -2L, name = NAME[[1L]], value = list(c(NAME[[1L]], MATERIAL_NAME)))
+        list(
+            KIND = -2L,
+            name = NAME[[1L]],
+            value = list(c(NAME[[1L]], MATERIAL_NAME))
+        )
     ]
 
     list(
@@ -591,25 +670,39 @@ const__door_objects <- function(door) {
 # normalized DeST source layers.
 const__object_tables <- function(source) {
     opaque_const <- const__layered_constructions(
-        source$const, c("ID", "KIND")
+        source$const,
+        c("ID", "KIND")
     )
     window_const <- const__layered_constructions(
-        source$window, "ID", kind = -1L
+        source$window,
+        "ID",
+        kind = -1L
     )
     window_type <- const__window_type_objects(source$window_type)
     door <- const__door_objects(source$door)
 
     dt_const <- unique(
-        data.table::rbindlist(list(
-            opaque_const, window_const,
-            window_type$construction, door$construction
-        ), use.names = TRUE, fill = TRUE),
+        data.table::rbindlist(
+            list(
+                opaque_const,
+                window_const,
+                window_type$construction,
+                door$construction
+            ),
+            use.names = TRUE,
+            fill = TRUE
+        ),
         by = c("ID", "KIND", "name")
     )
     dt_mat <- unique(
-        data.table::rbindlist(list(
-            const__material_table(source$const), door$material
-        ), use.names = TRUE, fill = TRUE),
+        data.table::rbindlist(
+            list(
+                const__material_table(source$const),
+                door$material
+            ),
+            use.names = TRUE,
+            fill = TRUE
+        ),
         by = c("MATERIAL_ID", "LENGTH")
     )
     if (nrow(dt_mat) > 0L) {
@@ -622,18 +715,26 @@ const__object_tables <- function(source) {
         )]
     }
     dt_glaze <- unique(
-        data.table::rbindlist(list(
-            const__material_table(
-                source$window, source$window$MATERIAL_ID != 0L
+        data.table::rbindlist(
+            list(
+                const__material_table(
+                    source$window,
+                    source$window$MATERIAL_ID != 0L
+                ),
+                door$glazing
             ),
-            door$glazing
-        ), use.names = TRUE, fill = TRUE),
+            use.names = TRUE,
+            fill = TRUE
+        ),
         by = c("MATERIAL_ID", "LENGTH")
     )
     dt_air <- const__material_table(
-        source$window, source$window$MATERIAL_ID == 0L
+        source$window,
+        source$window$MATERIAL_ID == 0L
     )
-    if (nrow(dt_air) > 0L) dt_air <- unique(dt_air, by = "LENGTH")
+    if (nrow(dt_air) > 0L) {
+        dt_air <- unique(dt_air, by = "LENGTH")
+    }
 
     list(
         construction = dt_const,
@@ -648,18 +749,28 @@ const__object_tables <- function(source) {
 # Original materials and constructions remain available to windows, doors, or
 # other surfaces that do not request the same absorptance tuple.
 const__apply_surface_properties <- function(object, surface) {
-    if (is.null(surface) || nrow(surface) == 0L ||
-        !"BASE_CONSTRUCTION" %in% names(surface)) return(object)
+    if (
+        is.null(surface) ||
+            nrow(surface) == 0L ||
+            !"BASE_CONSTRUCTION" %in% names(surface)
+    ) {
+        return(object)
+    }
 
     variant <- unique(surface[
         CONSTRUCTION != BASE_CONSTRUCTION,
         .(
-            BASE_CONSTRUCTION, CONSTRUCTION,
-            INSIDE_SOLAR_ABSORPTANCE, INSIDE_THERMAL_ABSORPTANCE,
-            OUTSIDE_SOLAR_ABSORPTANCE, OUTSIDE_THERMAL_ABSORPTANCE
+            BASE_CONSTRUCTION,
+            CONSTRUCTION,
+            INSIDE_SOLAR_ABSORPTANCE,
+            INSIDE_THERMAL_ABSORPTANCE,
+            OUTSIDE_SOLAR_ABSORPTANCE,
+            OUTSIDE_THERMAL_ABSORPTANCE
         )
     ])
-    if (nrow(variant) == 0L) return(object)
+    if (nrow(variant) == 0L) {
+        return(object)
+    }
 
     material <- data.table::copy(object$material)
     construction <- data.table::copy(object$construction)
@@ -669,10 +780,13 @@ const__apply_surface_properties <- function(object, surface) {
             construction$name == property$BASE_CONSTRUCTION
         )
         if (length(source_index) != 1L) {
-            stop(sprintf(
-                "Could not resolve one base construction named '%s'.",
-                property$BASE_CONSTRUCTION
-            ), call. = FALSE)
+            stop(
+                sprintf(
+                    "Could not resolve one base construction named '%s'.",
+                    property$BASE_CONSTRUCTION
+                ),
+                call. = FALSE
+            )
         }
 
         source <- construction[source_index]
@@ -680,20 +794,25 @@ const__apply_surface_properties <- function(object, surface) {
         source_layer <- layer
         has_outside <- is.finite(property$OUTSIDE_SOLAR_ABSORPTANCE) &&
             is.finite(property$OUTSIDE_THERMAL_ABSORPTANCE)
-        if (length(layer) == 1L && has_outside && (
-            property$OUTSIDE_SOLAR_ABSORPTANCE !=
-                property$INSIDE_SOLAR_ABSORPTANCE ||
-            property$OUTSIDE_THERMAL_ABSORPTANCE !=
-                property$INSIDE_THERMAL_ABSORPTANCE
-        )) {
-            stop(sprintf(
-                paste(
-                    "DeST construction '%s' has one material layer but its",
-                    "inside and outside absorptances differ; EnergyPlus cannot",
-                    "represent both values on one Material object."
+        if (
+            length(layer) == 1L &&
+                has_outside &&
+                (property$OUTSIDE_SOLAR_ABSORPTANCE !=
+                    property$INSIDE_SOLAR_ABSORPTANCE ||
+                    property$OUTSIDE_THERMAL_ABSORPTANCE !=
+                        property$INSIDE_THERMAL_ABSORPTANCE)
+        ) {
+            stop(
+                sprintf(
+                    paste(
+                        "DeST construction '%s' has one material layer but its",
+                        "inside and outside absorptances differ; EnergyPlus cannot",
+                        "represent both values on one Material object."
+                    ),
+                    property$BASE_CONSTRUCTION
                 ),
-                property$BASE_CONSTRUCTION
-            ), call. = FALSE)
+                call. = FALSE
+            )
         }
 
         exposed <- list(list(
@@ -702,11 +821,14 @@ const__apply_surface_properties <- function(object, surface) {
             thermal = property$INSIDE_THERMAL_ABSORPTANCE
         ))
         if (has_outside) {
-            exposed <- c(list(list(
-                position = 1L,
-                solar = property$OUTSIDE_SOLAR_ABSORPTANCE,
-                thermal = property$OUTSIDE_THERMAL_ABSORPTANCE
-            )), exposed)
+            exposed <- c(
+                list(list(
+                    position = 1L,
+                    solar = property$OUTSIDE_SOLAR_ABSORPTANCE,
+                    thermal = property$OUTSIDE_THERMAL_ABSORPTANCE
+                )),
+                exposed
+            )
         }
 
         for (face in exposed) {
@@ -715,14 +837,19 @@ const__apply_surface_properties <- function(object, surface) {
             base_name <- source_layer[[face$position]]
             material_index <- which(material$MATERIAL_NAME == base_name)
             if (length(material_index) != 1L) {
-                stop(sprintf(
-                    "Could not resolve one base material named '%s'.",
-                    base_name
-                ), call. = FALSE)
+                stop(
+                    sprintf(
+                        "Could not resolve one base material named '%s'.",
+                        base_name
+                    ),
+                    call. = FALSE
+                )
             }
             clone_name <- sprintf(
                 "%s [DeST a%.15g-e%.15g]",
-                base_name, face$solar, face$thermal
+                base_name,
+                face$solar,
+                face$thermal
             )
             clone_index <- which(material$MATERIAL_NAME == clone_name)
             if (length(clone_index) == 0L) {
@@ -733,12 +860,18 @@ const__apply_surface_properties <- function(object, surface) {
                     THERMAL_ABSORPTANCE = face$thermal
                 )]
                 material <- data.table::rbindlist(
-                    list(material, clone), use.names = TRUE, fill = TRUE
+                    list(material, clone),
+                    use.names = TRUE,
+                    fill = TRUE
                 )
             } else if (length(clone_index) > 1L) {
-                stop(sprintf(
-                    "Duplicated cloned material name '%s'.", clone_name
-                ), call. = FALSE)
+                stop(
+                    sprintf(
+                        "Duplicated cloned material name '%s'.",
+                        clone_name
+                    ),
+                    call. = FALSE
+                )
             }
             layer[[face$position]] <- clone_name
         }
@@ -749,7 +882,9 @@ const__apply_surface_properties <- function(object, surface) {
             value = list(c(property$CONSTRUCTION, layer))
         )]
         construction <- data.table::rbindlist(
-            list(construction, clone), use.names = TRUE, fill = TRUE
+            list(construction, clone),
+            use.names = TRUE,
+            fill = TRUE
         )
     }
 
@@ -760,21 +895,30 @@ const__apply_surface_properties <- function(object, surface) {
 
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
 const__convert <- function(dest, ep, surface = NULL) {
-    if (!db_has_rows(dest, "MAIN_ENCLOSURE")) return(NULL)
+    if (!db_has_rows(dest, "MAIN_ENCLOSURE")) {
+        return(NULL)
+    }
 
     source <- const__prepare_layers(dest)
     object <- const__object_tables(source)
     object <- const__apply_surface_properties(object, surface)
     out <- const__assemble_objects(
-        dest, ep, object$material, object$simple_glazing,
-        object$glazing, object$air, object$construction
+        dest,
+        ep,
+        object$material,
+        object$simple_glazing,
+        object$glazing,
+        object$air,
+        object$construction
     )
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- data.table::rbindlist(
         list(
-            source$const, source$window,
-            object$simple_glazing, source$door
+            source$const,
+            source$window,
+            object$simple_glazing,
+            source$door
         ),
         fill = TRUE
     )
@@ -791,15 +935,20 @@ const__is_no_mass_material <- function(material) {
     tolerance <- 1e-6
     finite <- is.finite(material$MATERIAL_DENSITY) &
         is.finite(material$MATERIAL_SPECIFIC_HEAT)
-    sentinel <- vapply(c(0.1, 10.0), function(value) {
-        abs(material$MATERIAL_DENSITY - value) <= tolerance &
-            abs(material$MATERIAL_SPECIFIC_HEAT - value) <= tolerance
-    }, logical(length(material$MATERIAL_DENSITY)))
+    sentinel <- vapply(
+        c(0.1, 10.0),
+        function(value) {
+            abs(material$MATERIAL_DENSITY - value) <= tolerance &
+                abs(material$MATERIAL_SPECIFIC_HEAT - value) <= tolerance
+        },
+        logical(length(material$MATERIAL_DENSITY))
+    )
     near_zero_specific_heat <-
         abs(material$MATERIAL_SPECIFIC_HEAT) <= tolerance |
         abs(material$MATERIAL_SPECIFIC_HEAT - 1e-5) <= tolerance
 
-    finite & material$MATERIAL_DENSITY > 0.0 &
+    finite &
+        material$MATERIAL_DENSITY > 0.0 &
         (rowSums(sentinel) > 0L | near_zero_specific_heat)
 }
 
@@ -807,8 +956,11 @@ const__is_no_mass_material <- function(material) {
 # required by WindowMaterial:Glazing:RefractionExtinctionMethod.
 const__is_refraction_glazing <- function(glazing) {
     required <- c(
-        "MATERIAL_GROUP", "LENGTH", "MATERIAL_CONDUCTIVITY",
-        "MATERIAL_EXTINCTION_COEFFICIENT", "MATERIAL_REFRACTIVE_INDEX",
+        "MATERIAL_GROUP",
+        "LENGTH",
+        "MATERIAL_CONDUCTIVITY",
+        "MATERIAL_EXTINCTION_COEFFICIENT",
+        "MATERIAL_REFRACTIVE_INDEX",
         "MATERIAL_EMISSIVITY"
     )
     if (!all(required %in% names(glazing))) {
@@ -822,26 +974,31 @@ const__is_refraction_glazing <- function(glazing) {
     )
     ordinary[is.na(ordinary)] <- FALSE
     ordinary &
-        is.finite(glazing$LENGTH) & glazing$LENGTH > 0.0 &
+        is.finite(glazing$LENGTH) &
+        glazing$LENGTH > 0.0 &
         is.finite(glazing$MATERIAL_CONDUCTIVITY) &
-            glazing$MATERIAL_CONDUCTIVITY > 0.0 &
+        glazing$MATERIAL_CONDUCTIVITY > 0.0 &
         is.finite(glazing$MATERIAL_EXTINCTION_COEFFICIENT) &
-            glazing$MATERIAL_EXTINCTION_COEFFICIENT >= 0.0 &
+        glazing$MATERIAL_EXTINCTION_COEFFICIENT >= 0.0 &
         is.finite(glazing$MATERIAL_REFRACTIVE_INDEX) &
-            glazing$MATERIAL_REFRACTIVE_INDEX > 1.0 &
+        glazing$MATERIAL_REFRACTIVE_INDEX > 1.0 &
         is.finite(glazing$MATERIAL_EMISSIVITY) &
-            glazing$MATERIAL_EMISSIVITY > 0.0 &
-            glazing$MATERIAL_EMISSIVITY < 1.0
+        glazing$MATERIAL_EMISSIVITY > 0.0 &
+        glazing$MATERIAL_EMISSIVITY < 1.0
 }
 
 # Warn when SimpleGlazingSystem will be simulated by EnergyPlus releases that
 # predate the angular-reflectance correction introduced in version 9.4.
 const__warn_simple_glazing_version <- function(ep, glazing_count) {
-    if (glazing_count == 0L) return(invisible(NULL))
+    if (glazing_count == 0L) {
+        return(invisible(NULL))
+    }
 
     version <- numeric_version(as.character(ep$version()))
-    if (version >= numeric_version("9.0.0") &&
-        version < numeric_version("9.4.0")) {
+    if (
+        version >= numeric_version("9.0.0") &&
+            version < numeric_version("9.4.0")
+    ) {
         warning(
             paste(
                 "EnergyPlus 9.0-9.3 contain a known",
@@ -859,7 +1016,13 @@ const__warn_simple_glazing_version <- function(ep, glazing_count) {
 # Assemble the heterogeneous material and construction classes after the
 # converter has normalized every source table and resolved its fallbacks.
 const__assemble_objects <- function(
-    dest, ep, dt_mat, win_type_glazing, dt_glaze, dt_air, dt_const
+    dest,
+    ep,
+    dt_mat,
+    win_type_glazing,
+    dt_glaze,
+    dt_air,
+    dt_const
 ) {
     no_mass_row <- const__is_no_mass_material(dt_mat)
     no_mass <- dt_mat[no_mass_row]
@@ -871,36 +1034,43 @@ const__assemble_objects <- function(
     fallback_glazing <- dt_glaze[!refraction_row]
 
     if (nrow(fallback_glazing) > 0L) {
-        warning(sprintf(
-            paste(
-                "Using the EnergyPlus 3 mm clear-glass fallback for DeST",
-                "glazing without supported ordinary-glass optical inputs: %s."
+        warning(
+            sprintf(
+                paste(
+                    "Using the EnergyPlus 3 mm clear-glass fallback for DeST",
+                    "glazing without supported ordinary-glass optical inputs: %s."
+                ),
+                paste(fallback_glazing$MATERIAL_NAME, collapse = ", ")
             ),
-            paste(fallback_glazing$MATERIAL_NAME, collapse = ", ")
-        ), call. = FALSE)
+            call. = FALSE
+        )
     }
 
     base <- eval(as.call(c(
-        conv__add, dest, ep,
+        conv__add,
+        dest,
+        ep,
 
         # Material
-        if (nrow(dt_mat) > 0L) bquote(
-            "Material" := list(
-                name                = .(dt_mat$MATERIAL_NAME),
-                # NOTE: here we use "MediumSmooth" for roughness"
-                roughness           = "MediumSmooth",
-                # DeST construction lengths are stored in millimetres, while
-                # EnergyPlus Material thickness is expressed in metres.
-                thickness           = .(dt_mat$LENGTH / 1000),
-                conductivity        = .(dt_mat$MATERIAL_CONDUCTIVITY),
-                density             = .(dt_mat$MATERIAL_DENSITY),
-                specific_heat       = .(dt_mat$MATERIAL_SPECIFIC_HEAT),
-                thermal_absorptance = .(dt_mat$THERMAL_ABSORPTANCE),
-                solar_absorptance   = .(dt_mat$SOLAR_ABSORPTANCE),
-                # DeST has no separately evidenced visible absorptance field.
-                visible_absorptance = .(dt_mat$VISIBLE_ABSORPTANCE)
+        if (nrow(dt_mat) > 0L) {
+            bquote(
+                "Material" := list(
+                    name = .(dt_mat$MATERIAL_NAME),
+                    # NOTE: here we use "MediumSmooth" for roughness"
+                    roughness = "MediumSmooth",
+                    # DeST construction lengths are stored in millimetres, while
+                    # EnergyPlus Material thickness is expressed in metres.
+                    thickness = .(dt_mat$LENGTH / 1000),
+                    conductivity = .(dt_mat$MATERIAL_CONDUCTIVITY),
+                    density = .(dt_mat$MATERIAL_DENSITY),
+                    specific_heat = .(dt_mat$MATERIAL_SPECIFIC_HEAT),
+                    thermal_absorptance = .(dt_mat$THERMAL_ABSORPTANCE),
+                    solar_absorptance = .(dt_mat$SOLAR_ABSORPTANCE),
+                    # DeST has no separately evidenced visible absorptance field.
+                    visible_absorptance = .(dt_mat$VISIBLE_ABSORPTANCE)
+                )
             )
-        ),
+        },
 
         # WINDOW_TYPE_DATA describes whole-window performance rather than
         # individual panes. Emit one equivalent simple glazing system per type.
@@ -917,32 +1087,43 @@ const__assemble_objects <- function(
             bquote("WindowMaterial:SimpleGlazingSystem" := .(value))
         }),
 
-        if (nrow(refraction_glazing) > 0L) bquote(
-            "WindowMaterial:Glazing:RefractionExtinctionMethod" := list(
-                name = .(refraction_glazing$MATERIAL_NAME),
-                thickness = .(refraction_glazing$LENGTH / 1000),
-                solar_index_of_refraction =
-                    .(refraction_glazing$MATERIAL_REFRACTIVE_INDEX),
-                # DeST stores EX_COEF per millimetre alongside layer lengths
-                # in millimetres; EnergyPlus requires the coefficient per metre.
-                solar_extinction_coefficient =
-                    .(refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT * 1000),
-                visible_index_of_refraction =
-                    .(refraction_glazing$MATERIAL_REFRACTIVE_INDEX),
-                visible_extinction_coefficient =
-                    .(refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT * 1000),
-                infrared_transmittance_at_normal_incidence = 0.0,
-                infrared_hemispherical_emissivity =
-                    .(refraction_glazing$MATERIAL_EMISSIVITY),
-                conductivity = .(refraction_glazing$MATERIAL_CONDUCTIVITY)
+        if (nrow(refraction_glazing) > 0L) {
+            bquote(
+                "WindowMaterial:Glazing:RefractionExtinctionMethod" := list(
+                    name = .(refraction_glazing$MATERIAL_NAME),
+                    thickness = .(refraction_glazing$LENGTH / 1000),
+                    solar_index_of_refraction = .(
+                        refraction_glazing$MATERIAL_REFRACTIVE_INDEX
+                    ),
+                    # DeST stores EX_COEF per millimetre alongside layer lengths
+                    # in millimetres; EnergyPlus requires the coefficient per metre.
+                    solar_extinction_coefficient = .(
+                        refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT *
+                            1000
+                    ),
+                    visible_index_of_refraction = .(
+                        refraction_glazing$MATERIAL_REFRACTIVE_INDEX
+                    ),
+                    visible_extinction_coefficient = .(
+                        refraction_glazing$MATERIAL_EXTINCTION_COEFFICIENT *
+                            1000
+                    ),
+                    infrared_transmittance_at_normal_incidence = 0.0,
+                    infrared_hemispherical_emissivity = .(
+                        refraction_glazing$MATERIAL_EMISSIVITY
+                    ),
+                    conductivity = .(refraction_glazing$MATERIAL_CONDUCTIVITY)
+                )
             )
-        ),
+        },
 
         if (nrow(fallback_glazing) > 0L) {
             # Keep the established approximation for coated, unknown, or
             # incomplete records that the refraction-extinction method excludes.
             clear3mm <- list(
-                Name = "CLEAR 3MM", Conductivity = 0.9, Thickness = 0.003,
+                Name = "CLEAR 3MM",
+                Conductivity = 0.9,
+                Thickness = 0.003,
                 `Optical Data Type` = "SpectralAverage",
                 `Solar Transmittance at Normal Incidence` = 0.837,
                 `Front Side Solar Reflectance at Normal Incidence` = 0.075,
@@ -955,19 +1136,21 @@ const__assemble_objects <- function(
                 `Back Side Infrared Hemispherical Emissivity` = 0.84
             )
 
-            glaze              <- clear3mm
-            glaze$Name         <- fallback_glazing$MATERIAL_NAME
-            glaze$Thickness    <- round(fallback_glazing$LENGTH / 1000, 4L)
+            glaze <- clear3mm
+            glaze$Name <- fallback_glazing$MATERIAL_NAME
+            glaze$Thickness <- round(fallback_glazing$LENGTH / 1000, 4L)
             glaze$Conductivity <- fallback_glazing$MATERIAL_CONDUCTIVITY
             bquote("WindowMaterial:Glazing" := .(glaze))
         },
 
         if (nrow(dt_air) > 0L) {
-            bquote("WindowMaterial:Gas" := list(
-                name = .(dt_air$MATERIAL_NAME),
-                gas_type = "Air",
-                thickness = round(.(dt_air$LENGTH) / 1000, 4L)
-            ))
+            bquote(
+                "WindowMaterial:Gas" := list(
+                    name = .(dt_air$MATERIAL_NAME),
+                    gas_type = "Air",
+                    thickness = round(.(dt_air$LENGTH) / 1000, 4L)
+                )
+            )
         },
 
         # Construction
@@ -985,7 +1168,8 @@ const__assemble_objects <- function(
             roughness = "MediumSmooth",
             # DeST stores the R-only layer as ordinary thickness and
             # conductivity fields, so preserve R = d / k explicitly.
-            thermal_resistance = material$LENGTH / 1000 /
+            thermal_resistance = material$LENGTH /
+                1000 /
                 material$MATERIAL_CONDUCTIVITY,
             thermal_absorptance = material$THERMAL_ABSORPTANCE,
             solar_absorptance = material$SOLAR_ABSORPTANCE,
@@ -993,7 +1177,10 @@ const__assemble_objects <- function(
         )
     })
     no_mass_output <- conv__add_objects(
-        dest, ep, "Material:NoMass", no_mass_values
+        dest,
+        ep,
+        "Material:NoMass",
+        no_mass_values
     )
     conv__combine_outputs(list(base = base, no_mass = no_mass_output))
 }
