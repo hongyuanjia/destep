@@ -414,7 +414,7 @@ internal_gains__convert_lights <- function(dest, ep) {
             END              AS MIN_WATTS_PER_AREA,
             ROUND(1.0 - DM.DIST_AIR, 3)
                              AS FRACTION_RADIANT,
-            T.L_HEAT_RATE    AS FRACTION_REPLACEABLE
+            T.L_HEAT_RATE    AS HEAT_TO_ELECTRIC_RATIO
         FROM ROOM R
         LEFT JOIN ROOM_TYPE_DATA T
         ON R.TYPE = T.ID
@@ -439,7 +439,7 @@ internal_gains__convert_lights <- function(dest, ep) {
             "MIN_LIGHTING_LEVEL",
             "MIN_WATTS_PER_AREA",
             "FRACTION_RADIANT",
-            "FRACTION_REPLACEABLE"
+            "HEAT_TO_ELECTRIC_RATIO"
         )
     )
     watts_per_area_field <- conv__idd_field_name(ep, "Lights", 6L)
@@ -532,8 +532,14 @@ internal_gains__light_value <- function(
         watts_per_person = NULL,
         return_air_fraction = 0,
         fraction_radiant = lights$FRACTION_RADIANT[[i]],
-        fraction_visible = 0.2,
-        fraction_replaceable = lights$FRACTION_REPLACEABLE[[i]],
+        # DeST DIST_MODE already allocates the thermal lighting gain between
+        # zone air and surfaces. A separate visible fraction would divert heat
+        # into EnergyPlus' optical path and can lose it on zero-absorptance
+        # surfaces, which is not part of the DeST heat-gain definition.
+        fraction_visible = 0,
+        # DeST L_HEAT_RATE is a heat-to-electricity ratio. It does not describe
+        # the fraction eligible for EnergyPlus daylighting replacement.
+        fraction_replaceable = 0,
         end_use_subcategory = "General"
     )
     value[[zone_field_name]] <- lights$ROOM_NAME[[i]]
