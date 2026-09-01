@@ -1,5 +1,13 @@
 # destep 0.0.0.9000
 
+- Fixed DeST lighting heat-gain conversion so `L_DIST_MODE` is represented
+  without introducing an unrelated EnergyPlus visible-light fraction, and
+  stopped mapping the DeST heat-to-electricity ratio to daylighting
+  replaceability.
+
+- Reconciled type-1 two-zone terminal minimum flows when their sum falls less
+  than 0.01% below the DeST system minimum outdoor-air flow, preserving zone
+  shares with an explicit warning while rejecting larger air-balance conflicts.
 - Warned when aggregate `WindowMaterial:SimpleGlazingSystem` objects target
   EnergyPlus 9.0 through 9.3, whose angular-reflectance implementation was
   corrected in EnergyPlus 9.4.
@@ -34,6 +42,42 @@
 - Preserved DeST surface convection coefficients, solar absorptance, and
   blackness using per-surface convection objects and deduplicated exposed-layer
   construction clones, while retaining reciprocal interzone layer order.
+- Preserved independent DeST window convection coefficients by reading the
+  window `SIDE1` and `SIDE2` surface records. Converted doors as opaque
+  subsurfaces with reciprocal construction order while inheriting the effective
+  face properties and convection coefficients of their owning enclosures.
+- Warned when a DeST window references transmitted-solar `DIST_MODE` fractions,
+  because the per-window distribution has no established direct EnergyPlus
+  projection and would otherwise be omitted silently.
+- Warned when `ROOM_GROUP.OF_AC_SYS` references a physical DeST
+  air-conditioning system, reporting its raw system type, outdoor-air control,
+  and available flow limits when the default `hvac = "ideal_loads"` conversion
+  omits its fans, coils, air loop, plant equipment, and system-level outputs.
+- Added explicit `hvac = "physical"` paths for supported one-room
+  `AC_SYS_TYPE = 0` constant-volume systems and exactly two conditioned rooms
+  linked to one shared terminal-reheat system with `AC_SYS_TYPE` 0 or 1. All
+  accept `FRESH_AIR_TYPE` 1, 5, or 6. Outdoor-air type 1 uses the DeST minimum
+  as a fixed flow and retains the maximum as a source capacity boundary; types
+  5 and 6 map the source limits to EnergyPlus differential dry-bulb and
+  differential enthalpy economizers.
+- The two-zone type-1 path preserves each room's source minimum and maximum
+  terminal flow in direct `AirTerminal:SingleDuct:VAV:Reheat` objects and uses
+  variable supply and return fans. The type-0 path fixes each terminal minimum
+  to its maximum and uses constant-volume supply and return fans. Both construct
+  one shared air loop and balance an explicit per-zone outdoor-air allocation
+  through two exhaust fans. The allocation is a named `ROOM.ID` vector and must
+  sum to the source system minimum outdoor-air flow.
+- Both physical paths preserve DeST system ownership, airflow limits,
+  availability, and room temperature schedules in direct EnergyPlus 9.0.1
+  objects. Equipment performance and zone allocation values missing from the
+  DeST model must be supplied through path-specific `hvac_options`; other
+  topologies and system types remain unsupported. The default conversion
+  remains `hvac = "ideal_loads"`.
+- Included the legacy `AC_SYS.SUPPLY_T_MIN` and `SUPPLY_T_MAX` references in
+  schedule conversion. Two-zone physical HVAC paths now use a matching source
+  trajectory for the cooling-coil setpoint and its minimum for cooling sizing;
+  distinct minimum and maximum trajectories stop with an explicit unsupported
+  error.
 - Fixed Calload control mapping to resolve availability, temperature, and
   humidity schedules through `ROOM.TYPE` and `ROOM_TYPE_DATA`, while retaining
   `ROOM_GROUP.IS_AC_ROOM` as the room-conditioning eligibility flag.
