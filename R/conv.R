@@ -193,11 +193,80 @@ MAP_ID_NAME <- list(
 #' @param verbose \[logical\] Whether to show verbose messages. Default is
 #'       `FALSE`.
 #'
+#' @param hvac \[string\] HVAC representation. `"ideal_loads"`, the default,
+#'       preserves the established load-only conversion. `"physical"` enables
+#'       one-room `AC_SYS_TYPE = 0` constant-volume systems and exactly two
+#'       conditioned rooms linked to one shared terminal-reheat system. A
+#'       two-room `AC_SYS_TYPE = 0` system uses constant-volume fans and fixes
+#'       terminal minimum flow to maximum flow; type 1 retains variable-volume
+#'       fans and the source terminal bounds. All paths accept verified
+#'       `FRESH_AIR_TYPE` values 1, 5, or 6. Outdoor-air type 1 uses the DeST
+#'       minimum as a fixed flow and retains the maximum as a source capacity
+#'       boundary. Types 5 and 6 map the source minimum and maximum flows to
+#'       differential dry-bulb and differential enthalpy economizers. The
+#'       type-1 two-zone path proportionally reconciles terminal minimum flows
+#'       when their sum falls below the system minimum outdoor-air flow by no
+#'       more than 0.01%, with a warning; larger conflicts stop conversion. The
+#'       two-zone paths map matching `AC_SYS.SUPPLY_T_MIN/MAX` schedules to the
+#'       cooling-coil setpoint and use their minimum value for cooling sizing;
+#'       distinct minimum and maximum trajectories remain unsupported. The
+#'       physical paths require `ver = "9.0.1"`, an installed matching EnergyPlus
+#'       version, and explicit `hvac_options` for parameters absent from DeST.
+#'
+#' @param hvac_options \[list or NULL\] Named equipment parameters required by
+#'       the selected `hvac = "physical"` path. Common fan fields are
+#'       `supply_fan_total_efficiency`, `supply_fan_delta_pressure_pa`,
+#'       `supply_fan_motor_efficiency`, `supply_fan_motor_in_air_fraction`, the
+#'       corresponding four `return_fan_*` fields,
+#'       `zone_exhaust_fan_total_efficiency`, and
+#'       `zone_exhaust_fan_pressure_rise_pa`. Common coil and plant fields are
+#'       `chilled_water_design_setpoint_c`, `condenser_water_design_setpoint_c`,
+#'       `chiller_type`,
+#'       `chiller_nominal_cop`, and `tower_type`. The single-zone path also
+#'       requires five `return_fan_power_coefficient_*` fields,
+#'       `cooling_coil_design_setpoint_c`,
+#'       `heating_coil_design_setpoint_c`,
+#'       `heating_coil_rated_air_water_convection_ratio`,
+#'       `hot_water_design_setpoint_c`, `boiler_type`, `boiler_efficiency`, and
+#'       `boiler_fuel_type`. The two-zone type-1 path also requires the five fan
+#'       power coefficients; the two-zone type-0 path uses constant-volume fans
+#'       and does not. Both two-zone terminal-reheat paths require
+#'       `cooling_coil_type = "ChilledWater"`,
+#'       `preheat_coil_type = "Electric"`,
+#'       `preheat_coil_design_setpoint_c`,
+#'       `reheat_coil_type = "Electric"`, and a named numeric
+#'       `zone_outdoor_air_flow_m3_s` vector. Its names must be the two DeST
+#'       `ROOM.ID` values and its sum must equal the source `AC_SYS` minimum
+#'       outdoor-air flow. Only fields required by the selected physical path
+#'       need to be supplied. These values are never inferred from reference
+#'       models.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model.
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
-to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
+to_eplus <- function(
+    dest,
+    ver = "latest",
+    copy = TRUE,
+    verbose = FALSE,
+    hvac = c("ideal_loads", "physical"),
+    hvac_options = NULL
+) {
+    hvac <- match.arg(hvac)
+    if (hvac == "physical") {
+        checkmate::assert_list(
+            hvac_options,
+            names = "unique",
+            .var.name = "hvac_options"
+        )
+    } else if (!is.null(hvac_options)) {
+        stop(
+            "'hvac_options' can only be supplied when 'hvac = \"physical\"'.",
+            call. = FALSE
+        )
+    }
+
     if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -329,9 +398,13 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
             attr(door, "table")
         ),
         schedule = schedule__convert(tmpdb, ep),
-        thermostat = thermostat__convert(tmpdb, ep),
+        thermostat = if (hvac == "ideal_loads") {
+            thermostat__convert(tmpdb, ep)
+        },
         outdoor_air = outdoor_air__convert(tmpdb, ep),
-        ideal_loads = ideal_loads__convert(tmpdb, ep),
+        ideal_loads = if (hvac == "ideal_loads") {
+            ideal_loads__convert(tmpdb, ep)
+        },
         ventilation = ventilation__convert(tmpdb, ep)
     )
 
@@ -370,10 +443,14 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
-    # EnergyPlus 9.0.1 rejects non-ASCII object names even when the IDF passes
-    # schema validation. Rename those objects and their references after the
-    # complete object graph has been assembled.
-    conv__normalize_object_names(ep)
+    if (hvac == "physical") {
+        ep <- hvac__convert(tmpdb, ep, hvac_options)
+    } else {
+        # EnergyPlus 9.0.1 rejects non-ASCII object names even when the IDF
+        # passes schema validation. Rename objects and references only after
+        # the complete selected HVAC graph has been assembled.
+        conv__normalize_object_names(ep)
+    }
 
     ep
 }

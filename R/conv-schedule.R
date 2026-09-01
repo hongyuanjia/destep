@@ -30,9 +30,27 @@ ENUM_SCH_DAYTYPE_WEEKDAY <- ENUM_SCH_DAYTYPE[
     ENUM_SCH_DAYTYPE["Monday"]:ENUM_SCH_DAYTYPE["Friday"]
 ]
 
+# List every source field that references SCHEDULE_YEAR, including AC_SYS
+# supply-temperature fields whose legacy names omit the word SCHEDULE.
+schedule__reference_fields <- function(dest, table) {
+    checkmate::assert_class(dest, "DBIConnection")
+    checkmate::assert_string(table, min.chars = 1L)
+
+    fields <- DBI::dbListFields(dest, table)
+    references <- grep("SCHEDULE", fields, value = TRUE)
+    if (identical(table, "AC_SYS")) {
+        references <- union(
+            references,
+            intersect(c("SUPPLY_T_MIN", "SUPPLY_T_MAX"), fields)
+        )
+    }
+    references
+}
+
 # SCHEDULE_YEAR -> Schedule:Year -> Schedule:Week:Compact -> Schedule:Day:Interval -> ScheduleTypeLimits
 schedule__convert <- function(dest, ep) {
     # currently, schedules are used in the tables below:
+    # - AC_SYS, including the nonstandard SUPPLY_T_MIN/MAX references
     # - DOOR
     # - ENERGY_DEVICE
     # - ENERGY_HOTWATER
@@ -63,11 +81,7 @@ schedule__convert <- function(dest, ep) {
             )$n
             if (n > 0L) {
                 # get the column names that reference schedules
-                col_ref <- grep(
-                    "SCHEDULE",
-                    DBI::dbListFields(dest, tbl),
-                    value = TRUE
-                )
+                col_ref <- schedule__reference_fields(dest, tbl)
                 if (length(col_ref) > 0L) {
                     # get the distinct values of the referenced schedules
                     DBI::dbGetQuery(
@@ -90,17 +104,15 @@ schedule__convert <- function(dest, ep) {
         schedule <- data.table::setDT(DBI::dbGetQuery(
             dest,
             sprintf(
-                "SELECT * FROM SCHEDULE_YEAR WHERE SCHEDULE_ID IN (%s)",
+                paste(
+                    "SELECT * FROM SCHEDULE_YEAR",
+                    "WHERE SCHEDULE_ID IN (%s) ORDER BY SCHEDULE_ID"
+                ),
                 paste(ids_ref, collapse = ", ")
             )
         ))
         # In DeST, the actual schedule data is stored as doubles in a raw vector.
-        data.table::set(
-            schedule,
-            NULL,
-            "DATA",
-            lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L)
-        )
+        schedule[, DATA := lapply(DATA, readBin, what = "double", n = 8760L)]
     } else {
         schedule <- data.table::data.table()
     }
@@ -196,11 +208,7 @@ schedule__nonhumidity_reference_ids <- function(dest) {
                 if (!db_has_rows(dest, table)) {
                     return(NULL)
                 }
-                fields <- grep(
-                    "SCHEDULE",
-                    DBI::dbListFields(dest, table),
-                    value = TRUE
-                )
+                fields <- schedule__reference_fields(dest, table)
                 fields <- setdiff(
                     fields,
                     c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
