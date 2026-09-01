@@ -1,7 +1,7 @@
 # ROOM_TYPE_DATA air-conditioning controls -> ZoneHVAC:IdealLoadsAirSystem.
-# This converter deliberately implements only the load-system shell: DeST
-# supply-air state fields live in AC_SYS, and the current real fixture has no
-# AC_SYS rows, so explicit load-only IdealLoads boundaries are used here.
+# This converter currently implements the load-system path. A separate physical
+# air-system converter can use AC_SYS, AHU, and related equipment records without
+# changing the established IdealLoads representation.
 ideal_loads__convert <- function(dest, ep) {
     if (
         !db_has_rows(dest, "ROOM") ||
@@ -12,6 +12,7 @@ ideal_loads__convert <- function(dest, ep) {
     }
 
     ideal <- control__room_table(dest)
+    ideal_loads__warn_physical_hvac(dest, ideal)
     # Reuse occupant-derived outdoor-air objects when they exist; rooms without
     # a positive people fresh-air requirement keep the IdealLoads field blank.
     outdoor_air <- outdoor_air__occupant_table(dest)
@@ -101,6 +102,84 @@ ideal_loads__convert <- function(dest, ep) {
     )
 
     out
+}
+
+# Warn when a room group references a DeST air-conditioning system that the
+# current IdealLoads path does not yet convert to physical EnergyPlus objects.
+ideal_loads__warn_physical_hvac <- function(dest, ideal) {
+    system_ids <- sort(unique(ideal$OF_AC_SYS[
+        !is.na(ideal$OF_AC_SYS) & ideal$OF_AC_SYS != 0L
+    ]))
+    if (!length(system_ids)) {
+        return(invisible(NULL))
+    }
+
+    # Retain unresolved identifiers and enrich only systems found in AC_SYS.
+    details <- stats::setNames(as.character(system_ids), system_ids)
+    if (
+        db_has_rows(dest, "AC_SYS") &&
+            db_has_fields(dest, "AC_SYS", "AC_SYS_ID")
+    ) {
+        systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
+        systems <- systems[AC_SYS_ID %in% system_ids]
+        if (nrow(systems)) {
+            data.table::setorderv(systems, "AC_SYS_ID")
+            detail_fields <- intersect(
+                c(
+                    "NAME",
+                    "AC_SYS_TYPE",
+                    "FRESH_AIR_TYPE",
+                    "MIN_FRESH_AIR_RATIO",
+                    "MAX_FRESH_AIR_RATIO",
+                    "MIN_FRESH_AIR_VOLUME",
+                    "MAX_FRESH_AIR_VOLUME"
+                ),
+                names(systems)
+            )
+            formatted <- vapply(
+                seq_len(nrow(systems)),
+                function(index) {
+                    if (!length(detail_fields)) {
+                        return(as.character(systems$AC_SYS_ID[[index]]))
+                    }
+
+                    # Report raw source values without inferring undocumented codes
+                    # or assigning units that are not established by the schema.
+                    values <- vapply(
+                        detail_fields,
+                        function(field) {
+                            value <- systems[[field]][[index]]
+                            if (is.na(value)) "NA" else as.character(value)
+                        },
+                        character(1L)
+                    )
+                    sprintf(
+                        "%s (%s)",
+                        systems$AC_SYS_ID[[index]],
+                        paste(
+                            sprintf("%s=%s", detail_fields, values),
+                            collapse = ", "
+                        )
+                    )
+                },
+                character(1L)
+            )
+            details[as.character(systems$AC_SYS_ID)] <- formatted
+        }
+    }
+
+    warn(
+        paste0(
+            "DeST air-conditioning system(s) referenced by ",
+            "ROOM_GROUP.OF_AC_SYS are represented with ",
+            "ZoneHVAC:IdealLoadsAirSystem only: ",
+            paste(unname(details), collapse = "; "),
+            ". Physical fans, coils, air loops, plant equipment, and their ",
+            "system-level outputs are not yet converted by this path."
+        ),
+        class = "destep_unconverted_hvac_system"
+    )
+    invisible(NULL)
 }
 
 # Detect optional equipment-list fields from the selected EnergyPlus IDD so the

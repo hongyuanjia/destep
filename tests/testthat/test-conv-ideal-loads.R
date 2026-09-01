@@ -170,6 +170,47 @@ test_that("can convert ROOM_TYPE_DATA ideal loads for air-conditioned rooms", {
     ))
 })
 
+
+test_that("warns when a linked physical HVAC system is not yet converted", {
+    ep <- eplusr::empty_idf(23.1)
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+
+    DBI::dbExecute(
+        dest,
+        "
+        UPDATE ROOM_GROUP
+        SET OF_AC_SYS = 4897
+        WHERE ROOM_GROUP_ID = 10
+    "
+    )
+    DBI::dbWriteTable(
+        dest,
+        "AC_SYS",
+        data.table::data.table(
+            AC_SYS_ID = 4897L,
+            NAME = "2-1",
+            AC_SYS_TYPE = 0L,
+            FRESH_AIR_TYPE = 5L,
+            MIN_FRESH_AIR_RATIO = 0.1,
+            MAX_FRESH_AIR_RATIO = 1.0,
+            MIN_FRESH_AIR_VOLUME = 339.804,
+            MAX_FRESH_AIR_VOLUME = 1019.412
+        )
+    )
+
+    expect_warning(
+        ideal_loads__convert(dest, ep),
+        paste0(
+            "4897 [(]NAME=2-1, AC_SYS_TYPE=0, FRESH_AIR_TYPE=5, ",
+            "MIN_FRESH_AIR_RATIO=0.1, MAX_FRESH_AIR_RATIO=1, ",
+            "MIN_FRESH_AIR_VOLUME=339.804, ",
+            "MAX_FRESH_AIR_VOLUME=1019.412[)]"
+        ),
+        class = "destep_unconverted_hvac_system"
+    )
+})
+
 test_that("ideal loads follow target equipment-list fields", {
     skip_if_not("9.0.1" %in% eplusr::avail_eplus())
 
