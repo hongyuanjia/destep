@@ -173,6 +173,20 @@ test_that("can convert internal gains", {
         ],
         c(10, 2)
     )
+    expect_equal(
+        unique(gains$value$value_num[
+            gains$value$class_name == "Lights" &
+                gains$value$field_name == "Fraction Visible"
+        ]),
+        0
+    )
+    expect_equal(
+        unique(gains$value$value_num[
+            gains$value$class_name == "Lights" &
+                gains$value$field_name == "Fraction Replaceable"
+        ]),
+        0
+    )
 })
 
 test_that("internal gains resolve target zone-reference fields", {
