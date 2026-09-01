@@ -4,6 +4,7 @@ const_test__door_db <- function(
     door_construction = c(10L, 20L),
     enclosure = c(100L, 200L),
     material = c(1L, 2L),
+    gap_length = c(40, 50),
     app_id = c(0L, 0L),
     app_flag = c(0L, 0L)
 ) {
@@ -34,6 +35,7 @@ const_test__door_db <- function(
             DOOR_ID = door_construction,
             CNAME = paste("Door", door_construction),
             MATERIAL_ID = material,
+            GAP_LENGTH = gap_length,
             APP_ID = app_id,
             APP_FLAG = app_flag
         )
@@ -114,7 +116,7 @@ test_that("keeps every distinct non-default door construction", {
     opaque <- door[door$LAYER_NO == 0L, ]
 
     expect_equal(opaque$ID, c(10L, 20L))
-    expect_equal(opaque$LENGTH, c(120, 180))
+    expect_equal(opaque$LENGTH, c(40, 50))
 })
 
 test_that("resolves transparent door materials through APP_ID", {

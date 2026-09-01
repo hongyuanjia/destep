@@ -288,11 +288,17 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ver <- conv__version_comment(tmpdb, ep)
     ep$Version$comment(un_list(ver$object$comment))
 
-    # Surface part geometry must be available when a window crosses a topology
-    # split, because each clipped window piece references exactly one host part.
+    # Surface part geometry must be available when an opening crosses a topology
+    # split, because each clipped piece references exactly one host part.
     geometry_profile <- eplus_geom__profile(ep$version())
     surface <- surface__convert(tmpdb, ep, geometry_profile)
     window <- window__convert(
+        tmpdb,
+        ep,
+        attr(surface, "table"),
+        geometry_profile
+    )
+    door <- door__convert(
         tmpdb,
         ep,
         attr(surface, "table"),
@@ -314,8 +320,14 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         zone = zone__convert(tmpdb, ep),
         surface = surface,
         window = window,
+        door = door,
         shading = shading,
-        const = const__convert(tmpdb, ep, attr(surface, "table")),
+        const = const__convert(
+            tmpdb,
+            ep,
+            attr(surface, "table"),
+            attr(door, "table")
+        ),
         schedule = schedule__convert(tmpdb, ep),
         thermostat = thermostat__convert(tmpdb, ep),
         outdoor_air = outdoor_air__convert(tmpdb, ep),

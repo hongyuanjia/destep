@@ -248,6 +248,61 @@ test_that("surface construction clones preserve reciprocal layer order", {
     expect_true(all(converted$material$VISIBLE_ABSORPTANCE == 0.7))
 })
 
+test_that("splits one-layer constructions across unequal face properties", {
+    material <- data.table::data.table(
+        MATERIAL_ID = 1L,
+        LENGTH = 6.096,
+        MATERIAL_NAME = "Effective panel",
+        MATERIAL_CONDUCTIVITY = 0.03077,
+        MATERIAL_DENSITY = 2470,
+        MATERIAL_SPECIFIC_HEAT = 750,
+        THERMAL_ABSORPTANCE = 0.9,
+        SOLAR_ABSORPTANCE = 0.7,
+        VISIBLE_ABSORPTANCE = 0.7
+    )
+    construction <- data.table::data.table(
+        ID = 1L,
+        KIND = -2L,
+        name = "Panel",
+        value = list(c("Panel", "Effective panel"))
+    )
+    property <- data.table::data.table(
+        BASE_CONSTRUCTION = "Panel",
+        CONSTRUCTION = "Panel [DeST properties]",
+        INSIDE_SOLAR_ABSORPTANCE = 0.6,
+        INSIDE_THERMAL_ABSORPTANCE = 0.9,
+        OUTSIDE_SOLAR_ABSORPTANCE = 0.1,
+        OUTSIDE_THERMAL_ABSORPTANCE = 0.9
+    )
+
+    converted <- const__apply_surface_properties(
+        list(material = material, construction = construction),
+        property
+    )
+    layers <- converted$construction[
+        name == property$CONSTRUCTION,
+        value
+    ][[1L]][-1L]
+    split <- converted$material[MATERIAL_NAME %in% layers]
+
+    expect_length(layers, 2L)
+    expect_equal(sum(split$LENGTH), material$LENGTH)
+    expect_equal(
+        sum(split$LENGTH / split$MATERIAL_CONDUCTIVITY),
+        material$LENGTH / material$MATERIAL_CONDUCTIVITY
+    )
+    expect_equal(
+        sum(
+            split$LENGTH * split$MATERIAL_DENSITY * split$MATERIAL_SPECIFIC_HEAT
+        ),
+        material$LENGTH *
+            material$MATERIAL_DENSITY *
+            material$MATERIAL_SPECIFIC_HEAT
+    )
+    expect_equal(split$SOLAR_ABSORPTANCE, c(0.1, 0.6))
+    expect_true(all(split$THERMAL_ABSORPTANCE == 0.9))
+})
+
 test_that("surface polygon simplification removes only redundant vertices", {
     polygon <- data.table::data.table(
         POINT_NO = 0:5,
@@ -654,7 +709,7 @@ test_that("windows are clipped to exact host surface parts", {
         POINT_Z = c(1, 1, 3, 3)
     )
 
-    split <- window__split_by_surface(window, host)
+    split <- subsurface__split_by_surface(window, host)
     metric <- split[, surface__metrics(.SD), by = "OUTPUT_PART_ID"]
 
     expect_equal(data.table::uniqueN(split$OUTPUT_PART_ID), 2L)
@@ -665,8 +720,8 @@ test_that("windows are clipped to exact host surface parts", {
     outside <- data.table::copy(window)
     outside[, POINT_X := POINT_X + 10]
     expect_error(
-        window__split_by_surface(outside, host),
-        "Could not place DeST window"
+        subsurface__split_by_surface(outside, host),
+        "Could not place DeST subsurface"
     )
 })
 
@@ -686,7 +741,7 @@ test_that("window-aware host triangulation avoids sub-centimetre slivers", {
 
     triangulated <- surface__triangulate_polygon(host, window)
     clipped <- lapply(unique(triangulated$PART), function(part) {
-        window__clip_polygon(window, triangulated[PART == part])
+        subsurface__clip_polygon(window, triangulated[PART == part])
     })
     clipped <- Filter(Negate(is.null), clipped)
 

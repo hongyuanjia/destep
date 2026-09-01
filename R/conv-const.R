@@ -143,8 +143,8 @@ const__window_type_performance <- function(dest) {
     window
 }
 
-# Read opaque and transparent door layers while retaining one representative
-# host enclosure for every distinct DeST door construction.
+# Read opaque and transparent layers for every distinct DeST door
+# construction referenced directly or through the default setting.
 const__door_layers <- function(dest) {
     DBI::dbGetQuery(
         dest,
@@ -170,7 +170,9 @@ const__door_layers <- function(dest) {
                 -2                    AS KIND,
                 -- mark the normal layer as 0
                 0                     AS LAYER_NO,
-                L.LENGTH              AS LENGTH,
+                -- DeST stores the door-body material thickness in millimetres
+                -- in GAP_LENGTH; the host wall thickness is unrelated.
+                S.GAP_LENGTH          AS LENGTH,
                 S.MATERIAL_ID         AS MATERIAL_ID,
                 M.CNAME               AS MATERIAL_NAME,
                 M.CONDUCTIVITY        AS MATERIAL_CONDUCTIVITY,
@@ -185,32 +187,6 @@ const__door_layers <- function(dest) {
             ON D.DOOR_CONSTRUCTION = S.DOOR_ID
             LEFT JOIN SYS_MATERIAL M
             ON S.MATERIAL_ID = M.MATERIAL_ID
-            LEFT JOIN MAIN_ENCLOSURE E
-            ON D.OF_ENCLOSURE = E.ID
-            LEFT JOIN (
-                SELECT STRUCT_ID, KIND, SUM(LENGTH) AS LENGTH
-                FROM (
-                    SELECT STRUCT_ID, 1 AS KIND, LENGTH
-                    FROM SYS_OUTWALL_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 2 AS KIND, LENGTH
-                    FROM SYS_INWALL_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 3 AS KIND, LENGTH
-                    FROM SYS_ROOF_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 4 AS KIND, LENGTH
-                    FROM SYS_GROUNDFLOOR_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 5 AS KIND, LENGTH
-                    FROM SYS_MIDDLEFLOOR_MATERIAL
-                    UNION
-                    SELECT STRUCT_ID, 6 AS KIND, LENGTH
-                    FROM SYS_AIRFLOOR_MATERIAL
-                )
-                GROUP BY STRUCT_ID, KIND
-            ) L
-            ON E.CONSTRUCTION = L.STRUCT_ID AND E.KIND = L.KIND
         ) WHERE ID IS NOT NULL -- in case there are no doors
         UNION
         SELECT * FROM (
@@ -649,15 +625,13 @@ const__door_objects <- function(door) {
         return(list(construction = empty, material = empty, glazing = empty))
     }
 
-    construction <- door[,
-        by = "ID",
-        # KIND = -2 distinguishes doors from other construction classes.
-        list(
-            KIND = -2L,
-            name = NAME[[1L]],
-            value = list(c(NAME[[1L]], MATERIAL_NAME))
-        )
-    ]
+    # Door polygons can face either DeST enclosure side, so retain the same
+    # explicit normal and reversed construction stacks used by other layers.
+    construction <- const__layered_constructions(
+        door,
+        "ID",
+        kind = -2L
+    )
 
     list(
         construction = construction,
@@ -794,41 +768,81 @@ const__apply_surface_properties <- function(object, surface) {
         source_layer <- layer
         has_outside <- is.finite(property$OUTSIDE_SOLAR_ABSORPTANCE) &&
             is.finite(property$OUTSIDE_THERMAL_ABSORPTANCE)
-        if (
-            length(layer) == 1L &&
-                has_outside &&
-                (property$OUTSIDE_SOLAR_ABSORPTANCE !=
-                    property$INSIDE_SOLAR_ABSORPTANCE ||
-                    property$OUTSIDE_THERMAL_ABSORPTANCE !=
-                        property$INSIDE_THERMAL_ABSORPTANCE)
-        ) {
-            stop(
-                sprintf(
-                    paste(
-                        "DeST construction '%s' has one material layer but its",
-                        "inside and outside absorptances differ; EnergyPlus cannot",
-                        "represent both values on one Material object."
+        split_single_layer <- length(layer) == 1L &&
+            has_outside &&
+            (property$OUTSIDE_SOLAR_ABSORPTANCE !=
+                property$INSIDE_SOLAR_ABSORPTANCE ||
+                property$OUTSIDE_THERMAL_ABSORPTANCE !=
+                    property$INSIDE_THERMAL_ABSORPTANCE)
+        if (split_single_layer) {
+            # Two half-thickness clones preserve total resistance and heat
+            # capacity while exposing independent material properties.
+            base_name <- source_layer[[1L]]
+            material_index <- which(material$MATERIAL_NAME == base_name)
+            if (length(material_index) != 1L) {
+                stop(
+                    sprintf(
+                        "Could not resolve one base material named '%s'.",
+                        base_name
                     ),
-                    property$BASE_CONSTRUCTION
-                ),
-                call. = FALSE
-            )
-        }
-
-        exposed <- list(list(
-            position = length(layer),
-            solar = property$INSIDE_SOLAR_ABSORPTANCE,
-            thermal = property$INSIDE_THERMAL_ABSORPTANCE
-        ))
-        if (has_outside) {
-            exposed <- c(
-                list(list(
-                    position = 1L,
+                    call. = FALSE
+                )
+            }
+            face_properties <- list(
+                list(
+                    label = "Outside",
                     solar = property$OUTSIDE_SOLAR_ABSORPTANCE,
                     thermal = property$OUTSIDE_THERMAL_ABSORPTANCE
-                )),
-                exposed
+                ),
+                list(
+                    label = "Inside",
+                    solar = property$INSIDE_SOLAR_ABSORPTANCE,
+                    thermal = property$INSIDE_THERMAL_ABSORPTANCE
+                )
             )
+            layer <- character(length(face_properties))
+            for (face_index in seq_along(face_properties)) {
+                face <- face_properties[[face_index]]
+                clone_name <- sprintf(
+                    "%s [DeST %s a%.15g-e%.15g]",
+                    base_name,
+                    face$label,
+                    face$solar,
+                    face$thermal
+                )
+                if (!clone_name %in% material$MATERIAL_NAME) {
+                    clone <- data.table::copy(material[material_index])
+                    clone[, `:=`(
+                        LENGTH = LENGTH / 2.0,
+                        MATERIAL_NAME = clone_name,
+                        SOLAR_ABSORPTANCE = face$solar,
+                        THERMAL_ABSORPTANCE = face$thermal
+                    )]
+                    material <- data.table::rbindlist(
+                        list(material, clone),
+                        use.names = TRUE,
+                        fill = TRUE
+                    )
+                }
+                layer[[face_index]] <- clone_name
+            }
+            exposed <- list()
+        } else {
+            exposed <- list(list(
+                position = length(layer),
+                solar = property$INSIDE_SOLAR_ABSORPTANCE,
+                thermal = property$INSIDE_THERMAL_ABSORPTANCE
+            ))
+            if (has_outside) {
+                exposed <- c(
+                    list(list(
+                        position = 1L,
+                        solar = property$OUTSIDE_SOLAR_ABSORPTANCE,
+                        thermal = property$OUTSIDE_THERMAL_ABSORPTANCE
+                    )),
+                    exposed
+                )
+            }
         }
 
         for (face in exposed) {
@@ -894,14 +908,19 @@ const__apply_surface_properties <- function(object, surface) {
 }
 
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-const__convert <- function(dest, ep, surface = NULL) {
+const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
     if (!db_has_rows(dest, "MAIN_ENCLOSURE")) {
         return(NULL)
     }
 
     source <- const__prepare_layers(dest)
     object <- const__object_tables(source)
-    object <- const__apply_surface_properties(object, surface)
+    property <- data.table::rbindlist(
+        Filter(Negate(is.null), list(surface, subsurface)),
+        use.names = TRUE,
+        fill = TRUE
+    )
+    object <- const__apply_surface_properties(object, property)
     out <- const__assemble_objects(
         dest,
         ep,
@@ -968,7 +987,7 @@ const__is_refraction_glazing <- function(glazing) {
     }
 
     ordinary <- grepl(
-        "普通玻璃|ordinary glass|normal glass|clear glass",
+        "\u666e\u901a\u73bb\u7483|ordinary glass|normal glass|clear glass",
         glazing$MATERIAL_GROUP,
         ignore.case = TRUE
     )

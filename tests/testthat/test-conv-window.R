@@ -36,12 +36,18 @@ test_that("can convert 'WINDOW'", {
     DBI::dbWriteTable(
         dest,
         "SURFACE",
-        data.frame(
-            SURFACE_ID = c(10L, 20L),
-            NAME = c("Outside Face", "Room Wall"),
-            TYPE = c(1L, 0L),
-            AZIMUTH = c(180, 0),
-            TILT = c(90, 90)
+        data.table::data.table(
+            SURFACE_ID = c(10L, 20L, 11L, 21L),
+            NAME = c(
+                "Outside Host",
+                "Room Wall",
+                "Outside Window Face",
+                "Room Window Face"
+            ),
+            TYPE = c(1L, 0L, 1L, 0L),
+            AZIMUTH = c(180, 0, 180, 0),
+            TILT = c(90, 90, 90, 90),
+            VENTILATION_COEF = c(21.6, 1.8, 17.8, 4.5)
         )
     )
     DBI::dbWriteTable(
@@ -67,6 +73,8 @@ test_that("can convert 'WINDOW'", {
         data.frame(
             ID = 200L,
             NAME = "Window A",
+            SIDE1 = 11L,
+            SIDE2 = 21L,
             TYPE = 35L,
             OF_ENCLOSURE = 100L,
             MIDDLE_PLANE = 300L,
@@ -111,15 +119,29 @@ test_that("can convert 'WINDOW'", {
 
     expect_type(window <- window__convert(dest, ep), "list")
     expect_named(window, c("object", "value"))
-    expect_equal(
+    expect_setequal(
         unique(window$object$class_name),
-        "FenestrationSurface:Detailed"
+        c(
+            "FenestrationSurface:Detailed",
+            "SurfaceProperty:ConvectionCoefficients"
+        )
     )
     expect_s3_class(attr(window, "table"), "data.table")
     expect_equal(unique(attr(window, "table")$SURFACE_NAME), "Room Wall")
     expect_equal(unique(attr(window, "table")$CONSTRUCTION), "Double Window")
     expect_equal(attr(window, "table")$POINT_X, c(2, 2, 1, 1))
     expect_equal(attr(window, "table")$POINT_Z, c(3, 1, 1, 3))
+    convection <- window$value[
+        class_name == "SurfaceProperty:ConvectionCoefficients"
+    ]
+    expect_equal(
+        convection[field_name == "Convection Coefficient 1", value_num],
+        4.5
+    )
+    expect_equal(
+        convection[field_name == "Convection Coefficient 2", value_num],
+        17.8
+    )
 
     # A valid aggregate window type replaces the detailed SYS_WINDOW reference
     # while leaving the fenestration geometry and host assignment unchanged.
@@ -162,7 +184,13 @@ test_that("can convert 'WINDOW'", {
         CONSTRUCTION
     )])
 
-    expect_equal(nrow(pair$object), 2L)
+    expect_equal(
+        pair$object[, .N, by = "class_name"][
+            class_name == "FenestrationSurface:Detailed",
+            N
+        ],
+        2L
+    )
     expect_setequal(pair_object$NAME, c("Window A [1]", "Window A [2]"))
     expect_equal(
         pair_object$BOUNDARY_OBJECT[match(
@@ -180,6 +208,19 @@ test_that("can convert 'WINDOW'", {
         unique(pair_object[SIDE == 2L]$CONSTRUCTION),
         "High Performance Window Simple Glazing Construction"
     )
+    pair_convection <- pair$value[
+        class_name == "SurfaceProperty:ConvectionCoefficients"
+    ]
+    expect_setequal(
+        pair_convection[
+            field_name == "Convection Coefficient 1",
+            value_num
+        ],
+        c(17.8, 4.5)
+    )
+    expect_false(any(
+        pair_convection$field_name == "Convection Coefficient 2 Location"
+    ))
 })
 
 test_that("skips window conversion without WINDOW records", {
@@ -215,7 +256,7 @@ test_that("rectangular windows stay intact on an intact host", {
         POINT_Z = c(1, 1, 3, 3)
     )
 
-    split <- window__split_by_surface(window, host)
+    split <- subsurface__split_by_surface(window, host)
 
     expect_equal(data.table::uniqueN(split$OUTPUT_PART_ID), 1L)
     expect_equal(nrow(split), 4L)
@@ -235,14 +276,14 @@ test_that("window clipping rejects invalid host-plane geometry", {
         POINT_Z = c(1, 1, 3, 3)
     )
     expect_error(
-        window__clip_polygon(window, host),
+        subsurface__clip_polygon(window, host),
         "host must be planar and convex"
     )
 
     host[, POINT_Y := 0]
     window[, POINT_Y := 0.001]
     expect_error(
-        window__clip_polygon(window, host),
+        subsurface__clip_polygon(window, host),
         "not coplanar"
     )
 })
@@ -283,7 +324,7 @@ test_that("interzone window pieces use the same canonical partition", {
         SIDE = 2L,
         POINT_NO = 0:3
     )]
-    split <- window__split_by_surface(
+    split <- subsurface__split_by_surface(
         data.table::rbindlist(list(side1, side2)),
         data.table::rbindlist(list(side1_host, side2_host))
     )
@@ -328,12 +369,18 @@ test_that("can convert windows from a real DeST model", {
     conv__update_names(dest)
 
     surface <- attr(surface__convert(dest, ep), "table")
-    window <- window__convert(dest, ep, surface)
+    expect_warning(
+        window <- window__convert(dest, ep, surface),
+        class = "destep_unsupported_solar_distribution"
+    )
     tab <- attr(window, "table")
 
-    expect_equal(
+    expect_setequal(
         unique(window$object$class_name),
-        "FenestrationSurface:Detailed"
+        c(
+            "FenestrationSurface:Detailed",
+            "SurfaceProperty:ConvectionCoefficients"
+        )
     )
     expected <- DBI::dbGetQuery(
         dest,
