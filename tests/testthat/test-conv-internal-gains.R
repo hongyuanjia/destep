@@ -3,62 +3,110 @@ test_that("can convert internal gains", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbWriteTable(dest, "ROOM", data.frame(
-        ID = 1L,
-        NAME = "Room 101",
-        TYPE = 1L
-    ))
-    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = 10L,
-        NAME = "Always On"
-    ))
-    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(
-        DIST_MODE_ID = c(2L, 3L, 4L),
-        DIST_AIR = c(0.5, 0.3, 0.7)
-    ))
-    DBI::dbWriteTable(dest, "ROOM_TYPE_DATA", data.frame(
-        ID = 1L,
-        NAME = "Dense Office",
-        O_SCHEDULE = 10L,
-        O_MAXNUMBER = 0.15,
-        O_MINNUMBER = 0.05,
-        O_HEAT_PER_PERSON = 61,
-        O_DAMP_PER_PERSON = 109,
-        O_MIN_REQUIRE_FRESH_AIR = 30,
-        O_PER_AREA = 1L,
-        O_DIST_MODE = 2L,
-        L_SCHEDULE = 10L,
-        L_MAXPOWER = 12,
-        L_MINPOWER = 2,
-        L_HEAT_RATE = 0.9,
-        L_PER_AREA = 1L,
-        L_DIST_MODE = 3L,
-        E_SCHEDULE = 10L,
-        E_MAXPOWER = 20,
-        E_MINPOWER = 0,
-        E_MAX_HUM = 0,
-        E_MIN_HUM = 0,
-        E_PER_AREA = 1L,
-        E_DIST_MODE = 4L
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(
+            ID = 1L,
+            NAME = "Room 101",
+            TYPE = 1L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SCHEDULE_YEAR",
+        data.frame(
+            SCHEDULE_ID = 10L,
+            NAME = "Always On"
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "DIST_MODE",
+        data.frame(
+            DIST_MODE_ID = c(2L, 3L, 4L),
+            DIST_AIR = c(0.5, 0.3, 0.7)
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_TYPE_DATA",
+        data.frame(
+            ID = 1L,
+            NAME = "Dense Office",
+            O_SCHEDULE = 10L,
+            O_MAXNUMBER = 0.15,
+            O_MINNUMBER = 0.05,
+            O_HEAT_PER_PERSON = 61,
+            O_DAMP_PER_PERSON = 109,
+            O_MIN_REQUIRE_FRESH_AIR = 30,
+            O_PER_AREA = 1L,
+            O_DIST_MODE = 2L,
+            L_SCHEDULE = 10L,
+            L_MAXPOWER = 12,
+            L_MINPOWER = 2,
+            L_HEAT_RATE = 0.9,
+            L_PER_AREA = 1L,
+            L_DIST_MODE = 3L,
+            E_SCHEDULE = 10L,
+            E_MAXPOWER = 20,
+            E_MINPOWER = 0,
+            E_MAX_HUM = 0,
+            E_MIN_HUM = 0,
+            E_PER_AREA = 1L,
+            E_DIST_MODE = 4L
+        )
+    )
     # Keep conflicting drawing-marker values in the fixture so the assertions
     # below prove that ROOM_TYPE_DATA, rather than these rows, controls Calload.
-    DBI::dbWriteTable(dest, "OCCUPANT_GAINS", data.frame(
-        GAIN_ID = 101L, NAME = "Marker People", OF_ROOM = 1L,
-        SCHEDULE = 10L, PER_AREA = 1L, MAXNUMBER = 0.2,
-        MINNUMBER = 0, HEAT_PER_PERSON = 40, DAMP_PER_PERSON = 0.1,
-        MIN_REQUIRE_FRESH_AIR = 25, DIST_MODE = 2L
-    ))
-    DBI::dbWriteTable(dest, "LIGHT_GAINS", data.frame(
-        GAIN_ID = 102L, NAME = "Marker Lights", OF_ROOM = 1L,
-        SCHEDULE = 10L, PER_AREA = 1L, MAXPOWER = 10, MINPOWER = 1,
-        HEAT_RATE = 0.9, DIST_MODE = 3L
-    ))
-    DBI::dbWriteTable(dest, "EQUIPMENT_GAINS", data.frame(
-        GAIN_ID = 103L, NAME = "Marker Equipment", OF_ROOM = 1L,
-        SCHEDULE = 10L, PER_AREA = 1L, MAXPOWER = 40, MINPOWER = 0,
-        MAX_HUM = 0, MIN_HUM = 0, DIST_MODE = 4L
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "OCCUPANT_GAINS",
+        data.frame(
+            GAIN_ID = 101L,
+            NAME = "Marker People",
+            OF_ROOM = 1L,
+            SCHEDULE = 10L,
+            PER_AREA = 1L,
+            MAXNUMBER = 0.2,
+            MINNUMBER = 0,
+            HEAT_PER_PERSON = 40,
+            DAMP_PER_PERSON = 0.1,
+            MIN_REQUIRE_FRESH_AIR = 25,
+            DIST_MODE = 2L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "LIGHT_GAINS",
+        data.frame(
+            GAIN_ID = 102L,
+            NAME = "Marker Lights",
+            OF_ROOM = 1L,
+            SCHEDULE = 10L,
+            PER_AREA = 1L,
+            MAXPOWER = 10,
+            MINPOWER = 1,
+            HEAT_RATE = 0.9,
+            DIST_MODE = 3L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "EQUIPMENT_GAINS",
+        data.frame(
+            GAIN_ID = 103L,
+            NAME = "Marker Equipment",
+            OF_ROOM = 1L,
+            SCHEDULE = 10L,
+            PER_AREA = 1L,
+            MAXPOWER = 40,
+            MINPOWER = 0,
+            MAX_HUM = 0,
+            MIN_HUM = 0,
+            DIST_MODE = 4L
+        )
+    )
 
     gains <- internal_gains__convert(dest, ep)
 
@@ -173,18 +221,24 @@ test_that("internal gains resolve target zone-reference fields", {
 
 test_that("rejects internal gain minimum values above their maximum", {
     people <- data.frame(
-        NAME = "Invalid People", SCHEDULE_NAME = "Always On",
-        METHOD = "People", NUMBER_OF_PEOPLE = 1,
+        NAME = "Invalid People",
+        SCHEDULE_NAME = "Always On",
+        METHOD = "People",
+        NUMBER_OF_PEOPLE = 1,
         MIN_NUMBER_OF_PEOPLE = 2
     )
     lights <- data.frame(
-        NAME = "Invalid Lights", SCHEDULE_NAME = "Always On",
-        METHOD = "LightingLevel", LIGHTING_LEVEL = 5,
+        NAME = "Invalid Lights",
+        SCHEDULE_NAME = "Always On",
+        METHOD = "LightingLevel",
+        LIGHTING_LEVEL = 5,
         MIN_LIGHTING_LEVEL = 6
     )
     equipment <- data.frame(
-        NAME = "Invalid Equipment", SCHEDULE_NAME = "Always On",
-        METHOD = "EquipmentLevel", DESIGN_LEVEL = 10,
+        NAME = "Invalid Equipment",
+        SCHEDULE_NAME = "Always On",
+        METHOD = "EquipmentLevel",
+        DESIGN_LEVEL = 10,
         MIN_DESIGN_LEVEL = 11
     )
 
@@ -193,12 +247,20 @@ test_that("rejects internal gain minimum values above their maximum", {
         "Invalid People.*minimum.*exceeds maximum"
     )
     expect_error(
-        internal_gains__light_values(lights, 1L, "watts_per_floor_area", "Minimum"),
+        internal_gains__light_values(
+            lights,
+            1L,
+            "watts_per_floor_area",
+            "Minimum"
+        ),
         "Invalid Lights.*minimum.*exceeds maximum"
     )
     expect_error(
         internal_gains__equipment_values(
-            equipment, 1L, "watts_per_floor_area", "Minimum"
+            equipment,
+            1L,
+            "watts_per_floor_area",
+            "Minimum"
         ),
         "Invalid Equipment.*minimum.*exceeds maximum"
     )
@@ -209,29 +271,45 @@ test_that("nonzero equipment moisture is rejected until it can be mapped", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbWriteTable(dest, "ROOM", data.frame(
-        ID = 1L,
-        NAME = "Room 101",
-        TYPE = 1L
-    ))
-    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = 10L,
-        NAME = "Always On"
-    ))
-    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(
-        DIST_MODE_ID = 4L,
-        DIST_AIR = 0.7
-    ))
-    DBI::dbWriteTable(dest, "ROOM_TYPE_DATA", data.frame(
-        ID = 1L,
-        E_SCHEDULE = 10L,
-        E_PER_AREA = 0L,
-        E_MAXPOWER = 40,
-        E_MINPOWER = 0,
-        E_MAX_HUM = 0.2,
-        E_MIN_HUM = 0,
-        E_DIST_MODE = 4L
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(
+            ID = 1L,
+            NAME = "Room 101",
+            TYPE = 1L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SCHEDULE_YEAR",
+        data.frame(
+            SCHEDULE_ID = 10L,
+            NAME = "Always On"
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "DIST_MODE",
+        data.frame(
+            DIST_MODE_ID = 4L,
+            DIST_AIR = 0.7
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_TYPE_DATA",
+        data.frame(
+            ID = 1L,
+            E_SCHEDULE = 10L,
+            E_PER_AREA = 0L,
+            E_MAXPOWER = 40,
+            E_MINPOWER = 0,
+            E_MAX_HUM = 0.2,
+            E_MIN_HUM = 0,
+            E_DIST_MODE = 4L
+        )
+    )
 
     expect_error(
         internal_gains__convert_electric_equipment(dest, ep),
@@ -248,10 +326,13 @@ test_that("can convert internal gains from a real DeST model", {
 
     path_tmp <- tempfile(fileext = ".sql")
     dest <- DBI::dbConnect(RSQLite::SQLite(), path_tmp)
-    on.exit({
-        DBI::dbDisconnect(dest)
-        unlink(path_tmp)
-    }, add = TRUE)
+    on.exit(
+        {
+            DBI::dbDisconnect(dest)
+            unlink(path_tmp)
+        },
+        add = TRUE
+    )
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
@@ -278,8 +359,14 @@ test_that("can convert internal gains from a real DeST model", {
         "
     )
 
-    expect_equal(sum(gains$object$class_name == "People"), expected$PEOPLE[[1L]])
-    expect_equal(sum(gains$object$class_name == "Lights"), expected$LIGHTS[[1L]])
+    expect_equal(
+        sum(gains$object$class_name == "People"),
+        expected$PEOPLE[[1L]]
+    )
+    expect_equal(
+        sum(gains$object$class_name == "Lights"),
+        expected$LIGHTS[[1L]]
+    )
     expect_equal(
         sum(gains$object$class_name == "ElectricEquipment"),
         expected$EQUIPMENT[[1L]]

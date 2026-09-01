@@ -2,15 +2,21 @@
 # interpolated in 3-D so the result stays on the original DeST middle plane even
 # when the stable clipping projection omits a non-constant coordinate.
 window__clip_polygon <- function(
-    window, host, profile = eplus_geom__profile()
+    window,
+    host,
+    profile = eplus_geom__profile()
 ) {
     tolerance <- profile$intersection
     distance_tolerance <- profile$coordinate_distance
     boundary_inset <- profile$boundary_inset_distance
     frame <- geom__polygon_frame(host, profile$normal_magnitude)
-    if (!frame$valid) geom__unit_normal(host, profile$normal_magnitude)
-    if (frame$planarity_error > profile$planarity_distance ||
-        !geom__polygon_is_convex(host, profile$angle)) {
+    if (!frame$valid) {
+        geom__unit_normal(host, profile$normal_magnitude)
+    }
+    if (
+        frame$planarity_error > profile$planarity_distance ||
+            !geom__polygon_is_convex(host, profile$angle)
+    ) {
         stop("A converted EnergyPlus window host must be planar and convex.")
     }
     normal <- frame$normal
@@ -31,11 +37,14 @@ window__clip_polygon <- function(
         edge <- clip_end - clip_start
         segment <- end[4:5] - start[4:5]
         denominator <- edge[[1L]] * segment[[2L]] - edge[[2L]] * segment[[1L]]
-        if (abs(denominator) <= tolerance) return(start)
+        if (abs(denominator) <= tolerance) {
+            return(start)
+        }
         relative <- start[4:5] - clip_start
-        position <- -(
-            edge[[1L]] * relative[[2L]] - edge[[2L]] * relative[[1L]]
-        ) / denominator
+        position <- -(edge[[1L]] *
+            relative[[2L]] -
+            edge[[2L]] * relative[[1L]]) /
+            denominator
         start + position * (end - start)
     }
 
@@ -43,37 +52,59 @@ window__clip_polygon <- function(
     # by surface conversion is either one convex face or one triangle.
     host_next <- c(seq.int(2L, nrow(host_xy)), 1L)
     for (edge_index in seq_len(nrow(host_xy))) {
-        if (nrow(value) == 0L) break
+        if (nrow(value) == 0L) {
+            break
+        }
         clip_start <- host_xy[edge_index, ]
         clip_end <- host_xy[host_next[[edge_index]], ]
         input <- value
         value <- matrix(numeric(), nrow = 0L, ncol = 5L)
         previous <- input[nrow(input), ]
         previous_inside <- geom__cross_2d(
-            clip_start, clip_end, previous[4:5]
-        ) >= -tolerance
+            clip_start,
+            clip_end,
+            previous[4:5]
+        ) >=
+            -tolerance
         for (index in seq_len(nrow(input))) {
             current <- input[index, ]
             current_inside <- geom__cross_2d(
-                clip_start, clip_end, current[4:5]
-            ) >= -tolerance
+                clip_start,
+                clip_end,
+                current[4:5]
+            ) >=
+                -tolerance
             if (current_inside) {
                 if (!previous_inside) {
-                    value <- rbind(value, intersection(
-                        previous, current, clip_start, clip_end
-                    ))
+                    value <- rbind(
+                        value,
+                        intersection(
+                            previous,
+                            current,
+                            clip_start,
+                            clip_end
+                        )
+                    )
                 }
                 value <- rbind(value, current)
             } else if (previous_inside) {
-                value <- rbind(value, intersection(
-                    previous, current, clip_start, clip_end
-                ))
+                value <- rbind(
+                    value,
+                    intersection(
+                        previous,
+                        current,
+                        clip_start,
+                        clip_end
+                    )
+                )
             }
             previous <- current
             previous_inside <- current_inside
         }
     }
-    if (nrow(value) < 3L) return(NULL)
+    if (nrow(value) < 3L) {
+        return(NULL)
+    }
 
     # The reference EnergyPlus profile's CHKSBS test treats some vertices on
     # a triangulated host boundary as outside even when the analytical distance
@@ -84,22 +115,32 @@ window__clip_polygon <- function(
     host_centroid <- colMeans(as.matrix(
         host[, .(POINT_X, POINT_Y, POINT_Z)]
     ))
-    boundary <- vapply(seq_len(nrow(value)), function(index) {
-        any(vapply(seq_len(nrow(host_xy)), function(edge_index) {
-            edge_end <- host_xy[host_next[[edge_index]], ]
-            edge <- edge_end - host_xy[edge_index, ]
-            abs(geom__cross_2d(
-                host_xy[edge_index, ],
-                edge_end,
-                value[index, 4:5]
-            )) / sqrt(sum(edge ^ 2)) <= tolerance
-        }, logical(1L)))
-    }, logical(1L))
+    boundary <- vapply(
+        seq_len(nrow(value)),
+        function(index) {
+            any(vapply(
+                seq_len(nrow(host_xy)),
+                function(edge_index) {
+                    edge_end <- host_xy[host_next[[edge_index]], ]
+                    edge <- edge_end - host_xy[edge_index, ]
+                    abs(geom__cross_2d(
+                        host_xy[edge_index, ],
+                        edge_end,
+                        value[index, 4:5]
+                    )) /
+                        sqrt(sum(edge^2)) <=
+                        tolerance
+                },
+                logical(1L)
+            ))
+        },
+        logical(1L)
+    )
     if (any(boundary)) {
         for (index in which(boundary)) {
             direction <- host_centroid - value[index, 1:3]
             value[index, 1:3] <- value[index, 1:3] +
-                boundary_inset * direction / sqrt(sum(direction ^ 2))
+                boundary_inset * direction / sqrt(sum(direction^2))
         }
         value[, 4:5] <- value[, projection, drop = FALSE]
     }
@@ -109,11 +150,19 @@ window__clip_polygon <- function(
     # processing and are rejected instead of becoming degenerate windows.
     repeat {
         following <- seq_len(nrow(value)) %% nrow(value) + 1L
-        short <- which(sqrt(rowSums(
-            (value[, 1:3, drop = FALSE] - value[following, 1:3, drop = FALSE]) ^ 2
-        )) < distance_tolerance)
-        if (length(short) == 0L) break
-        if (nrow(value) <= 3L) return(NULL)
+        short <- which(
+            sqrt(rowSums(
+                (value[, 1:3, drop = FALSE] -
+                    value[following, 1:3, drop = FALSE])^2
+            )) <
+                distance_tolerance
+        )
+        if (length(short) == 0L) {
+            break
+        }
+        if (nrow(value) <= 3L) {
+            return(NULL)
+        }
         value <- value[-following[short[[1L]]], , drop = FALSE]
     }
 
@@ -123,8 +172,12 @@ window__clip_polygon <- function(
         POINT_Z = value[, 3L]
     )
     out[, POINT_NO := seq_len(.N) - 1L]
-    if (!geom__polygon_frame(out, profile$normal_magnitude)$valid ||
-        geom__polygon_area(out) <= profile$area) return(NULL)
+    if (
+        !geom__polygon_frame(out, profile$normal_magnitude)$valid ||
+            geom__polygon_area(out) <= profile$area
+    ) {
+        return(NULL)
+    }
     out
 }
 
@@ -132,76 +185,94 @@ window__clip_polygon <- function(
 # same deterministic part number is used on both sides of an interzone opening,
 # allowing reciprocal FenestrationSurface references after clipping.
 window__split_by_surface <- function(
-    window, surface = NULL, profile = eplus_geom__profile()
+    window,
+    surface = NULL,
+    profile = eplus_geom__profile()
 ) {
     expected <- unique(window[, .(OUTPUT_ID, ORIGINAL_NAME)])
     if (is.null(surface)) {
         window[, PART := 1L]
     } else {
         coordinate_columns <- geom__coordinate_columns()
-        window <- window[, {
-            source <- data.table::copy(.SD)
-            host <- surface[ID == source$SURFACE_ID[[1L]]]
-            if (nrow(host) == 0L) {
-                stop(sprintf(
-                    "Could not find the EnergyPlus host for DeST window '%s'.",
-                    source$ORIGINAL_NAME[[1L]]
-                ))
-            }
-            part <- lapply(unique(host$PART), function(part_id) {
-                host_part <- host[PART == part_id]
-                clipped <- window__clip_polygon(source, host_part, profile)
-                if (is.null(clipped)) return(NULL)
-                # Canonical winding and start coordinates make reciprocal window
-                # sides choose the same diagonal and subpart numbering.
-                clipped <- geom__canonicalize_polygon(
-                    clipped, profile$normal_magnitude
-                )
-                # Preserve rectangles as one EnergyPlus subsurface. Other
-                # polygons are triangulated because EnergyPlus may replace a
-                # four-sided non-rectangle with an equivalent rectangle.
-                clipped_part <- if (nrow(clipped) <= 3L ||
-                    geom__polygon_is_rectangle(
-                        clipped,
-                        angle_tolerance = profile$angle,
-                        distance_tolerance = profile$coordinate_distance,
-                        planarity_tolerance = profile$planarity_distance
-                    )) {
-                    list(clipped)
-                } else {
-                    if (!geom__polygon_is_convex(clipped, profile$angle)) {
-                        stop(paste(
-                            "DeST windows with concave polygons are not",
-                            "supported by EnergyPlus window conversion."
-                        ))
-                    }
-                    # The clipped subject and host are convex, so a canonical
-                    # first-vertex fan stays inside the polygon and is identical
-                    # for reciprocal room-side copies.
-                    lapply(seq.int(2L, nrow(clipped) - 1L), function(index) {
-                        value <- data.table::copy(
-                            clipped[c(1L, index, index + 1L)]
-                        )
-                        value[, POINT_NO := 0:2]
-                        value
-                    })
+        window <- window[,
+            {
+                source <- data.table::copy(.SD)
+                host <- surface[ID == source$SURFACE_ID[[1L]]]
+                if (nrow(host) == 0L) {
+                    stop(sprintf(
+                        "Could not find the EnergyPlus host for DeST window '%s'.",
+                        source$ORIGINAL_NAME[[1L]]
+                    ))
                 }
-                metadata <- source[1L,
-                    setdiff(names(source), coordinate_columns), with = FALSE
-                ]
-                data.table::rbindlist(lapply(seq_along(clipped_part), function(index) {
-                    value <- clipped_part[[index]]
-                    part_metadata <- data.table::copy(metadata)
-                    part_metadata[, `:=`(
-                        PART = part_id,
-                        SUBPART = index,
-                        SURFACE_NAME = host_part$NAME[[1L]]
-                    )]
-                    cbind(part_metadata[rep(1L, nrow(value))], value)
-                }))
-            })
-            data.table::rbindlist(part, fill = TRUE)
-        }, by = "OUTPUT_ID"]
+                part <- lapply(unique(host$PART), function(part_id) {
+                    host_part <- host[PART == part_id]
+                    clipped <- window__clip_polygon(source, host_part, profile)
+                    if (is.null(clipped)) {
+                        return(NULL)
+                    }
+                    # Canonical winding and start coordinates make reciprocal window
+                    # sides choose the same diagonal and subpart numbering.
+                    clipped <- geom__canonicalize_polygon(
+                        clipped,
+                        profile$normal_magnitude
+                    )
+                    # Preserve rectangles as one EnergyPlus subsurface. Other
+                    # polygons are triangulated because EnergyPlus may replace a
+                    # four-sided non-rectangle with an equivalent rectangle.
+                    clipped_part <- if (
+                        nrow(clipped) <= 3L ||
+                            geom__polygon_is_rectangle(
+                                clipped,
+                                angle_tolerance = profile$angle,
+                                distance_tolerance = profile$coordinate_distance,
+                                planarity_tolerance = profile$planarity_distance
+                            )
+                    ) {
+                        list(clipped)
+                    } else {
+                        if (!geom__polygon_is_convex(clipped, profile$angle)) {
+                            stop(paste(
+                                "DeST windows with concave polygons are not",
+                                "supported by EnergyPlus window conversion."
+                            ))
+                        }
+                        # The clipped subject and host are convex, so a canonical
+                        # first-vertex fan stays inside the polygon and is identical
+                        # for reciprocal room-side copies.
+                        lapply(
+                            seq.int(2L, nrow(clipped) - 1L),
+                            function(index) {
+                                value <- data.table::copy(
+                                    clipped[c(1L, index, index + 1L)]
+                                )
+                                value[, POINT_NO := 0:2]
+                                value
+                            }
+                        )
+                    }
+                    metadata <- source[
+                        1L,
+                        setdiff(names(source), coordinate_columns),
+                        with = FALSE
+                    ]
+                    data.table::rbindlist(lapply(
+                        seq_along(clipped_part),
+                        function(index) {
+                            value <- clipped_part[[index]]
+                            part_metadata <- data.table::copy(metadata)
+                            part_metadata[, `:=`(
+                                PART = part_id,
+                                SUBPART = index,
+                                SURFACE_NAME = host_part$NAME[[1L]]
+                            )]
+                            cbind(part_metadata[rep(1L, nrow(value))], value)
+                        }
+                    ))
+                })
+                data.table::rbindlist(part, fill = TRUE)
+            },
+            by = "OUTPUT_ID"
+        ]
     }
 
     # A window completely outside its converted host indicates inconsistent
@@ -215,26 +286,32 @@ window__split_by_surface <- function(
         ))
     }
 
-    if (!"SUBPART" %in% names(window)) window[, SUBPART := 1L]
+    if (!"SUBPART" %in% names(window)) {
+        window[, SUBPART := 1L]
+    }
     data.table::setorderv(window, c("OUTPUT_ID", "PART", "SUBPART", "POINT_NO"))
     window[, PIECE := data.table::rleid(PART, SUBPART), by = "OUTPUT_ID"]
     window[, PART_COUNT := data.table::uniqueN(PIECE), by = "OUTPUT_ID"]
-    window[, NAME := data.table::fcase(
-        INTERZONE & PART_COUNT > 1L,
-            sprintf("%s [Side %d Part %d]", ORIGINAL_NAME, SIDE, PIECE),
-        INTERZONE,
-            sprintf("%s [%d]", ORIGINAL_NAME, SIDE),
-        PART_COUNT > 1L,
-            sprintf("%s [Part %d]", ORIGINAL_NAME, PIECE),
-        default = ORIGINAL_NAME
-    )]
-    window[, BOUNDARY_OBJECT := data.table::fcase(
-        INTERZONE & PART_COUNT > 1L,
-            sprintf("%s [Side %d Part %d]", ORIGINAL_NAME, 3L - SIDE, PIECE),
-        INTERZONE,
-            sprintf("%s [%d]", ORIGINAL_NAME, 3L - SIDE),
-        default = NA_character_
-    )]
+    window[,
+        NAME := data.table::fcase(
+            INTERZONE & PART_COUNT > 1L                                 ,
+            sprintf("%s [Side %d Part %d]", ORIGINAL_NAME, SIDE, PIECE) ,
+            INTERZONE                                                   ,
+            sprintf("%s [%d]", ORIGINAL_NAME, SIDE)                     ,
+            PART_COUNT > 1L                                             ,
+            sprintf("%s [Part %d]", ORIGINAL_NAME, PIECE)               ,
+            default = ORIGINAL_NAME
+        )
+    ]
+    window[,
+        BOUNDARY_OBJECT := data.table::fcase(
+            INTERZONE & PART_COUNT > 1L                                      ,
+            sprintf("%s [Side %d Part %d]", ORIGINAL_NAME, 3L - SIDE, PIECE) ,
+            INTERZONE                                                        ,
+            sprintf("%s [%d]", ORIGINAL_NAME, 3L - SIDE)                     ,
+            default = NA_character_
+        )
+    ]
     window[, OUTPUT_PART_ID := sprintf("%s-%d", OUTPUT_ID, PIECE)]
     data.table::setorderv(window, c("OUTPUT_ID", "PIECE", "POINT_NO"))
     window
@@ -253,7 +330,9 @@ window__expand_side <- function(window, side) {
     tilt <- sprintf("SIDE%d_TILT", side)
 
     value <- data.table::copy(window[!get(surface_type) %in% c(1L, 2L)])
-    if (nrow(value) == 0L) return(value)
+    if (nrow(value) == 0L) {
+        return(value)
+    }
     value[, `:=`(
         ORIGINAL_NAME = NAME,
         SIDE = side,
@@ -352,41 +431,49 @@ window__source_table <- function(dest) {
 window__object_values <- function(window) {
     window[,
         by = "OUTPUT_PART_ID",
-        list(value = list(c(
-            list(
-                # 01: Name
-                name = NAME[[1L]],
-                # 02: Surface Type
-                surface_type = "Window",
-                # 03: Construction Name
-                construction_name = CONSTRUCTION[[1L]],
-                # 04: Building Surface Name
-                building_surface_name = SURFACE_NAME[[1L]],
-                # 05: Outside Boundary Condition Object
-                outside_boundary_condition_object = if (!is.na(BOUNDARY_OBJECT[[1L]])) {
-                    BOUNDARY_OBJECT[[1L]]
-                },
-                # 06: View Factor to Ground
-                view_factor_to_ground = NULL,
-                # 07: Frame and Divider Name
-                frame_and_divider_name = NULL,
-                # 08: Multiplier
-                multiplier = NULL,
-                # 09: Number of Vertices
-                number_of_vertices = max(POINT_NO) + 1L
-            ),
-            # Vertices
-            geom__eplus_vertex_values(.SD)
-        )))
+        list(
+            value = list(c(
+                list(
+                    # 01: Name
+                    name = NAME[[1L]],
+                    # 02: Surface Type
+                    surface_type = "Window",
+                    # 03: Construction Name
+                    construction_name = CONSTRUCTION[[1L]],
+                    # 04: Building Surface Name
+                    building_surface_name = SURFACE_NAME[[1L]],
+                    # 05: Outside Boundary Condition Object
+                    outside_boundary_condition_object = if (
+                        !is.na(BOUNDARY_OBJECT[[1L]])
+                    ) {
+                        BOUNDARY_OBJECT[[1L]]
+                    },
+                    # 06: View Factor to Ground
+                    view_factor_to_ground = NULL,
+                    # 07: Frame and Divider Name
+                    frame_and_divider_name = NULL,
+                    # 08: Multiplier
+                    multiplier = NULL,
+                    # 09: Number of Vertices
+                    number_of_vertices = max(POINT_NO) + 1L
+                ),
+                # Vertices
+                geom__eplus_vertex_values(.SD)
+            ))
+        )
     ]$value
 }
 
 # WINDOW -> FenestrationSurface:Detailed
 window__convert <- function(
-    dest, ep, surface = NULL,
+    dest,
+    ep,
+    surface = NULL,
     geometry_profile = eplus_geom__profile(ep$version())
 ) {
-    if (!db_has_rows(dest, "WINDOW")) return(NULL)
+    if (!db_has_rows(dest, "WINDOW")) {
+        return(NULL)
+    }
 
     # TODO: Does DeST support polygon windows other than rectangles?
     window <- window__source_table(dest)
@@ -406,23 +493,32 @@ window__convert <- function(
     # Use the same DeST direction metadata as the parent surface so a window
     # cannot silently face into its zone when enclosure side ordering varies.
     south_direction <- geom__south_direction(dest)
-    window <- window[
-        , geom__orient_surface_polygon(
-            .SD, south_direction, geometry_profile
-        ), by = "OUTPUT_ID"
+    window <- window[,
+        geom__orient_surface_polygon(
+            .SD,
+            south_direction,
+            geometry_profile
+        ),
+        by = "OUTPUT_ID"
     ]
     window <- window__split_by_surface(window, surface, geometry_profile)
-    window <- window[
-        , geom__orient_surface_polygon(
-            .SD, south_direction, geometry_profile
-        ), by = "OUTPUT_PART_ID"
+    window <- window[,
+        geom__orient_surface_polygon(
+            .SD,
+            south_direction,
+            geometry_profile
+        ),
+        by = "OUTPUT_PART_ID"
     ]
     assert_unique_name(window$NAME[window$POINT_NO == 0L], "window")
 
     value <- window__object_values(window)
 
     out <- conv__add_objects(
-        dest, ep, "FenestrationSurface:Detailed", value
+        dest,
+        ep,
+        "FenestrationSurface:Detailed",
+        value
     )
 
     attr(out, "table") <- window

@@ -31,9 +31,17 @@ test_that("can convert 'BuildingSurface:Detailed'", {
         by = ENCLOSURE_ID
     ]
     expect_gt(nrow(interior_wall), 0L)
-    expect_true(all(interior_wall[, .(
-        RECIPROCAL = identical(sort(unique(HAS_REVERSE)), c(FALSE, TRUE))
-    ), by = ENCLOSURE_ID]$RECIPROCAL))
+    expect_true(all(
+        interior_wall[,
+            .(
+                RECIPROCAL = identical(
+                    sort(unique(HAS_REVERSE)),
+                    c(FALSE, TRUE)
+                )
+            ),
+            by = ENCLOSURE_ID
+        ]$RECIPROCAL
+    ))
     # DeST inner-wall layers ascend from SIDE1 to SIDE2. EnergyPlus lists each
     # room-side construction outside-to-inside, so SIDE1 must receive the
     # reverse stack and SIDE2 must retain the source stack.
@@ -57,12 +65,14 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     expect_equal(nrow(inside), data.table::uniqueN(table$OUTPUT_ID))
     expect_true(all(inside$value_chr == "Inside"))
     expect_equal(
-        nrow(outside), data.table::uniqueN(table[BOUNDARY == "Outdoors"]$OUTPUT_ID)
+        nrow(outside),
+        data.table::uniqueN(table[BOUNDARY == "Outdoors"]$OUTPUT_ID)
     )
     expect_true(all(outside$value_chr == "Outside"))
     expect_equal(
         unique(convection[
-            field_name == "Convection Coefficient 2", value_num
+            field_name == "Convection Coefficient 2",
+            value_num
         ]),
         23.3,
         tolerance = 1e-6
@@ -91,10 +101,12 @@ test_that("maps DeST surface coefficients by room-side boundary semantics", {
     # Interzone outside faces are the peer's room-side faces, not the raw peer
     # columns inherited through later geometry rewiring.
     expect_equal(
-        mapped[NAME == "Partition A", OUTSIDE_SOLAR_ABSORPTANCE], 0.60
+        mapped[NAME == "Partition A", OUTSIDE_SOLAR_ABSORPTANCE],
+        0.60
     )
     expect_equal(
-        mapped[NAME == "Partition B", OUTSIDE_THERMAL_ABSORPTANCE], 0.80
+        mapped[NAME == "Partition B", OUTSIDE_THERMAL_ABSORPTANCE],
+        0.80
     )
     expect_match(mapped[NAME == "Exterior", CONSTRUCTION], "o-a0.55-e0.85")
     expect_equal(convection[[1L]]$convection_coefficient_2, 23.3)
@@ -178,10 +190,12 @@ test_that("maps DeST thermal-emissivity limits to valid EnergyPlus values", {
 
 test_that("surface construction clones preserve reciprocal layer order", {
     surface <- data.table::data.table(
-        OUTPUT_ID = c("a", "b"), NAME = c("A", "B"),
+        OUTPUT_ID = c("a", "b"),
+        NAME = c("A", "B"),
         KIND_ENCLOSURE = 2L,
         CONSTRUCTION = c("Partition", "Partition [Reverse]"),
-        BOUNDARY = "Surface", BOUNDARY_OBJECT = c("B", "A"),
+        BOUNDARY = "Surface",
+        BOUNDARY_OBJECT = c("B", "A"),
         INSIDE_SOLAR_ABSORPTANCE = c(0.40, 0.60),
         INSIDE_THERMAL_ABSORPTANCE = c(0.80, 0.75),
         INSIDE_CONVECTION_COEFFICIENT = 3.5,
@@ -191,7 +205,8 @@ test_that("surface construction clones preserve reciprocal layer order", {
     )
     mapped <- surface_property__assign_constructions(surface)
     material <- data.table::data.table(
-        MATERIAL_ID = 1:3, LENGTH = 100,
+        MATERIAL_ID = 1:3,
+        LENGTH = 100,
         MATERIAL_NAME = c("Outer", "Core", "Inner"),
         MATERIAL_CONDUCTIVITY = 1.0,
         MATERIAL_DENSITY = 1000,
@@ -201,7 +216,8 @@ test_that("surface construction clones preserve reciprocal layer order", {
         VISIBLE_ABSORPTANCE = 0.7
     )
     construction <- data.table::data.table(
-        ID = 1L, KIND = 2L,
+        ID = 1L,
+        KIND = 2L,
         name = c("Partition", "Partition [Reverse]"),
         value = list(
             c("Partition", "Outer", "Core", "Inner"),
@@ -210,7 +226,8 @@ test_that("surface construction clones preserve reciprocal layer order", {
     )
 
     converted <- const__apply_surface_properties(
-        list(material = material, construction = construction), mapped
+        list(material = material, construction = construction),
+        mapped
     )
     forward_name <- mapped[NAME == "A", CONSTRUCTION]
     reverse_name <- mapped[NAME == "B", CONSTRUCTION]
@@ -256,28 +273,40 @@ test_that("surface polygon simplification removes only redundant vertices", {
 test_that("surface polygons start at EnergyPlus's declared upper-left corner", {
     polygon <- list(
         east = rbind(
-            c(8, 4.5, 0.2), c(8, 4.5, 2.2),
-            c(8, 1.5, 2.2), c(8, 1.5, 0.2)
+            c(8, 4.5, 0.2),
+            c(8, 4.5, 2.2),
+            c(8, 1.5, 2.2),
+            c(8, 1.5, 0.2)
         ),
         west = rbind(
-            c(0, 1.5, 0.2), c(0, 1.5, 2.2),
-            c(0, 4.5, 2.2), c(0, 4.5, 0.2)
+            c(0, 1.5, 0.2),
+            c(0, 1.5, 2.2),
+            c(0, 4.5, 2.2),
+            c(0, 4.5, 0.2)
         ),
         north = rbind(
-            c(0, 6, 0), c(0, 6, 2.7),
-            c(8, 6, 2.7), c(8, 6, 0)
+            c(0, 6, 0),
+            c(0, 6, 2.7),
+            c(8, 6, 2.7),
+            c(8, 6, 0)
         ),
         south = rbind(
-            c(8, 0, 0), c(8, 0, 2.7),
-            c(0, 0, 2.7), c(0, 0, 0)
+            c(8, 0, 0),
+            c(8, 0, 2.7),
+            c(0, 0, 2.7),
+            c(0, 0, 0)
         ),
         roof = rbind(
-            c(8, 0, 2.7), c(8, 6, 2.7),
-            c(0, 6, 2.7), c(0, 0, 2.7)
+            c(8, 0, 2.7),
+            c(8, 6, 2.7),
+            c(0, 6, 2.7),
+            c(0, 0, 2.7)
         ),
         floor = rbind(
-            c(8, 6, 0), c(8, 0, 0),
-            c(0, 0, 0), c(0, 6, 0)
+            c(8, 6, 0),
+            c(8, 0, 0),
+            c(0, 0, 0),
+            c(0, 6, 0)
         )
     )
     expected <- list(
@@ -307,9 +336,13 @@ test_that("surface polygons start at EnergyPlus's declared upper-left corner", {
         expect_equal(geom__polygon_area(normalized), area_before, info = name)
         expect_setequal(
             do.call(paste, c(input[, .(POINT_X, POINT_Y, POINT_Z)], sep = ":")),
-            do.call(paste, c(
-                normalized[, .(POINT_X, POINT_Y, POINT_Z)], sep = ":"
-            ))
+            do.call(
+                paste,
+                c(
+                    normalized[, .(POINT_X, POINT_Y, POINT_Z)],
+                    sep = ":"
+                )
+            )
         )
     }
 })
@@ -333,12 +366,18 @@ test_that("adjacent triangles merge into one convex surface", {
     # common diagonal may be deleted without changing its boundary or area.
     surface <- data.table::rbindlist(list(
         data.table::data.table(
-            PART = 1L, POINT_NO = 0:2,
-            POINT_X = c(0, 4, 4), POINT_Y = c(0, 0, 3), POINT_Z = 0
+            PART = 1L,
+            POINT_NO = 0:2,
+            POINT_X = c(0, 4, 4),
+            POINT_Y = c(0, 0, 3),
+            POINT_Z = 0
         ),
         data.table::data.table(
-            PART = 2L, POINT_NO = 0:2,
-            POINT_X = c(0, 4, 0), POINT_Y = c(0, 3, 3), POINT_Z = 0
+            PART = 2L,
+            POINT_NO = 0:2,
+            POINT_X = c(0, 4, 0),
+            POINT_Y = c(0, 3, 3),
+            POINT_Z = 0
         )
     ))
 
@@ -347,10 +386,15 @@ test_that("adjacent triangles merge into one convex surface", {
     expect_equal(data.table::uniqueN(merged$PART), 1L)
     expect_equal(nrow(merged), 4L)
     following <- seq_len(nrow(merged)) %% nrow(merged) + 1L
-    expect_equal(abs(sum(
-        merged$POINT_X * merged$POINT_Y[following] -
-            merged$POINT_X[following] * merged$POINT_Y
-    )) / 2.0, 12.0)
+    expect_equal(
+        abs(sum(
+            merged$POINT_X *
+                merged$POINT_Y[following] -
+                merged$POINT_X[following] * merged$POINT_Y
+        )) /
+            2.0,
+        12.0
+    )
 })
 
 test_that("convex-part merging rejects a non-planar polygon", {
@@ -358,13 +402,17 @@ test_that("convex-part merging rejects a non-planar polygon", {
     # diagonal would create a quadrilateral with one vertex 5 mm off plane.
     surface <- data.table::rbindlist(list(
         data.table::data.table(
-            PART = 1L, POINT_NO = 0:2,
-            POINT_X = c(0, 1, 1), POINT_Y = c(0, 0, 1),
+            PART = 1L,
+            POINT_NO = 0:2,
+            POINT_X = c(0, 1, 1),
+            POINT_Y = c(0, 0, 1),
             POINT_Z = c(0, 0, 0.005)
         ),
         data.table::data.table(
-            PART = 2L, POINT_NO = 0:2,
-            POINT_X = c(0, 1, 0), POINT_Y = c(0, 1, 1),
+            PART = 2L,
+            POINT_NO = 0:2,
+            POINT_X = c(0, 1, 0),
+            POINT_Y = c(0, 1, 1),
             POINT_Z = c(0, 0.005, 0)
         )
     ))
@@ -381,15 +429,27 @@ test_that("convex-part merging is independent of part traversal order", {
         VERTEX = 1:10,
         POINT_NO = 0:9,
         POINT_X = c(
-            0.989748214576005, 0.585767730908300, -0.816434295808996,
-            -2.094515643110917, -2.547365040702336, 1.300509053897897,
-            1.800024425395703, 1.145867268715982, 2.272045004267075,
+            0.989748214576005,
+            0.585767730908300,
+            -0.816434295808996,
+            -2.094515643110917,
+            -2.547365040702336,
+            1.300509053897897,
+            1.800024425395703,
+            1.145867268715982,
+            2.272045004267075,
             1.060572752934251
         ),
         POINT_Y = c(
-            0.406676496443011, 1.837457261328847, 2.070688628786034,
-            1.486738100706347, -2.118904161038813, -1.350773412036306,
-            -1.142463925382292, -0.553086176099802, -0.853681349296615,
+            0.406676496443011,
+            1.837457261328847,
+            2.070688628786034,
+            1.486738100706347,
+            -2.118904161038813,
+            -1.350773412036306,
+            -1.142463925382292,
+            -0.553086176099802,
+            -0.853681349296615,
             -0.197666698611673
         ),
         POINT_Z = 0
@@ -424,32 +484,77 @@ test_that("EnergyPlus-compatible closure accepts a harmless T-junction", {
     # required. Moving the point off the edge creates a genuine open shell.
     face <- function(name, type, coordinate) {
         data.table::data.table(
-            ROOM = "Room", OUTPUT_ID = name, TYPE = type,
+            ROOM = "Room",
+            OUTPUT_ID = name,
+            TYPE = type,
             POINT_NO = seq_len(nrow(coordinate)) - 1L,
-            POINT_X = coordinate[, 1L], POINT_Y = coordinate[, 2L],
+            POINT_X = coordinate[, 1L],
+            POINT_Y = coordinate[, 2L],
             POINT_Z = coordinate[, 3L]
         )
     }
     shell <- data.table::rbindlist(list(
-        face("Floor", "Floor", rbind(
-            c(0, 0, 0), c(0, 1, 0), c(2, 1, 0), c(2, 0, 0)
-        )),
-        face("Roof", "Roof", rbind(
-            c(0, 0, 1), c(2, 0, 1), c(2, 1, 1), c(0, 1, 1)
-        )),
-        face("Front", "Wall", rbind(
-            c(0, 0, 0), c(2, 0, 0), c(2, 0, 1),
-            c(1, 0, 1), c(0, 0, 1)
-        )),
-        face("Back", "Wall", rbind(
-            c(2, 1, 0), c(0, 1, 0), c(0, 1, 1), c(2, 1, 1)
-        )),
-        face("Left", "Wall", rbind(
-            c(0, 1, 0), c(0, 0, 0), c(0, 0, 1), c(0, 1, 1)
-        )),
-        face("Right", "Wall", rbind(
-            c(2, 0, 0), c(2, 1, 0), c(2, 1, 1), c(2, 0, 1)
-        ))
+        face(
+            "Floor",
+            "Floor",
+            rbind(
+                c(0, 0, 0),
+                c(0, 1, 0),
+                c(2, 1, 0),
+                c(2, 0, 0)
+            )
+        ),
+        face(
+            "Roof",
+            "Roof",
+            rbind(
+                c(0, 0, 1),
+                c(2, 0, 1),
+                c(2, 1, 1),
+                c(0, 1, 1)
+            )
+        ),
+        face(
+            "Front",
+            "Wall",
+            rbind(
+                c(0, 0, 0),
+                c(2, 0, 0),
+                c(2, 0, 1),
+                c(1, 0, 1),
+                c(0, 0, 1)
+            )
+        ),
+        face(
+            "Back",
+            "Wall",
+            rbind(
+                c(2, 1, 0),
+                c(0, 1, 0),
+                c(0, 1, 1),
+                c(2, 1, 1)
+            )
+        ),
+        face(
+            "Left",
+            "Wall",
+            rbind(
+                c(0, 1, 0),
+                c(0, 0, 0),
+                c(0, 0, 1),
+                c(0, 1, 1)
+            )
+        ),
+        face(
+            "Right",
+            "Wall",
+            rbind(
+                c(2, 0, 0),
+                c(2, 1, 0),
+                c(2, 1, 1),
+                c(2, 0, 1)
+            )
+        )
     ))
 
     expect_length(surface__energyplus_unclosed_rooms(shell), 0L)
@@ -468,10 +573,14 @@ test_that("surface coordinates follow EnergyPlus's vertex tolerance", {
     )
 
     snapped <- surface__snap_coordinates(point)
-    expect_equal(snapped[1L, .(POINT_X, POINT_Y, POINT_Z)],
-        snapped[3L, .(POINT_X, POINT_Y, POINT_Z)])
-    expect_equal(snapped[2L, .(POINT_X, POINT_Y, POINT_Z)],
-        snapped[4L, .(POINT_X, POINT_Y, POINT_Z)])
+    expect_equal(
+        snapped[1L, .(POINT_X, POINT_Y, POINT_Z)],
+        snapped[3L, .(POINT_X, POINT_Y, POINT_Z)]
+    )
+    expect_equal(
+        snapped[2L, .(POINT_X, POINT_Y, POINT_Z)],
+        snapped[4L, .(POINT_X, POINT_Y, POINT_Z)]
+    )
 
     sliver <- data.table::data.table(
         POINT_NO = 0:2,
@@ -486,35 +595,63 @@ test_that("surface coordinates follow EnergyPlus's vertex tolerance", {
 surface__metrics <- function(surface) {
     following <- seq_len(nrow(surface)) %% nrow(surface) + 1L
     normal <- c(
-        sum((surface$POINT_Y - surface$POINT_Y[following]) *
-            (surface$POINT_Z + surface$POINT_Z[following])),
-        sum((surface$POINT_Z - surface$POINT_Z[following]) *
-            (surface$POINT_X + surface$POINT_X[following])),
-        sum((surface$POINT_X - surface$POINT_X[following]) *
-            (surface$POINT_Y + surface$POINT_Y[following]))
+        sum(
+            (surface$POINT_Y - surface$POINT_Y[following]) *
+                (surface$POINT_Z + surface$POINT_Z[following])
+        ),
+        sum(
+            (surface$POINT_Z - surface$POINT_Z[following]) *
+                (surface$POINT_X + surface$POINT_X[following])
+        ),
+        sum(
+            (surface$POINT_X - surface$POINT_X[following]) *
+                (surface$POINT_Y + surface$POINT_Y[following])
+        )
     )
-    magnitude <- sqrt(sum(normal ^ 2))
-    list(NX = normal[[1L]] / magnitude, NY = normal[[2L]] / magnitude,
-        NZ = normal[[3L]] / magnitude, AREA = magnitude / 2.0,
-        N_VERTEX = nrow(surface))
+    magnitude <- sqrt(sum(normal^2))
+    list(
+        NX = normal[[1L]] / magnitude,
+        NY = normal[[2L]] / magnitude,
+        NZ = normal[[3L]] / magnitude,
+        AREA = magnitude / 2.0,
+        N_VERTEX = nrow(surface)
+    )
 }
 
 test_that("windows are clipped to exact host surface parts", {
     host <- data.table::rbindlist(list(
         data.table::data.table(
-            ID = 20L, PART = 1L, NAME = "Wall [1]", POINT_NO = 0:2,
-            POINT_X = c(0, 4, 4), POINT_Y = 0, POINT_Z = c(0, 0, 4)
+            ID = 20L,
+            PART = 1L,
+            NAME = "Wall [1]",
+            POINT_NO = 0:2,
+            POINT_X = c(0, 4, 4),
+            POINT_Y = 0,
+            POINT_Z = c(0, 0, 4)
         ),
         data.table::data.table(
-            ID = 20L, PART = 2L, NAME = "Wall [2]", POINT_NO = 0:2,
-            POINT_X = c(0, 4, 0), POINT_Y = 0, POINT_Z = c(0, 4, 4)
+            ID = 20L,
+            PART = 2L,
+            NAME = "Wall [2]",
+            POINT_NO = 0:2,
+            POINT_X = c(0, 4, 0),
+            POINT_Y = 0,
+            POINT_Z = c(0, 4, 4)
         )
     ))
     window <- data.table::data.table(
-        OUTPUT_ID = "200-1", ID = 200L, SURFACE_ID = 20L,
-        ORIGINAL_NAME = "Window", NAME = "Window", SIDE = 1L,
-        INTERZONE = FALSE, BOUNDARY_OBJECT = NA_character_, POINT_NO = 0:3,
-        POINT_X = c(1, 3, 3, 1), POINT_Y = 0, POINT_Z = c(1, 1, 3, 3)
+        OUTPUT_ID = "200-1",
+        ID = 200L,
+        SURFACE_ID = 20L,
+        ORIGINAL_NAME = "Window",
+        NAME = "Window",
+        SIDE = 1L,
+        INTERZONE = FALSE,
+        BOUNDARY_OBJECT = NA_character_,
+        POINT_NO = 0:3,
+        POINT_X = c(1, 3, 3, 1),
+        POINT_Y = 0,
+        POINT_Z = c(1, 1, 3, 3)
     )
 
     split <- window__split_by_surface(window, host)
@@ -555,9 +692,15 @@ test_that("window-aware host triangulation avoids sub-centimetre slivers", {
 
     host_metric <- triangulated[, surface__metrics(.SD), by = "PART"]
     clipped_area <- sum(vapply(
-        clipped, function(value) surface__metrics(value)$AREA, numeric(1L)
+        clipped,
+        function(value) surface__metrics(value)$AREA,
+        numeric(1L)
     ))
-    expect_equal(sum(host_metric$AREA), surface__metrics(host)$AREA, tolerance = 1e-8)
+    expect_equal(
+        sum(host_metric$AREA),
+        surface__metrics(host)$AREA,
+        tolerance = 1e-8
+    )
     expect_equal(clipped_area, surface__metrics(window)$AREA, tolerance = 1e-6)
 })
 
@@ -569,7 +712,9 @@ test_that("window-clear triangulation search has a deterministic state cap", {
         POINT_Z = 0
     )
     avoid <- data.table::data.table(
-        POINT_X = 0.5, POINT_Y = 0.5, POINT_Z = 0
+        POINT_X = 0.5,
+        POINT_Y = 0.5,
+        POINT_Z = 0
     )
     profile <- eplus_geom__profile()
     profile$triangulation_max_states <- 0L
@@ -589,38 +734,75 @@ test_that("typical-storey overlap preserves an already convex polygon", {
     # rectangle. The typical-storey transformation should retain that exact
     # four-vertex polygon instead of introducing two unnecessary triangles.
     make_face <- function(
-        id, name, type, z, azimuth, side, construction, peer
+        id,
+        name,
+        type,
+        z,
+        azimuth,
+        side,
+        construction,
+        peer
     ) {
         data.table::data.table(
-            ID = id, PLANE = id, NAME = name, ORIGINAL_NAME = name,
-            KIND_ENCLOSURE = 5L, TYPE_SURFACE = 0L, TYPE = type,
-            SIDE = side, CONSTRUCTION = construction, ROOM = "Room",
-            BOUNDARY = "Surface", BOUNDARY_OBJECT = peer,
-            STOREY_ID = 1L, STOREY_NAME = "Typical",
-            STOREY_MULTIPLIER = 5L, AZIMUTH = azimuth, TILT = 0.0,
-            OUTPUT_ID = sprintf("%d-1", id), PART = 1L, PART_COUNT = 1L,
-            POINT_NO = 0:3, POINT_X = c(0, 4, 4, 0),
-            POINT_Y = c(0, 0, 3, 3), POINT_Z = z
+            ID = id,
+            PLANE = id,
+            NAME = name,
+            ORIGINAL_NAME = name,
+            KIND_ENCLOSURE = 5L,
+            TYPE_SURFACE = 0L,
+            TYPE = type,
+            SIDE = side,
+            CONSTRUCTION = construction,
+            ROOM = "Room",
+            BOUNDARY = "Surface",
+            BOUNDARY_OBJECT = peer,
+            STOREY_ID = 1L,
+            STOREY_NAME = "Typical",
+            STOREY_MULTIPLIER = 5L,
+            AZIMUTH = azimuth,
+            TILT = 0.0,
+            OUTPUT_ID = sprintf("%d-1", id),
+            PART = 1L,
+            PART_COUNT = 1L,
+            POINT_NO = 0:3,
+            POINT_X = c(0, 4, 4, 0),
+            POINT_Y = c(0, 0, 3, 3),
+            POINT_Z = z
         )
     }
     surface <- data.table::rbindlist(list(
         make_face(
-            1L, "Floor", "Floor", 0.0, 999.0, 1L,
-            "Slab [Reverse]", "Ceiling"
+            1L,
+            "Floor",
+            "Floor",
+            0.0,
+            999.0,
+            1L,
+            "Slab [Reverse]",
+            "Ceiling"
         ),
         make_face(
-            2L, "Ceiling", "Ceiling", 3.0, -999.0, 2L,
-            "Slab", "Floor"
+            2L,
+            "Ceiling",
+            "Ceiling",
+            3.0,
+            -999.0,
+            2L,
+            "Slab",
+            "Floor"
         )
     ))
 
     converted <- surface__apply_typical_storey_boundaries(surface)
-    object <- converted[, .(
-        N_VERTEX = .N,
-        AREA = surface__metrics(.SD)$AREA,
-        BOUNDARY_OBJECT = BOUNDARY_OBJECT[[1L]],
-        BOUNDARY_MODE = BOUNDARY_MODE[[1L]]
-    ), by = .(OUTPUT_ID, NAME)]
+    object <- converted[,
+        .(
+            N_VERTEX = .N,
+            AREA = surface__metrics(.SD)$AREA,
+            BOUNDARY_OBJECT = BOUNDARY_OBJECT[[1L]],
+            BOUNDARY_MODE = BOUNDARY_MODE[[1L]]
+        ),
+        by = .(OUTPUT_ID, NAME)
+    ]
 
     expect_equal(object$N_VERTEX, c(4L, 4L))
     expect_equal(object$AREA, c(12.0, 12.0))
@@ -635,10 +817,13 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     on.exit(DBI::dbDisconnect(src), add = TRUE)
     path_tmp <- tempfile(fileext = ".sql")
     dest <- DBI::dbConnect(RSQLite::SQLite(), path_tmp)
-    on.exit({
-        DBI::dbDisconnect(dest)
-        unlink(path_tmp)
-    }, add = TRUE)
+    on.exit(
+        {
+            DBI::dbDisconnect(dest)
+            unlink(path_tmp)
+        },
+        add = TRUE
+    )
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
@@ -646,34 +831,79 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     # Keep the fixture close to DeST's 560 SURFACE rows while allowing the
     # separate room-side objects required by EnergyPlus interzone boundaries.
     expect_lte(data.table::uniqueN(surface$OUTPUT_ID), 700L)
-    metric <- surface[, surface__metrics(.SD), by = .(
-        OUTPUT_ID, ID, PLANE, NAME, ORIGINAL_NAME, TYPE, KIND_ENCLOSURE,
-        BOUNDARY, BOUNDARY_OBJECT, AZIMUTH, TILT, ROOM, BOUNDARY_MODE,
-        SOURCE_TYPE, SOURCE_BOUNDARY, STOREY_MULTIPLIER, TYPICAL_PAIR_ID
-    )]
-    metric[, EXPECTED := list(list(geom__expected_surface_normal(
-        AZIMUTH, TILT, geom__south_direction(dest)
-    ))), by = "OUTPUT_ID"]
-    metric[, ALIGNMENT := NX * vapply(EXPECTED, `[[`, numeric(1L), 1L) +
-        NY * vapply(EXPECTED, `[[`, numeric(1L), 2L) +
-        NZ * vapply(EXPECTED, `[[`, numeric(1L), 3L)]
+    metric <- surface[,
+        surface__metrics(.SD),
+        by = .(
+            OUTPUT_ID,
+            ID,
+            PLANE,
+            NAME,
+            ORIGINAL_NAME,
+            TYPE,
+            KIND_ENCLOSURE,
+            BOUNDARY,
+            BOUNDARY_OBJECT,
+            AZIMUTH,
+            TILT,
+            ROOM,
+            BOUNDARY_MODE,
+            SOURCE_TYPE,
+            SOURCE_BOUNDARY,
+            STOREY_MULTIPLIER,
+            TYPICAL_PAIR_ID
+        )
+    ]
+    metric[,
+        EXPECTED := list(list(geom__expected_surface_normal(
+            AZIMUTH,
+            TILT,
+            geom__south_direction(dest)
+        ))),
+        by = "OUTPUT_ID"
+    ]
+    metric[,
+        ALIGNMENT := NX *
+            vapply(EXPECTED, `[[`, numeric(1L), 1L) +
+            NY * vapply(EXPECTED, `[[`, numeric(1L), 2L) +
+            NZ * vapply(EXPECTED, `[[`, numeric(1L), 3L)
+    ]
     expect_true(all(metric$ALIGNMENT > 1.0 - 1e-6))
 
     original <- unique(metric, by = "ID")
     # Trace metadata preserves DeST's source classification even when a middle
     # storey's roof or exposed floor becomes part of the cyclic typical layer.
-    expect_equal(data.table::uniqueN(metric[
-        SOURCE_TYPE == "Roof" & SOURCE_BOUNDARY == "Outdoors"
-    ]$ID), 18L)
-    expect_equal(data.table::uniqueN(metric[
-        SOURCE_TYPE == "Floor" & SOURCE_BOUNDARY == "Outdoors"
-    ]$ID), 2L)
-    expect_equal(data.table::uniqueN(metric[
-        TYPE == "Roof" & BOUNDARY == "Outdoors"
-    ]$ID), 11L)
-    expect_equal(data.table::uniqueN(metric[
-        TYPE == "Floor" & BOUNDARY == "Outdoors"
-    ]$ID), 0L)
+    expect_equal(
+        data.table::uniqueN(
+            metric[
+                SOURCE_TYPE == "Roof" & SOURCE_BOUNDARY == "Outdoors"
+            ]$ID
+        ),
+        18L
+    )
+    expect_equal(
+        data.table::uniqueN(
+            metric[
+                SOURCE_TYPE == "Floor" & SOURCE_BOUNDARY == "Outdoors"
+            ]$ID
+        ),
+        2L
+    )
+    expect_equal(
+        data.table::uniqueN(
+            metric[
+                TYPE == "Roof" & BOUNDARY == "Outdoors"
+            ]$ID
+        ),
+        11L
+    )
+    expect_equal(
+        data.table::uniqueN(
+            metric[
+                TYPE == "Floor" & BOUNDARY == "Outdoors"
+            ]$ID
+        ),
+        0L
+    )
     expect_true(all(original[KIND_ENCLOSURE == 6L]$NZ < 0.0))
 
     self <- metric[BOUNDARY == "Surface" & NAME == BOUNDARY_OBJECT]
@@ -686,8 +916,11 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     expect_equal(metric$BOUNDARY_OBJECT[peer], paired$NAME)
     expect_equal(paired$N_VERTEX, metric$N_VERTEX[peer])
     expect_true(all(
-        paired$NX * metric$NX[peer] + paired$NY * metric$NY[peer] +
-            paired$NZ * metric$NZ[peer] < -1.0 + 1e-6
+        paired$NX *
+            metric$NX[peer] +
+            paired$NY * metric$NY[peer] +
+            paired$NZ * metric$NZ[peer] <
+            -1.0 + 1e-6
     ))
     # EnergyPlus applies zone multipliers after solving the representative
     # zones, so every non-adiabatic peer pair must conserve A * multiplier.
@@ -705,7 +938,9 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     # harmless T-junction to be physically inserted into exported polygons.
     expect_length(surface__energyplus_unclosed_rooms(surface), 0L)
 
-    raw <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+    raw <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        "
         SELECT P.PLANE_ID AS PLANE, L.POINT_NO,
             ROUND(PT.X, 3) AS POINT_X, ROUND(PT.Y, 3) AS POINT_Y,
             ROUND(PT.Z, 3) AS POINT_Z
@@ -714,9 +949,13 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
         INNER JOIN LOOP_POINT L ON G.BOUNDARY_LOOP_ID = L.LOOP_ID
         INNER JOIN POINT PT ON L.POINT = PT.POINT_ID
         ORDER BY P.PLANE_ID, L.POINT_NO
-    "))
-    raw_area <- raw[PLANE %in% surface$PLANE,
-        .(SOURCE_AREA = surface__metrics(.SD)$AREA), by = "PLANE"]
+    "
+    ))
+    raw_area <- raw[
+        PLANE %in% surface$PLANE,
+        .(SOURCE_AREA = surface__metrics(.SD)$AREA),
+        by = "PLANE"
+    ]
     converted_area <- metric[, .(CONVERTED_AREA = sum(AREA)), by = .(ID, PLANE)]
     area <- merge(converted_area, raw_area, by = "PLANE")
     expect_lt(max(abs(area$CONVERTED_AREA - area$SOURCE_AREA)), 1e-6)
@@ -749,10 +988,15 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
     expect_false(any(grepl(
         paste(
             c(
-                "not fully enclosed", "vertex size mismatch",
-                "invalid Building Surface Name", "floor area.*differs",
-                "zone volume.*differs", "degenerate", "non-?convex",
-                "possibly coincident", "collinear",
+                "not fully enclosed",
+                "vertex size mismatch",
+                "invalid Building Surface Name",
+                "floor area.*differs",
+                "zone volume.*differs",
+                "degenerate",
+                "non-?convex",
+                "possibly coincident",
+                "collinear",
                 "InterZone Surface Areas do not match as expected",
                 "Base surface does not surround subsurface",
                 "Distance between two vertices < \\.01",
