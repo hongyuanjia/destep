@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Corrected the `AHU.FAN` schema description: the field stores the rated air
+  flow of the selected cooling or dehumidification device in m3/h, rather than
+  a fan or equipment identifier.
+
 - Fixed DeST lighting heat-gain conversion so `L_DIST_MODE` is represented
   without introducing an unrelated EnergyPlus visible-light fraction, and
   stopped mapping the DeST heat-to-electricity ratio to daylighting

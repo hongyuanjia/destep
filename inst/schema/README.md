@@ -28,6 +28,10 @@ files instead of leaving that knowledge only in converter comments.
 - Outdoor-ventilation rows in `ROOM_RELATION` are converted to
   `ZoneVentilation:DesignFlowRate` when `RELA_ROOM_ID` references `OUTSIDE`.
   Inter-zone mixing remains deferred until adjacent-room semantics are verified.
+- DeST GUI inspection of `example.accdb` resolves `AHU.FAN` as the rated air
+  flow of the selected cooling or dehumidification device, in m3/h. The raw
+  Access description calls it an equipment ID and remains preserved in
+  `fields_cn.tsv` as conflicting source evidence.
 - Access field descriptions were extracted to `fields_cn.tsv` in PR #13, and
   `fields.tsv` was refreshed so English field semantics are derived from those
   source comments.
