@@ -49,7 +49,9 @@ two-zone paths map matching \code{AC_SYS.SUPPLY_T_MIN/MAX} schedules to the
 cooling-coil setpoint and use their minimum value for cooling sizing;
 distinct minimum and maximum trajectories remain unsupported. The
 physical paths require \code{ver = "9.0.1"}, an installed matching EnergyPlus
-version, and explicit \code{hvac_options} for parameters absent from DeST.}
+version, and explicit \code{hvac_options} for parameters absent from DeST.
+All HVAC representations reject models containing \code{AC_SYS_TYPE} values
+other than 0 and 1 instead of silently omitting unsupported systems.}
 
 \item{hvac_options}{[list or NULL] Named equipment parameters required by
 the selected \code{hvac = "physical"} path. Common fan fields are

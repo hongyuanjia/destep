@@ -105,4 +105,14 @@ test_that("real DeST HVAC equipment relations are resolved", {
         result$systems$ahu_rated_air_flow_m3_h %in% result$fans$fan_id
     ))
 
+    # The same real model remains useful as source evidence while its type-3
+    # systems must be rejected by the EnergyPlus conversion entry point.
+    expect_error(
+        to_eplus(model, "9.0.1"),
+        regexp = paste0(
+            "supports AC_SYS_TYPE values 0 and 1 only: ",
+            "17674 \\(NAME=2-1, AC_SYS_TYPE=3\\)"
+        ),
+        class = "destep_unsupported_hvac_system_type"
+    )
 })
