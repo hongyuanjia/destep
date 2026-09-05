@@ -1,3 +1,49 @@
+# Stop conversion before unsupported DeST HVAC families can be silently
+# represented by an unrelated EnergyPlus system.
+hvac__assert_supported_system_types <- function(dest) {
+    if (!db_has_rows(dest, "AC_SYS")) {
+        return(invisible(TRUE))
+    }
+    required <- c("AC_SYS_ID", "NAME", "AC_SYS_TYPE")
+    if (!db_has_fields(dest, "AC_SYS", required)) {
+        abort(
+            paste0(
+                "The DeST AC_SYS table must contain fields: ",
+                paste(required, collapse = ", "),
+                "."
+            ),
+            class = "destep_invalid_hvac_source_schema"
+        )
+    }
+
+    systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
+    unsupported <- systems[
+        is.na(AC_SYS_TYPE) | !AC_SYS_TYPE %in% c(0L, 1L),
+        .(AC_SYS_ID, NAME, AC_SYS_TYPE)
+    ]
+    if (!nrow(unsupported)) {
+        return(invisible(TRUE))
+    }
+
+    # Include source identifiers and names so users can locate every rejected
+    # system directly in DeST instead of receiving only an opaque type code.
+    details <- unsupported[, sprintf(
+        "%s (NAME=%s, AC_SYS_TYPE=%s)",
+        ifelse(is.na(AC_SYS_ID), "NA", as.character(AC_SYS_ID)),
+        ifelse(is.na(NAME), "NA", as.character(NAME)),
+        ifelse(is.na(AC_SYS_TYPE), "NA", as.character(AC_SYS_TYPE))
+    )]
+    abort(
+        paste0(
+            "Unsupported DeST air-conditioning system type detected. ",
+            "destep currently supports AC_SYS_TYPE values 0 and 1 only: ",
+            paste(details, collapse = "; "),
+            "."
+        ),
+        class = "destep_unsupported_hvac_system_type"
+    )
+}
+
 # List external parameters used by one or more physical air-system paths.
 hvac__common_required_options <- function() {
     c(

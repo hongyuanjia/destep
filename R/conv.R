@@ -212,6 +212,8 @@ MAP_ID_NAME <- list(
 #'       distinct minimum and maximum trajectories remain unsupported. The
 #'       physical paths require `ver = "9.0.1"`, an installed matching EnergyPlus
 #'       version, and explicit `hvac_options` for parameters absent from DeST.
+#'       All HVAC representations reject models containing `AC_SYS_TYPE` values
+#'       other than 0 and 1 instead of silently omitting unsupported systems.
 #'
 #' @param hvac_options \[list or NULL\] Named equipment parameters required by
 #'       the selected `hvac = "physical"` path. Common fan fields are
@@ -282,6 +284,10 @@ to_eplus <- function(
     if (!is_flag(verbose)) {
         stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
+
+    # Enforce the supported DeST HVAC boundary before any conversion-side copy
+    # or EnergyPlus object generation can obscure the source system type.
+    hvac__assert_supported_system_types(dest)
 
     # copy the DeST database to a temporary SQLite database since we need to
     # update the database

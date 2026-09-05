@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Stopped `to_eplus()` with an explicit list of source systems when a DeST
+  model contains an unsupported `AC_SYS_TYPE` other than 0 or 1, preventing
+  unsupported HVAC families from being omitted silently.
+
 - Corrected the `AHU.FAN` schema description: the field stores the rated air
   flow of the selected cooling or dehumidification device in m3/h, rather than
   a fan or equipment identifier.
