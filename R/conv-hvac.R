@@ -1381,6 +1381,19 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
         air_inlet_node_name = paste(system_name, "Heating Coil Outlet"),
         air_outlet_node_name = paste(system_name, "Cooling Coil Outlet")
     )
+
+    # The constant-volume template creates a second mixed-air manager whose
+    # fan inlet becomes invalid after the heating and cooling coils are
+    # reordered. Keeping it causes the economizer to stop below full outdoor
+    # air even while the cooling coil is active.
+    stale_manager_name <- paste(system_name, "Economizer Air Temp Manager")
+    mixed_air_managers <- unname(unlist(
+        model$object_name(class = "SetpointManager:MixedAir"),
+        use.names = FALSE
+    ))
+    if (stale_manager_name %in% mixed_air_managers) {
+        suppressMessages(model$del(stale_manager_name, .force = TRUE))
+    }
     model$object(paste(system_name, "Cooling Coil Air Temp Manager"))$set(
         fan_inlet_node_name = paste(system_name, "Cooling Coil Outlet"),
         setpoint_node_or_nodelist_name = paste(system_name, "Mixed Air Nodes")
