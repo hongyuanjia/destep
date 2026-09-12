@@ -8,7 +8,8 @@
 [![R-CMD-check](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-> A toolkit to convert ‘DeST’ models to ‘EnergyPlus’ models
+> A toolkit to convert [DeST](https://www.dest.net.cn/) models to
+> [EnergyPlus](https://energyplus.net/) models
 
 ## Installation
 
@@ -23,24 +24,61 @@ install.packages("destep",
 )
 ```
 
-## Supported DeST components
+## Supported conversion boundary
 
-This package is still under heavy development and is not ready for use.
-Currently, the following components are supported:
+`destep` is under active development. The default conversion currently
+preserves the following DeST components:
 
-- [x] Geometry
-- [x] Material
-- [x] Construction
-- [x] Hourly schedules from `SCHEDULE_YEAR`
-- [x] Outdoor ventilation from `ROOM_RELATION`
-- [x] Thermostat setpoints from `ROOM_GROUP`
-- [x] Ideal loads zone equipment from `ROOM_GROUP`
-- [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
-  `EQUIPMENT_GAINS`
-- [x] Outdoor air requirements from `OCCUPANT_GAINS`
-- [x] Ground temperatures from `GROUND_DATA`
-- [ ] Shading
-- [ ] HVAC
+- Geometry, opaque constructions, doors, and windows
+- Material thermal properties and aggregate or detailed glazing
+  properties
+- Hourly schedules from `SCHEDULE_YEAR`
+- Outdoor ventilation from `ROOM_RELATION`
+- Thermostat setpoints and Ideal Loads zone equipment from `ROOM_GROUP`
+- Internal gains and occupant outdoor-air requirements
+- Ground temperatures, site metadata, and ground reflectance
+- Exterior window overhangs and side fins
+- Climate data through `to_epw()`
+
+The default `hvac = "ideal_loads"` path is not restricted to a
+particular air-system topology or to one or two conditioned rooms. It
+creates a `ZoneHVAC:IdealLoadsAirSystem` for each convertible
+air-conditioned DeST room and maps its availability, thermostat,
+humidity-control, and outdoor-air inputs. When a room group references a
+DeST air-conditioning system, this path does not reconstruct its
+physical fans, coils, ducts, air loop, or plant.
+
+The opt-in `hvac = "physical"` path currently implements three
+explicitly validated model structures:
+
+- one conditioned room connected to one `AC_SYS_TYPE = 0`
+  constant-volume system;
+- exactly two conditioned rooms connected to one shared
+  `AC_SYS_TYPE = 0` constant-volume terminal-reheat system; and
+- exactly two conditioned rooms connected to one shared
+  `AC_SYS_TYPE = 1` VAV terminal-reheat system.
+
+These are the current boundaries of direct physical-system generation,
+not the boundaries of the default load-oriented conversion. Supported
+physical systems may use `FRESH_AIR_TYPE` 1, 5, or 6. Equipment and zone
+outdoor-air parameters that are absent from the DeST model must be
+supplied through `hvac_options`; see `?to_eplus` for the required
+fields. Other physical topologies are not yet projected. At present,
+source models containing an `AC_SYS_TYPE` other than 0 or 1 stop with an
+explicit error in either HVAC mode.
+
+## EnergyPlus versions
+
+The reproducible conversion baseline is
+[EnergyPlus](https://energyplus.net/) 9.0.1. The default load-only
+conversion can request versions supported by
+[eplusr](https://cran.r-project.org/package=eplusr), with compatibility
+warnings where a version-specific behavior has not been verified. The
+physical HVAC paths currently require EnergyPlus 9.0.1. A converted
+9.0.1 model can be transitioned to a newer EnergyPlus version with
+`eplusr`. Aggregate `WindowMaterial:SimpleGlazingSystem` output
+targeting EnergyPlus 9.0 through 9.3 emits a warning because EnergyPlus
+corrected the relevant angular-reflectance behavior in version 9.4.
 
 ## Get started
 
@@ -52,72 +90,38 @@ path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
 
 # make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not
 # installed
-eplusr::use_idd(23.1, download = "auto")
-#> IDD v23.1.0 has not been parsed before.
-#> Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.
-#> IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.
-#> Start parsing...
-#> Parsing completed.
+eplusr::use_idd("9.0.1", download = "auto")
 #> ── EnergyPlus Input Data Dictionary ────────────────────────────────────────────
-#> * Version: 23.1.0
-#> * Build: 87ed9199d4
-#> * Total Class: 840
+#> * Version: 9.0.1
+#> * Build: bb7ca4f0da
+#> * Total Class: 799
 
-# read the DeST model and convert it to an EnergyPlus model
-read_dest(path) |> to_eplus(23.1)
-#> There are windows in the input DeST model. However, the optical properties of the glazing in DeST are not one-to-one match with the glazing in EnergyPlus. Here the optical properties of a 3mm clear glazing in EnergyPlus dataset 'WindowGlassMaterials.idf' will be used for all glazing in DeST. Please check the results in the converted IDF file.
-#> ── EnergPlus Input Data File ───────────────────────────────────────────────────
-#>  • Path: NOT LOCAL
-#>  • Version: '23.1.0'
-#>
-#> Group: <Simulation Parameters>
-#> ├─ [001<O>] Class: <Version>
-#> └─ [001<O>] Class: <Building>
-#>
-#> Group: <Location and Climate>
-#> ├─ [001<O>] Class: <Site:Location>
-#> └─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
-#>
-#> Group: <Schedules>
-#> ├─ [003<O>] Class: <ScheduleTypeLimits>
-#> │─ [100<O>] Class: <Schedule:Day:Interval>
-#> │─ [187<O>] Class: <Schedule:Week:Compact>
-#> │─ [177<O>] Class: <Schedule:Year>
-#> └─ [004<O>] Class: <Schedule:Constant>
-#>
-#> Group: <Surface Construction Elements>
-#> ├─ [014<O>] Class: <Material>
-#> │─ [001<O>] Class: <WindowMaterial:Glazing>
-#> │─ [001<O>] Class: <WindowMaterial:Gas>
-#> └─ [007<O>] Class: <Construction>
-#>
-#> Group: <Thermal Zones and Surfaces>
-#> ├─ [001<O>] Class: <GlobalGeometryRules>
-#> │─ [036<O>] Class: <Zone>
-#> │─ [003<O>] Class: <ZoneList>
-#> │─ [003<O>] Class: <ZoneGroup>
-#> │─ [371<O>] Class: <BuildingSurface:Detailed>
-#> └─ [045<O>] Class: <FenestrationSurface:Detailed>
-#>
-#> Group: <Internal Gains>
-#> ├─ [036<O>] Class: <People>
-#> │─ [072<O>] Class: <Lights>
-#> └─ [036<O>] Class: <ElectricEquipment>
-#>
-#> Group: <Zone Airflow>
-#> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
-#>
-#> Group: <HVAC Design Objects>
-#> └─ [036<O>] Class: <DesignSpecification:OutdoorAir>
-#>
-#> Group: <Zone HVAC Controls and Thermostats>
-#> ├─ [036<O>] Class: <ZoneControl:Thermostat>
-#> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
-#>
-#> Group: <Zone HVAC Forced Air Units>
-#> └─ [027<O>] Class: <ZoneHVAC:IdealLoadsAirSystem>
-#>
-#> Group: <Zone HVAC Equipment Connections>
-#> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
-#> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+# read once, then create the EnergyPlus input and weather objects
+dest <- read_dest(path)
+idf <- to_eplus(dest, "9.0.1")
+#> Warning: EnergyPlus 9.0.1 uses the geometry compatibility profile validated
+#> against EnergyPlus 23.1.
+#> Warning: DeST window transmitted-solar distribution mode(s) [1] are not
+#> converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof,
+#> floor, and surrounding-surface fractions have no established direct EnergyPlus
+#> projection; the converted model uses the EnergyPlus building-level
+#> solar-distribution algorithm.
+#> Warning: EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem
+#> angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the
+#> converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+#> Warning: Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+#> Warning: Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the
+#> documented outdoor-temperature-band rule. This preserves the declared
+#> minimum/maximum ACH schedules but does not claim equivalence to DeST's
+#> undocumented solver-state coupling.
+epw <- to_epw(dest)
+
+output_dir <- file.path(tempdir(), "destep-readme")
+dir.create(output_dir)
+idf$save(file.path(output_dir, "model.idf"))
+epw$save(file.path(output_dir, "weather.epw"))
+DBI::dbDisconnect(dest)
+
+file.exists(file.path(output_dir, c("model.idf", "weather.epw")))
+#> [1] TRUE TRUE
 ```

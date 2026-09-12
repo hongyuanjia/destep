@@ -12,9 +12,13 @@
 ^README\.Rmd$
 
 ^data-raw$
+^research$
+^tmp$
+^\.uvr$
 
 ^tests/testthat/fixture/.*[.]accdb$
 ^tests/testthat/fixture/.*[.]laccdb$
 ^tests/testthat/fixture/.*[.]sql$
 
 ^cran-comments\.md$
+^[.]?air[.]toml$

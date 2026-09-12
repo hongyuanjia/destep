@@ -59,7 +59,7 @@ test_that("conv__update_names prefixes storeys in multi-building models", {
 })
 
 test_that("conv__add_objects expands one EnergyPlus class", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     values <- list(
         list(name = "First", hourly_value = 1),
         list(name = "Second", hourly_value = 2)
@@ -76,6 +76,39 @@ test_that("conv__add_objects expands one EnergyPlus class", {
         c("First", "Second")
     )
     expect_null(conv__add_objects(NULL, ep, "Schedule:Constant", list()))
+})
+
+test_that("EnergyPlus 9.0.1 object names remain executable", {
+    ep <- eplusr::empty_idf("9.0.1")
+    ep$add(
+        Schedule_Constant = list(
+            name = "全天开启",
+            hourly_value = 1
+        ),
+        ThermostatSetpoint_SingleHeating = list(
+            name = "供暖设定点",
+            setpoint_temperature_schedule_name = "全天开启"
+        )
+    )
+
+    conv__normalize_object_names(ep)
+
+    objects <- unique(ep$to_table()[!is.na(name), .(id, name)])
+    expect_false(any(grepl("[^\\x01-\\x7f]", objects$name, perl = TRUE)))
+    setpoint <- ep$to_table(
+        class = "ThermostatSetpoint:SingleHeating",
+        wide = TRUE,
+        string_value = TRUE
+    )
+    schedule <- ep$to_table(
+        class = "Schedule:Constant",
+        wide = TRUE,
+        string_value = TRUE
+    )
+    expect_equal(
+        setpoint[["Setpoint Temperature Schedule Name"]],
+        schedule$Name
+    )
 })
 
 test_that("to_eplus() works", {
@@ -138,8 +171,18 @@ test_that("to_eplus() works", {
     # can convert 'BuildingSurface:Detailed'
     expect_type(surface <- surface__convert(dest, ep), "list")
     expect_named(surface, c("object", "value"))
-    expect_equal(unique(surface$object$class_name), "BuildingSurface:Detailed")
+    expect_setequal(
+        unique(surface$object$class_name),
+        c("BuildingSurface:Detailed", "SurfaceProperty:ConvectionCoefficients")
+    )
     expect_s3_class(attr(surface, "table"), "data.table")
+
+    # Preserve the exact source value so the integration assertion covers the
+    # Access/SQLite numeric representation instead of a rounded decimal.
+    expected_ground_reflectance <- as.numeric(DBI::dbGetQuery(
+        dest,
+        "SELECT GROUND_REFLECT_COEF FROM ENVIRONMENT"
+    )$GROUND_REFLECT_COEF)
 
     # can convert a DeST model to a valid EnergyPlus model
     expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf")
@@ -153,6 +196,25 @@ test_that("to_eplus() works", {
             run_period$field == "Day of Week for Start Day"
         ],
         "Monday"
+    )
+    timestep <- idf$to_table(class = "Timestep", all = TRUE)
+    expect_equal(
+        timestep$value[
+            timestep$field == "Number of Timesteps per Hour"
+        ],
+        "12"
+    )
+    ground_reflectance <- idf$to_table(
+        class = "Site:GroundReflectance", all = TRUE
+    )
+    expect_equal(
+        as.numeric(ground_reflectance$value[
+            grepl(
+                "Ground Reflectance", ground_reflectance$field,
+                fixed = TRUE
+            )
+        ]),
+        rep(expected_ground_reflectance, 12L)
     )
     geometry_rules <- idf$to_table(class = "GlobalGeometryRules", all = TRUE)
     expect_equal(

@@ -1,17 +1,56 @@
 ENUM_SCH_DAYTYPE <- c(
-    Sunday = 1L, Monday = 2L, Tuesday = 3L, Wednesday = 4L, Thursday = 5L, Friday = 6L, Saturday = 7L,
-    Holiday = 8L, SummerDesignDay = 9L, WinterDesignDay = 10L,
-    CustomDay1 = 11L, CustomDay2 = 12L,
-    Weekdays = 13L, Weekends = 14L, AllDays = 15L, AllOtherDays = 16L
+    Sunday = 1L,
+    Monday = 2L,
+    Tuesday = 3L,
+    Wednesday = 4L,
+    Thursday = 5L,
+    Friday = 6L,
+    Saturday = 7L,
+    Holiday = 8L,
+    SummerDesignDay = 9L,
+    WinterDesignDay = 10L,
+    CustomDay1 = 11L,
+    CustomDay2 = 12L,
+    Weekdays = 13L,
+    Weekends = 14L,
+    AllDays = 15L,
+    AllOtherDays = 16L
 )
-ENUM_SCH_DAYTYPE_NORMAL <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE <= ENUM_SCH_DAYTYPE["CustomDay2"]]
-ENUM_SCH_DAYTYPE_SPECIAL <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE > ENUM_SCH_DAYTYPE["CustomDay2"]]
-ENUM_SCH_DAYTYPE_WEEKEND <- c(ENUM_SCH_DAYTYPE["Saturday"], ENUM_SCH_DAYTYPE["Sunday"])
-ENUM_SCH_DAYTYPE_WEEKDAY <- ENUM_SCH_DAYTYPE[ENUM_SCH_DAYTYPE["Monday"]:ENUM_SCH_DAYTYPE["Friday"]]
+ENUM_SCH_DAYTYPE_NORMAL <- ENUM_SCH_DAYTYPE[
+    ENUM_SCH_DAYTYPE <= ENUM_SCH_DAYTYPE["CustomDay2"]
+]
+ENUM_SCH_DAYTYPE_SPECIAL <- ENUM_SCH_DAYTYPE[
+    ENUM_SCH_DAYTYPE > ENUM_SCH_DAYTYPE["CustomDay2"]
+]
+ENUM_SCH_DAYTYPE_WEEKEND <- c(
+    ENUM_SCH_DAYTYPE["Saturday"],
+    ENUM_SCH_DAYTYPE["Sunday"]
+)
+ENUM_SCH_DAYTYPE_WEEKDAY <- ENUM_SCH_DAYTYPE[
+    ENUM_SCH_DAYTYPE["Monday"]:ENUM_SCH_DAYTYPE["Friday"]
+]
+
+# List every source field that references SCHEDULE_YEAR, including AC_SYS
+# supply-temperature fields whose legacy names omit the word SCHEDULE.
+schedule__reference_fields <- function(dest, table) {
+    checkmate::assert_class(dest, "DBIConnection")
+    checkmate::assert_string(table, min.chars = 1L)
+
+    fields <- DBI::dbListFields(dest, table)
+    references <- grep("SCHEDULE", fields, value = TRUE)
+    if (identical(table, "AC_SYS")) {
+        references <- union(
+            references,
+            intersect(c("SUPPLY_T_MIN", "SUPPLY_T_MAX"), fields)
+        )
+    }
+    references
+}
 
 # SCHEDULE_YEAR -> Schedule:Year -> Schedule:Week:Compact -> Schedule:Day:Interval -> ScheduleTypeLimits
 schedule__convert <- function(dest, ep) {
     # currently, schedules are used in the tables below:
+    # - AC_SYS, including the nonstandard SUPPLY_T_MIN/MAX references
     # - DOOR
     # - ENERGY_DEVICE
     # - ENERGY_HOTWATER
@@ -32,31 +71,65 @@ schedule__convert <- function(dest, ep) {
     tbls <- DBI::dbListTables(dest)
 
     # find tables that reference schedules
-    ids_ref <- unique(un_list(recursive = TRUE, lapply(tbls[tbls != "SCHEDULE_YEAR"], function(tbl) {
-        # get the number of rows in the table
-        n <- DBI::dbGetQuery(dest, sprintf("SELECT COUNT(*) as n FROM '%s'", tbl))$n
-        if (n > 0L) {
-            # get the column names that reference schedules
-            col_ref <- grep("SCHEDULE", DBI::dbListFields(dest, tbl), value = TRUE)
-            if (length(col_ref) > 0L) {
-                # get the distinct values of the referenced schedules
-                DBI::dbGetQuery(dest, sprintf("SELECT DISTINCT %s FROM '%s'", paste(col_ref, collapse = ", "), tbl))
+    ids_ref <- unique(un_list(
+        recursive = TRUE,
+        lapply(tbls[tbls != "SCHEDULE_YEAR"], function(tbl) {
+            # get the number of rows in the table
+            n <- DBI::dbGetQuery(
+                dest,
+                sprintf("SELECT COUNT(*) as n FROM '%s'", tbl)
+            )$n
+            if (n > 0L) {
+                # get the column names that reference schedules
+                col_ref <- schedule__reference_fields(dest, tbl)
+                if (length(col_ref) > 0L) {
+                    # get the distinct values of the referenced schedules
+                    DBI::dbGetQuery(
+                        dest,
+                        sprintf(
+                            "SELECT DISTINCT %s FROM '%s'",
+                            paste(col_ref, collapse = ", "),
+                            tbl
+                        )
+                    )
+                }
             }
-        }
-    })))
+        })
+    ))
     # NULL means that the optional reference is not assigned, while zero is
     # DeST's sentinel for a default or unused schedule. Neither value names a
     # SCHEDULE_YEAR row, and retaining NA would emit it as a SQL identifier.
     ids_ref <- ids_ref[!is.na(ids_ref) & ids_ref != 0L]
-    if (length(ids_ref) == 0L) return(NULL)
+    if (length(ids_ref) > 0L) {
+        schedule <- data.table::setDT(DBI::dbGetQuery(
+            dest,
+            sprintf(
+                paste(
+                    "SELECT * FROM SCHEDULE_YEAR",
+                    "WHERE SCHEDULE_ID IN (%s) ORDER BY SCHEDULE_ID"
+                ),
+                paste(ids_ref, collapse = ", ")
+            )
+        ))
+        # In DeST, the actual schedule data is stored as doubles in a raw vector.
+        schedule[, DATA := lapply(DATA, readBin, what = "double", n = 8760L)]
+    } else {
+        schedule <- data.table::data.table()
+    }
 
-    schedule <- data.table::setDT(DBI::dbGetQuery(
-        dest,
-        sprintf("SELECT * FROM SCHEDULE_YEAR WHERE SCHEDULE_ID IN (%s)", paste(ids_ref, collapse = ", "))
-    ))
-    # In DeST, the actual schedule data is stored as doubles in a raw vector.
-    data.table::set(schedule, NULL, "DATA", lapply(schedule[["DATA"]], readBin, what = "double", n = 8760L))
+    # Range ventilation needs a normalized max-minus-min schedule because an
+    # EnergyPlus ventilation availability schedule is a fraction, not an ACH
+    # value. Generate that portable Schedule:Year input alongside source rows.
+    derived <- ventilation__range_schedule_rows(dest)
+    schedule <- data.table::rbindlist(
+        list(schedule, derived),
+        use.names = TRUE,
+        fill = TRUE
+    )
     schedule <- schedule__scale_relative_humidity(dest, schedule)
+    if (nrow(schedule) == 0L) {
+        return(NULL)
+    }
 
     type_limits <- schedule__convert_type_limits(dest, ep, schedule)
     days <- schedule__convert_day(dest, ep, schedule, type_limits)
@@ -65,12 +138,31 @@ schedule__convert <- function(dest, ep) {
 
     # combine all data and load
     data.table::set(type_limits, NULL, "id", data.table::rleid(type_limits$id))
-    data.table::set(days$data, NULL, "id", data.table::rleid(days$data$id) + type_limits$id[nrow(type_limits)])
-    data.table::set(weeks$data, NULL, "id", data.table::rleid(weeks$data$id) + days$data$id[nrow(days$data)])
-    data.table::set(years, NULL, "id", data.table::rleid(years$id) + weeks$data$id[nrow(weeks$data)])
+    data.table::set(
+        days$data,
+        NULL,
+        "id",
+        data.table::rleid(days$data$id) + type_limits$id[nrow(type_limits)]
+    )
+    data.table::set(
+        weeks$data,
+        NULL,
+        "id",
+        data.table::rleid(weeks$data$id) + days$data$id[nrow(days$data)]
+    )
+    data.table::set(
+        years,
+        NULL,
+        "id",
+        data.table::rleid(years$id) + weeks$data$id[nrow(weeks$data)]
+    )
     out <- conv__load(
-        dest, ep,
-        data.table::rbindlist(list(type_limits, days$data, weeks$data, years), use.names = TRUE)
+        dest,
+        ep,
+        data.table::rbindlist(
+            list(type_limits, days$data, weeks$data, years),
+            use.names = TRUE
+        )
     )
 
     # always attach the table to the output in case it is useful later
@@ -90,7 +182,9 @@ schedule__relative_humidity_ids <- function(dest) {
 
     ids <- un_list(lapply(tables, function(table) {
         fields <- intersect(columns, DBI::dbListFields(dest, table))
-        if (length(fields) == 0L || !db_has_rows(dest, table)) return(NULL)
+        if (length(fields) == 0L || !db_has_rows(dest, table)) {
+            return(NULL)
+        }
         un_list(DBI::dbGetQuery(
             dest,
             sprintf(
@@ -104,118 +198,229 @@ schedule__relative_humidity_ids <- function(dest) {
     unique(ids[!is.na(ids) & ids != 0L])
 }
 
-# Collect every schedule reference except the two humidity-limit fields. A
-# shared ID would make in-place unit conversion ambiguous and must fail loudly.
+# Collect every schedule reference except the two humidity-limit fields.
 schedule__nonhumidity_reference_ids <- function(dest) {
-    ids <- un_list(recursive = TRUE, lapply(
-        setdiff(DBI::dbListTables(dest), "SCHEDULE_YEAR"),
-        function(table) {
-            if (!db_has_rows(dest, table)) return(NULL)
-            fields <- grep("SCHEDULE", DBI::dbListFields(dest, table), value = TRUE)
-            fields <- setdiff(fields, c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE"))
-            if (length(fields) == 0L) return(NULL)
-            DBI::dbGetQuery(
-                dest,
-                sprintf(
-                    "SELECT DISTINCT %s FROM `%s`",
-                    paste(sprintf("`%s`", fields), collapse = ", "),
-                    table
+    ids <- un_list(
+        recursive = TRUE,
+        lapply(
+            setdiff(DBI::dbListTables(dest), "SCHEDULE_YEAR"),
+            function(table) {
+                if (!db_has_rows(dest, table)) {
+                    return(NULL)
+                }
+                fields <- schedule__reference_fields(dest, table)
+                fields <- setdiff(
+                    fields,
+                    c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
                 )
-            )
-        }
-    ))
+                if (length(fields) == 0L) {
+                    return(NULL)
+                }
+                DBI::dbGetQuery(
+                    dest,
+                    sprintf(
+                        "SELECT DISTINCT %s FROM `%s`",
+                        paste(sprintf("`%s`", fields), collapse = ", "),
+                        table
+                    )
+                )
+            }
+        )
+    )
 
     unique(ids[!is.na(ids) & ids != 0L])
+}
+
+# Return humidity schedules that also need to retain their original unit use.
+schedule__shared_relative_humidity_ids <- function(dest) {
+    intersect(
+        schedule__relative_humidity_ids(dest),
+        schedule__nonhumidity_reference_ids(dest)
+    )
+}
+
+# Build deterministic names for percent copies of shared humidity schedules.
+schedule__relative_humidity_name_map <- function(dest) {
+    shared_ids <- schedule__shared_relative_humidity_ids(dest)
+    if (length(shared_ids) == 0L) {
+        return(data.table::data.table())
+    }
+
+    source <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        sprintf(
+            paste(
+                "SELECT SCHEDULE_ID, NAME FROM SCHEDULE_YEAR",
+                "WHERE SCHEDULE_ID IN (%s) ORDER BY SCHEDULE_ID"
+            ),
+            paste(shared_ids, collapse = ", ")
+        )
+    ))
+    unresolved <- setdiff(shared_ids, source$SCHEDULE_ID)
+    if (length(unresolved) > 0L) {
+        stop(
+            sprintf(
+                "Cannot resolve relative-humidity schedule ID(s): [%s].",
+                paste(unresolved, collapse = ", ")
+            ),
+            call. = FALSE
+        )
+    }
+
+    existing_names <- DBI::dbGetQuery(
+        dest,
+        "SELECT NAME FROM SCHEDULE_YEAR ORDER BY SCHEDULE_ID"
+    )$NAME
+    candidates <- paste(source$NAME, "[Relative Humidity Percent]")
+    reserved <- make_unique_name(c(existing_names, candidates))
+    source[, NAME := utils::tail(reserved, .N)]
+    source[]
+}
+
+# Substitute derived percent-copy names only for shared humidity references.
+schedule__relative_humidity_reference_names <- function(dest, ids, names) {
+    mapping <- schedule__relative_humidity_name_map(dest)
+    if (nrow(mapping) == 0L) {
+        return(names)
+    }
+
+    index <- match(ids, mapping$SCHEDULE_ID)
+    replace <- !is.na(index)
+    names[replace] <- mapping$NAME[index[replace]]
+    names
 }
 
 # Convert DeST relative-humidity fractions to the percent values required by
 # EnergyPlus schedules while preserving all non-humidity schedules unchanged.
 schedule__scale_relative_humidity <- function(dest, schedule) {
     humidity_ids <- schedule__relative_humidity_ids(dest)
-    if (length(humidity_ids) == 0L) return(schedule)
-
-    shared_ids <- intersect(
-        humidity_ids,
-        schedule__nonhumidity_reference_ids(dest)
-    )
-    if (length(shared_ids) > 0L) {
-        stop(sprintf(
-            paste(
-                "Cannot scale relative-humidity schedule ID(s) [%s] because",
-                "they are also referenced by non-humidity fields."
-            ),
-            paste(shared_ids, collapse = ", ")
-        ), call. = FALSE)
+    if (length(humidity_ids) == 0L) {
+        return(schedule)
     }
 
     rows <- which(schedule$SCHEDULE_ID %in% humidity_ids)
     unresolved <- setdiff(humidity_ids, schedule$SCHEDULE_ID[rows])
     if (length(unresolved) > 0L) {
-        stop(sprintf(
-            "Cannot resolve relative-humidity schedule ID(s): [%s].",
-            paste(unresolved, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Cannot resolve relative-humidity schedule ID(s): [%s].",
+                paste(unresolved, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
 
     for (row in rows) {
         values <- schedule$DATA[[row]]
         # H0 froze DeST's supported representation as a 0--1 fraction. Reject
         # other encodings instead of guessing whether they are already percent.
-        if (length(values) != 8760L || any(!is.finite(values)) ||
-            any(values < 0 | values > 1)) {
-            stop(sprintf(
-                paste(
-                    "Relative-humidity schedule %s must contain 8760 finite",
-                    "DeST fraction values in [0, 1]."
+        if (
+            length(values) != 8760L ||
+                any(!is.finite(values)) ||
+                any(values < 0 | values > 1)
+        ) {
+            stop(
+                sprintf(
+                    paste(
+                        "Relative-humidity schedule %s must contain 8760 finite",
+                        "DeST fraction values in [0, 1]."
+                    ),
+                    schedule$SCHEDULE_ID[[row]]
                 ),
-                schedule$SCHEDULE_ID[[row]]
-            ), call. = FALSE)
+                call. = FALSE
+            )
         }
     }
 
     schedule__assert_relative_humidity_bounds(dest, schedule)
-    for (row in rows) {
+    shared_ids <- schedule__shared_relative_humidity_ids(dest)
+    direct_rows <- which(
+        schedule$SCHEDULE_ID %in% setdiff(humidity_ids, shared_ids)
+    )
+    for (row in direct_rows) {
         values <- schedule$DATA[[row]]
         schedule$DATA[[row]] <- values * 100
+    }
+
+    # A shared DeST schedule has two physical roles with different units.
+    # Preserve its original values and add a percent copy for Humidistat.
+    mapping <- schedule__relative_humidity_name_map(dest)
+    if (nrow(mapping) > 0L) {
+        duplicate_rows <- match(mapping$SCHEDULE_ID, schedule$SCHEDULE_ID)
+        duplicate <- data.table::copy(schedule[duplicate_rows])
+        first_id <- min(c(0L, schedule$SCHEDULE_ID), na.rm = TRUE) -
+            nrow(duplicate)
+        duplicate[, `:=`(
+            SCHEDULE_ID = seq.int(first_id, length.out = .N),
+            NAME = mapping$NAME,
+            DATA = lapply(DATA, function(values) values * 100)
+        )]
+        schedule <- data.table::rbindlist(
+            list(schedule, duplicate),
+            use.names = TRUE,
+            fill = TRUE
+        )
     }
 
     schedule
 }
 
-# Check every complete ROOM_GROUP humidity pair hour by hour before scaling;
-# an inverted lower/upper bound is invalid in both DeST and EnergyPlus.
+# Check every complete ROOM_GROUP or ROOM_TYPE_DATA humidity pair hour by hour
+# before scaling; an inverted lower/upper bound is invalid in both simulators.
 schedule__assert_relative_humidity_bounds <- function(dest, schedule) {
-    if (!"ROOM_GROUP" %in% DBI::dbListTables(dest)) return(invisible(NULL))
-    fields <- DBI::dbListFields(dest, "ROOM_GROUP")
     required <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
-    if (!all(required %in% fields) || !db_has_rows(dest, "ROOM_GROUP")) {
+    tables <- intersect(
+        c("ROOM_GROUP", "ROOM_TYPE_DATA"),
+        DBI::dbListTables(dest)
+    )
+    pairs <- data.table::rbindlist(lapply(tables, function(table) {
+        fields <- DBI::dbListFields(dest, table)
+        if (!all(required %in% fields) || !db_has_rows(dest, table)) {
+            return(NULL)
+        }
+        data.table::as.data.table(DBI::dbGetQuery(
+            dest,
+            sprintf(
+                paste(
+                    "SELECT DISTINCT SET_RH_MIN_SCHEDULE AS MIN_ID,",
+                    "SET_RH_MAX_SCHEDULE AS MAX_ID FROM `%s`"
+                ),
+                table
+            )
+        ))
+    }))
+    if (nrow(pairs) == 0L) {
         return(invisible(NULL))
     }
-
-    pairs <- data.table::as.data.table(DBI::dbGetQuery(
-        dest,
-        paste(
-            "SELECT DISTINCT SET_RH_MIN_SCHEDULE AS MIN_ID,",
-            "SET_RH_MAX_SCHEDULE AS MAX_ID FROM ROOM_GROUP"
-        )
-    ))
-    keep <- !is.na(pairs$MIN_ID) & pairs$MIN_ID != 0L &
-        !is.na(pairs$MAX_ID) & pairs$MAX_ID != 0L
+    pairs <- unique(pairs)
+    keep <- !is.na(pairs$MIN_ID) &
+        pairs$MIN_ID != 0L &
+        !is.na(pairs$MAX_ID) &
+        pairs$MAX_ID != 0L
     pairs <- pairs[keep]
     for (i in seq_len(nrow(pairs))) {
-        min_values <- schedule$DATA[[match(pairs$MIN_ID[[i]], schedule$SCHEDULE_ID)]]
-        max_values <- schedule$DATA[[match(pairs$MAX_ID[[i]], schedule$SCHEDULE_ID)]]
+        min_values <- schedule$DATA[[match(
+            pairs$MIN_ID[[i]],
+            schedule$SCHEDULE_ID
+        )]]
+        max_values <- schedule$DATA[[match(
+            pairs$MAX_ID[[i]],
+            schedule$SCHEDULE_ID
+        )]]
         inverted <- which(min_values > max_values)
         if (length(inverted) > 0L) {
-            stop(sprintf(
-                paste(
-                    "Relative-humidity lower schedule %s exceeds upper",
-                    "schedule %s at DeST hour index %s."
+            stop(
+                sprintf(
+                    paste(
+                        "Relative-humidity lower schedule %s exceeds upper",
+                        "schedule %s at DeST hour index %s."
+                    ),
+                    pairs$MIN_ID[[i]],
+                    pairs$MAX_ID[[i]],
+                    inverted[[1L]] - 1L
                 ),
-                pairs$MIN_ID[[i]],
-                pairs$MAX_ID[[i]],
-                inverted[[1L]] - 1L
-            ), call. = FALSE)
+                call. = FALSE
+            )
         }
     }
 
@@ -227,29 +432,43 @@ schedule__convert_type_limits <- function(dest, ep, schedule) {
     types[types == 5L] <- 4L
     types <- unique.default(types)
     type_limits <- data.table::fcase(
-        types == 1L,
-        list(list("Fraction", 0, 1, "Continuous")),
-        types == 2L,
-        list(list("On/Off", 0, 1, "Discrete")),
-        types == 3L,
-        list(list("Control Method", NA_real_, NA_real_, "Discrete")),
-        types %in% c(4L, 5L),
+        types == 1L                                                  ,
+        list(list("Fraction", 0, 1, "Continuous"))                   ,
+        types == 2L                                                  ,
+        list(list("On/Off", 0, 1, "Discrete"))                       ,
+        types == 3L                                                  ,
+        list(list("Control Method", NA_real_, NA_real_, "Discrete")) ,
+        types %in% c(4L, 5L)                                         ,
         list(list("Any Number", NA_real_, NA_real_, "Continuous"))
     )
     type_limits <- data.table::rbindlist(type_limits)
-    data.table::setnames(type_limits, c("Name", "Lower Limit Value", "Upper Limit Value", "Numeric Type"))
+    data.table::setnames(
+        type_limits,
+        c("Name", "Lower Limit Value", "Upper Limit Value", "Numeric Type")
+    )
     data.table::set(type_limits, NULL, "Unit Type", "Dimensionless")
     data.table::set(type_limits, NULL, "id", types)
     data.table::set(type_limits, NULL, "class", "ScheduleTypeLimits")
     data.table::set(type_limits, NULL, "name", type_limits$Name)
 
-    type_limits <- data.table::set(eplusr::dt_to_load(type_limits), NULL, "field", NULL)
+    type_limits <- data.table::set(
+        eplusr::dt_to_load(type_limits),
+        NULL,
+        "field",
+        NULL
+    )
     data.table::setcolorder(type_limits, c("id", "class", "name", "value"))
 
     type_limits
 }
 
-schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day-") {
+schedule__convert_day <- function(
+    dest,
+    ep,
+    schedule,
+    type_limits,
+    prefix = "Day-"
+) {
     # the number of schedules to extract
     num_sch <- nrow(schedule)
 
@@ -266,7 +485,8 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
 
     # compress the value
     grp <- collapse::groupv(day_value$rleid)
-    changed <- collapse::fdiff.default(day_value$value, g = grp, fill = 1.0) != 0.0
+    changed <- collapse::fdiff.default(day_value$value, g = grp, fill = 1.0) !=
+        0.0
     changed <- collapse::flag.default(changed, n = -1L, g = grp)
     collapse::replace_na(changed, TRUE, set = TRUE)
     day_value <- collapse::ss(day_value, changed)
@@ -279,7 +499,10 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
     ]
     day_name <- paste0(prefix, make_unique_name(day_name))
 
-    type_day <- collapse::funique.data.frame(collapse::ss(day_value, j = c("rleid", "type")))
+    type_day <- collapse::funique.data.frame(collapse::ss(
+        day_value,
+        j = c("rleid", "type")
+    ))
     data.table::setnames(type_day, "rleid", "id")
 
     grp_fld <- collapse::groupv(day_value$rleid, group.size = TRUE)
@@ -292,11 +515,18 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
     data.table::set(sch_day, NULL, "name", rep(day_name, num_fld))
 
     # field 1: name
-    data.table::set(sch_day, collapse::whichv(sch_day$index, 1L), "value", day_name)
+    data.table::set(
+        sch_day,
+        collapse::whichv(sch_day$index, 1L),
+        "value",
+        day_name
+    )
 
     # field 2: schedule type limits name
     data.table::set(
-        sch_day, collapse::whichv(sch_day$index, 2L), "value",
+        sch_day,
+        collapse::whichv(sch_day$index, 2L),
+        "value",
         type_limits$name[collapse::fmatch(type_day$type, type_limits$id)]
     )
 
@@ -305,8 +535,13 @@ schedule__convert_day <- function(dest, ep, schedule, type_limits, prefix = "Day
 
     # field-sets
     data.table::set(
-        sch_day, which(sch_day$index > 3L), "value",
-        c(schedule__format_time(day_value$until), as.character(day_value$value))[
+        sch_day,
+        which(sch_day$index > 3L),
+        "value",
+        c(
+            schedule__format_time(day_value$until),
+            as.character(day_value$value)
+        )[
             collapse::radixorderv(rep(seq_along(day_value$until), 2L))
         ]
     )
@@ -323,7 +558,8 @@ schedule__object_lookup <- function(fields, object_class) {
     if (length(missing) > 0L) {
         abort(sprintf(
             "Cannot build %s schedule lookup. Missing column(s): [%s].",
-            object_class, paste(missing, collapse = ", ")
+            object_class,
+            paste(missing, collapse = ", ")
         ))
     }
 
@@ -338,7 +574,8 @@ schedule__object_lookup <- function(fields, object_class) {
     if (anyDuplicated(lookup$id)) {
         abort(sprintf(
             "Cannot build %s schedule lookup because object ids are not unique: [%s].",
-            object_class, paste(unique(lookup$id[duplicated(lookup$id)]), collapse = ", ")
+            object_class,
+            paste(unique(lookup$id[duplicated(lookup$id)]), collapse = ", ")
         ))
     }
 
@@ -359,7 +596,8 @@ schedule__lookup_names <- function(ids, lookup, object_class) {
     if (anyNA(matched)) {
         abort(sprintf(
             "Cannot resolve %s schedule reference id(s): [%s].",
-            object_class, paste(unique(ids[is.na(matched)]), collapse = ", ")
+            object_class,
+            paste(unique(ids[is.na(matched)]), collapse = ", ")
         ))
     }
 
@@ -373,8 +611,18 @@ schedule__week_map <- function(schedule, days, prefix = "Week-") {
     map <- data.table::copy(days$map)
 
     data.table::set(map, NULL, "rleid", rep(seq_len(num_sch), each = 365L))
-    data.table::set(map, NULL, "week", rep(c(rep(1L:52L, each = 7L), 53L), num_sch))
-    data.table::set(map, NULL, "rleid_week", rep((seq_len(num_sch) - 1L) * 53L, each = 365L) + map$week)
+    data.table::set(
+        map,
+        NULL,
+        "week",
+        rep(c(rep(1L:52L, each = 7L), 53L), num_sch)
+    )
+    data.table::set(
+        map,
+        NULL,
+        "rleid_week",
+        rep((seq_len(num_sch) - 1L) * 53L, each = 365L) + map$week
+    )
 
     # Find an earlier week containing the same profile as the final calendar
     # day so its complete set of day-type assignments can be reused.
@@ -385,7 +633,11 @@ schedule__week_map <- function(schedule, days, prefix = "Week-") {
         nomatch = 0L
     )
 
-    week_53 <- collapse::ss(map, ind_53, c("index_ori", "rleid", "week", "rleid_week"))
+    week_53 <- collapse::ss(
+        map,
+        ind_53,
+        c("index_ori", "rleid", "week", "rleid_week")
+    )
     matched_53 <- mth_53 != 0L
 
     # Reuse an earlier complete week when its daily profile already contains
@@ -395,15 +647,28 @@ schedule__week_map <- function(schedule, days, prefix = "Week-") {
     if (any(matched_53)) {
         reused_week_53 <- collapse::ss(week_53, which(matched_53))
         data.table::set(
-            reused_week_53, NULL, "week",
+            reused_week_53,
+            NULL,
+            "week",
             map$week[-ind_53][mth_53[matched_53]]
         )
-        reused_week_53 <- data.table::set(collapse::join(
-            collapse::ss(map, j = c("index_cur", "rleid", "week"), check = FALSE),
-            reused_week_53,
-            on = c("rleid", "week"), how = "right",
-            verbose = FALSE, multiple = TRUE
-        ), NULL, "week", 53L)
+        reused_week_53 <- data.table::set(
+            collapse::join(
+                collapse::ss(
+                    map,
+                    j = c("index_cur", "rleid", "week"),
+                    check = FALSE
+                ),
+                reused_week_53,
+                on = c("rleid", "week"),
+                how = "right",
+                verbose = FALSE,
+                multiple = TRUE
+            ),
+            NULL,
+            "week",
+            53L
+        )
     }
 
     # Schedule:Year uses week 53 only for December 31. If that day has a unique
@@ -420,20 +685,27 @@ schedule__week_map <- function(schedule, days, prefix = "Week-") {
         ]
     }
 
-    map <- data.table::rbindlist(list(
-        collapse::ss(map, -ind_53),
-        reused_week_53,
-        dedicated_week_53
-    ), use.names = TRUE)
+    map <- data.table::rbindlist(
+        list(
+            collapse::ss(map, -ind_53),
+            reused_week_53,
+            dedicated_week_53
+        ),
+        use.names = TRUE
+    )
 
     spl_week <- collapse::gsplit(map$index_cur, map$rleid_week)
     grp_week <- collapse::group(data.table::transpose(spl_week))
     grp_rleid <- collapse::groupv(rep(seq_len(num_sch), each = 53L))
-    changed <- collapse::fdiff.default(grp_week, g = grp_rleid, fill = 1.0) != 0.0
+    changed <- collapse::fdiff.default(grp_week, g = grp_rleid, fill = 1.0) !=
+        0.0
     changed <- collapse::flag.default(changed, n = -1L, g = grp_rleid)
     collapse::replace_na(changed, TRUE, set = TRUE)
 
-    week_name <- paste0(prefix, make_unique_name(rep(schedule$NAME, each = 53L)[changed]))
+    week_name <- paste0(
+        prefix,
+        make_unique_name(rep(schedule$NAME, each = 53L)[changed])
+    )
 
     list(map = map, changed = changed, name = week_name)
 }
@@ -446,7 +718,12 @@ schedule__week_daytypes <- function(map, changed) {
         c("rleid_week", "index_cur"),
         check = FALSE
     )
-    data.table::set(week_daytype, NULL, "daytype", rep(c(2L:7L, 1L), sum(changed)))
+    data.table::set(
+        week_daytype,
+        NULL,
+        "daytype",
+        rep(c(2L:7L, 1L), sum(changed))
+    )
     data.table::setnames(week_daytype, "index_cur", "rleid_day")
     # NOTE: In DeST, there is no "SummerDesignDay", "WinterDesignDay",
     #       "Holiday", "CustomDay1" and "CustomDay2". So for "SummerDesignDay"
@@ -460,8 +737,18 @@ schedule__week_daytypes <- function(map, changed) {
         check = FALSE
     )
     week_daytype_designday <- data.table::rbindlist(list(
-        data.table::set(data.table::copy(week_daytype_mon), NULL, "daytype", ENUM_SCH_DAYTYPE[["SummerDesignDay"]]),
-        data.table::set(week_daytype_mon, NULL, "daytype", ENUM_SCH_DAYTYPE[["WinterDesignDay"]])
+        data.table::set(
+            data.table::copy(week_daytype_mon),
+            NULL,
+            "daytype",
+            ENUM_SCH_DAYTYPE[["SummerDesignDay"]]
+        ),
+        data.table::set(
+            week_daytype_mon,
+            NULL,
+            "daytype",
+            ENUM_SCH_DAYTYPE[["WinterDesignDay"]]
+        )
     ))
     # extract the value for "Sunday"
     week_daytype_sun <- collapse::ss(
@@ -470,9 +757,24 @@ schedule__week_daytypes <- function(map, changed) {
         check = FALSE
     )
     week_daytype_specialday <- data.table::rbindlist(list(
-        data.table::set(data.table::copy(week_daytype_sun), NULL, "daytype", ENUM_SCH_DAYTYPE[["Holiday"]]),
-        data.table::set(data.table::copy(week_daytype_sun), NULL, "daytype", ENUM_SCH_DAYTYPE[["CustomDay1"]]),
-        data.table::set(week_daytype_sun, NULL, "daytype", ENUM_SCH_DAYTYPE[["CustomDay2"]])
+        data.table::set(
+            data.table::copy(week_daytype_sun),
+            NULL,
+            "daytype",
+            ENUM_SCH_DAYTYPE[["Holiday"]]
+        ),
+        data.table::set(
+            data.table::copy(week_daytype_sun),
+            NULL,
+            "daytype",
+            ENUM_SCH_DAYTYPE[["CustomDay1"]]
+        ),
+        data.table::set(
+            week_daytype_sun,
+            NULL,
+            "daytype",
+            ENUM_SCH_DAYTYPE[["CustomDay2"]]
+        )
     ))
     # combine all
     week_daytype <- data.table::rbindlist(list(
@@ -520,7 +822,9 @@ schedule__compact_week_daytypes <- function(week_daytype) {
                         matched_daytypes,
                         0L
                     )
-                    if (sum(m_weekday != 0L) == length(ENUM_SCH_DAYTYPE_WEEKDAY)) {
+                    if (
+                        sum(m_weekday != 0L) == length(ENUM_SCH_DAYTYPE_WEEKDAY)
+                    ) {
                         out <- c(ENUM_SCH_DAYTYPE[["Weekdays"]])
                         matched_daytypes <- matched_daytypes[-m_weekday]
                     }
@@ -530,7 +834,9 @@ schedule__compact_week_daytypes <- function(week_daytype) {
                         matched_daytypes,
                         0L
                     )
-                    if (sum(m_weekend != 0L) == length(ENUM_SCH_DAYTYPE_WEEKEND)) {
+                    if (
+                        sum(m_weekend != 0L) == length(ENUM_SCH_DAYTYPE_WEEKEND)
+                    ) {
                         out <- c(out, ENUM_SCH_DAYTYPE[["Weekends"]])
                         matched_daytypes <- matched_daytypes[-m_weekend]
                     }
@@ -540,16 +846,28 @@ schedule__compact_week_daytypes <- function(week_daytype) {
             )
 
             if (length(other_days) > 0L) {
-                num_others <- vapply(compacted, function(daytypes) {
-                    sum(collapse::fmatch(daytypes, other_days, 0L) != 0L)
-                }, integer(1L))
-                ind_others <- collapse::radixorderv(num_others, decreasing = TRUE)[num_others > 0L]
+                num_others <- vapply(
+                    compacted,
+                    function(daytypes) {
+                        sum(collapse::fmatch(daytypes, other_days, 0L) != 0L)
+                    },
+                    integer(1L)
+                )
+                ind_others <- collapse::radixorderv(
+                    num_others,
+                    decreasing = TRUE
+                )[num_others > 0L]
                 if (length(ind_others) > 0L) {
                     ind_others <- ind_others[[1L]]
                     compacted[[ind_others]] <- c(
                         # only keep the special daytypes
                         compacted[[ind_others]][
-                            collapse::fmatch(compacted[[ind_others]], ENUM_SCH_DAYTYPE_SPECIAL, 0L) != 0L
+                            collapse::fmatch(
+                                compacted[[ind_others]],
+                                ENUM_SCH_DAYTYPE_SPECIAL,
+                                0L
+                            ) !=
+                                0L
                         ],
                         ENUM_SCH_DAYTYPE[["AllOtherDays"]]
                     )
@@ -558,9 +876,13 @@ schedule__compact_week_daytypes <- function(week_daytype) {
 
             # EnergyPlus resolves day types in field order. AllOtherDays
             # therefore has to be the final group, after every explicit type.
-            has_all_other_days <- vapply(compacted, function(daytypes) {
-                any(daytypes == ENUM_SCH_DAYTYPE[["AllOtherDays"]])
-            }, logical(1L))
+            has_all_other_days <- vapply(
+                compacted,
+                function(daytypes) {
+                    any(daytypes == ENUM_SCH_DAYTYPE[["AllOtherDays"]])
+                },
+                logical(1L)
+            )
             day_order <- c(
                 which(!has_all_other_days),
                 which(has_all_other_days)
@@ -592,10 +914,14 @@ schedule__compact_week_daytypes <- function(week_daytype) {
 
 # Build the Schedule:Week:Compact field table from compressed day-type groups.
 schedule__week_fields <- function(dest, ep, days, week_name, week_daytype) {
-    num_fld <- attr(collapse::groupv(
-        week_daytype$rleid,
-        group.sizes = TRUE
-    ), "group.sizes", exact = TRUE)
+    num_fld <- attr(
+        collapse::groupv(
+            week_daytype$rleid,
+            group.sizes = TRUE
+        ),
+        "group.sizes",
+        exact = TRUE
+    )
     num_fld <- num_fld * 2L + 1L
 
     fld_daytype <- paste("For:", names(ENUM_SCH_DAYTYPE)[week_daytype$daytype])
@@ -610,21 +936,43 @@ schedule__week_fields <- function(dest, ep, days, week_name, week_daytype) {
     sch_week <- conv__field(dest, ep, "Schedule:Week:Compact", num_fld)
     data.table::set(sch_week, NULL, "name", rep(week_name, num_fld))
     # keep the original rleid
-    data.table::set(sch_week, NULL, "id", rep(unique(week_daytype$rleid), num_fld))
+    data.table::set(
+        sch_week,
+        NULL,
+        "id",
+        rep(unique(week_daytype$rleid), num_fld)
+    )
 
     # field 1: name
-    data.table::set(sch_week, collapse::whichv(sch_week$index, 1L), "value", week_name)
+    data.table::set(
+        sch_week,
+        collapse::whichv(sch_week$index, 1L),
+        "value",
+        week_name
+    )
 
     data.table::set(
-        sch_week, which(sch_week$index > 1L), "value",
-        c(fld_daytype, fld_day)[collapse::radixorderv(rep(seq_along(fld_daytype), 2L))]
+        sch_week,
+        which(sch_week$index > 1L),
+        "value",
+        c(fld_daytype, fld_day)[collapse::radixorderv(rep(
+            seq_along(fld_daytype),
+            2L
+        ))]
     )
 
     sch_week
 }
 
 # Coordinate week mapping, day-type expansion, compression, and field assembly.
-schedule__convert_week <- function(dest, ep, schedule, type_limits, days, prefix = "Week-") {
+schedule__convert_week <- function(
+    dest,
+    ep,
+    schedule,
+    type_limits,
+    days,
+    prefix = "Week-"
+) {
     week <- schedule__week_map(schedule, days, prefix)
     daytypes <- schedule__week_daytypes(week$map, week$changed)
     daytypes <- schedule__compact_week_daytypes(daytypes)
@@ -649,13 +997,26 @@ schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
     }
 
     # get the start and end date of each span
-    grp_span <- collapse::groupv(year_span$rleid, starts = TRUE, group.sizes = TRUE)
-    year_span_start <- collapse::flag.default(year_span$ordinal, n = 1L, g = grp_span, fill = NA_integer_) + 1L
+    grp_span <- collapse::groupv(
+        year_span$rleid,
+        starts = TRUE,
+        group.sizes = TRUE
+    )
+    year_span_start <- collapse::flag.default(
+        year_span$ordinal,
+        n = 1L,
+        g = grp_span,
+        fill = NA_integer_
+    ) +
+        1L
     collapse::replace_na(year_span_start, 1L, set = TRUE)
-    year_span_start <- lubridate::make_date(2025L, 12L, 31L) + lubridate::days(year_span_start)
-    year_span_end <- lubridate::make_date(2025L, 12L, 31L) + lubridate::days(year_span$ordinal)
+    year_span_start <- lubridate::make_date(2025L, 12L, 31L) +
+        lubridate::days(year_span_start)
+    year_span_end <- lubridate::make_date(2025L, 12L, 31L) +
+        lubridate::days(year_span$ordinal)
     data.table::set(
-        year_span, NULL,
+        year_span,
+        NULL,
         c("start_month", "start_day", "end_month", "end_day"),
         list(
             as.integer(lubridate::month(year_span_start)),
@@ -668,7 +1029,11 @@ schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
     # make unique names for each year schedule
     year_name <- make_unique_name(schedule$NAME)
 
-    grp_week <- collapse::groupv(year_span$rleid, group.sizes = TRUE, starts = TRUE)
+    grp_week <- collapse::groupv(
+        year_span$rleid,
+        group.sizes = TRUE,
+        starts = TRUE
+    )
     num_fld <- attr(grp_week, "group.sizes", exact = TRUE)
     # *5 for week, start month, start day, end month, end day
     # +2 for name, type limits
@@ -678,11 +1043,18 @@ schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
     data.table::set(sch_year, NULL, "name", rep(year_name, num_fld))
 
     # field 1: name
-    data.table::set(sch_year, collapse::whichv(sch_year$index, 1L), "value", year_name)
+    data.table::set(
+        sch_year,
+        collapse::whichv(sch_year$index, 1L),
+        "value",
+        year_name
+    )
 
     # field 2: schedule type limits name
     data.table::set(
-        sch_year, collapse::whichv(sch_year$index, 2L), "value",
+        sch_year,
+        collapse::whichv(sch_year$index, 2L),
+        "value",
         type_limits$name[collapse::fmatch(schedule$TYPE, type_limits$id)]
     )
 
@@ -690,7 +1062,9 @@ schedule__convert_year <- function(dest, ep, schedule, type_limits, weeks) {
 
     # field-sets
     data.table::set(
-        sch_year, which(sch_year$index > 2L), "value",
+        sch_year,
+        which(sch_year$index > 2L),
+        "value",
         c(
             schedule__lookup_names(
                 year_span$rleid_week,
@@ -718,7 +1092,12 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
     }
 
     args <- c(
-        list(index = collapse::gsplit(collapse::ss(value$rleid, attr(len, "starts")), grp_len)),
+        list(
+            index = collapse::gsplit(
+                collapse::ss(value$rleid, attr(len, "starts")),
+                grp_len
+            )
+        ),
         data.table::setattr(
             lapply(col_data, function(col) {
                 collapse::gsplit(collapse::gsplit(value[[col]], len), grp_len)
@@ -754,7 +1133,10 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
                 offset <- 0L
                 for (col in col_data) {
                     out[[col]] <- un_list(data.table::transpose(
-                        collapse::fsubset.default(pair, seq_along(trans[[col]]) + offset)
+                        collapse::fsubset.default(
+                            pair,
+                            seq_along(trans[[col]]) + offset
+                        )
                     ))
                     offset <- offset + length(trans[[col]])
                 }
@@ -788,13 +1170,20 @@ schedule__unique_value <- function(value, cols = NULL, full = TRUE) {
         list(
             rleid = un_list(.mapply(
                 function(rleid, offset) rleid + offset,
-                list(rleid = lapply(paired, .subset2, "rleid"), offset = offset),
+                list(
+                    rleid = lapply(paired, .subset2, "rleid"),
+                    offset = offset
+                ),
                 NULL
             ))
         ),
-        data.table::setattr(lapply(col_data, function(col) {
-            un_list(lapply(paired, .subset2, col))
-        }), "names", col_data)
+        data.table::setattr(
+            lapply(col_data, function(col) {
+                un_list(lapply(paired, .subset2, col))
+            }),
+            "names",
+            col_data
+        )
     ))
     data.table::setattr(value, "map", map)
 

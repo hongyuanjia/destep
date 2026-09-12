@@ -86,7 +86,37 @@ epw__climate_data <- function(dest) {
     )
     data.table::setDT(climate)
     dt_force_numeric(climate, names(climate))
+    climate <- epw__expand_sparse_wind(climate)
     epw__validate_climate(climate, climate_id)
+    climate
+}
+
+# Expand the six-hourly wind observations stored by DeST Access models using
+# the same zero-initialized last-observation rule found in DeST's solver input.
+epw__expand_sparse_wind <- function(climate) {
+    missing <- vapply(c("WS", "WD"), function(field) {
+        sum(is.na(climate[[field]]))
+    }, integer(1L))
+    for (field in names(missing)) {
+        value <- climate[[field]]
+        previous <- 0
+        for (index in seq_along(value)) {
+            if (is.na(value[[index]])) {
+                value[[index]] <- previous
+            } else {
+                previous <- value[[index]]
+            }
+        }
+        data.table::set(climate, NULL, field, value)
+    }
+    attr(climate, "destep_wind_audit") <- list(
+        wind_speed_filled_hours = unname(missing[["WS"]]),
+        wind_direction_filled_hours = unname(missing[["WD"]]),
+        wind_fill_method = paste(
+            "zero-initialized last observation carried forward",
+            "matching DeST solver serialization"
+        )
+    )
     climate
 }
 
@@ -337,9 +367,38 @@ epw__solar_sine_altitude <- function(hour, latitude, longitude, time_zone) {
         cos(latitude) * cos(declination) * cos(hour_angle)
 }
 
-# Derive DNI from DeST GHI and DHI at the source HOUR timestamp. This timestamp
-# is used because the development data produce nonphysical near-horizon DNI at
-# the interval midpoint; the selected convention is recorded in diagnostics.
+# Average positive solar altitude over the hourly support centered on each DeST
+# whole-hour weather timestamp. Sampling minute midpoints avoids the sunrise and
+# sunset singularity produced by dividing hourly radiation by one instant.
+epw__solar_interval_sine <- function(
+    hour, latitude, longitude, time_zone, samples = 60L
+) {
+    if (length(samples) != 1L || is.na(samples) || samples < 1L ||
+        samples != as.integer(samples)) {
+        stop("`samples` must be one positive integer.", call. = FALSE)
+    }
+    samples <- as.integer(samples)
+    offsets <- (seq_len(samples) - 0.5) / samples - 0.5
+    sine_altitude <- vapply(offsets, function(offset) {
+        epw__solar_sine_altitude(
+            hour + offset, latitude, longitude, time_zone
+        )
+    }, numeric(length(hour)))
+    dim(sine_altitude) <- c(length(hour), samples)
+    sunlit_samples <- rowSums(sine_altitude > 0)
+    mean_sunlit_sine <- rowSums(pmax(sine_altitude, 0)) /
+        pmax(sunlit_samples, 1L)
+    list(
+        mean_sunlit_sine = mean_sunlit_sine,
+        daylight = sunlit_samples > 0L,
+        sunlit_fraction = sunlit_samples / samples,
+        samples = samples
+    )
+}
+
+# Derive DNI from hourly DeST GHI and DHI using the corresponding centered-hour
+# solar geometry. This preserves the horizontal beam while producing the
+# hourly normal-plane radiation quantity required by EPW.
 epw__radiation <- function(climate, environment) {
     discrepancy <- climate$HORI_SCATTER_RAD - climate$HORI_TOTAL_RAD
     if (any(discrepancy > 1)) {
@@ -355,16 +414,16 @@ epw__radiation <- function(climate, environment) {
     global <- pmax(climate$HORI_TOTAL_RAD, climate$HORI_SCATTER_RAD)
     beam_horizontal <- pmax(global - climate$HORI_SCATTER_RAD, 0)
     time_zone <- epw__time_zone(environment)
-    sine_altitude <- epw__solar_sine_altitude(
+    solar_interval <- epw__solar_interval_sine(
         climate$HOUR,
         environment$LATITUDE[[1L]],
         environment$LONGITUDE[[1L]],
         time_zone
     )
-    daylight <- sine_altitude > 0
+    daylight <- solar_interval$daylight
     direct_normal <- numeric(nrow(climate))
     direct_normal[daylight] <- beam_horizontal[daylight] /
-        sine_altitude[daylight]
+        solar_interval$mean_sunlit_sine[daylight]
     if (any(direct_normal > 1500)) {
         stop(sprintf(
             "Derived direct normal radiation exceeds 1500 W/m2; maximum is %.6f W/m2.",
@@ -385,7 +444,13 @@ epw__radiation <- function(climate, environment) {
             maximum_discarded_beam_horizontal_w_m2 =
                 max(beam_horizontal[!daylight], 0),
             maximum_derived_dni_w_m2 = max(direct_normal),
-            solar_representative_time = "DeST HOUR timestamp"
+            solar_representative_time =
+                "hourly interval centered on DeST HOUR timestamp",
+            solar_interval_samples = solar_interval$samples,
+            partial_sunlight_hours = sum(
+                solar_interval$sunlit_fraction > 0 &
+                    solar_interval$sunlit_fraction < 1
+            )
         )
     )
 }
@@ -464,6 +529,7 @@ epw__data <- function(climate, environment, missing) {
                 epw_minute = 60L,
                 time_zone = epw__time_zone(environment)
             ),
+            attr(climate, "destep_wind_audit"),
             humidity$audit,
             radiation$audit
         )
@@ -532,8 +598,9 @@ epw__write <- function(path, weather, environment) {
         "HOLIDAYS/DAYLIGHT SAVINGS,No,0,0,0",
         "COMMENTS 1,Generated by destep from DeST CLIMATE_DATA",
         paste(
-            "COMMENTS 2,DNI derived from GHI and DHI at the DeST HOUR",
-            "timestamp; mild supersaturation capped within supported bounds"
+            "COMMENTS 2,DNI derived from GHI and DHI over the hourly interval",
+            "centered on DeST HOUR; mild supersaturation capped within",
+            "supported bounds"
         ),
         "DATA PERIODS,1,1,Data,Monday, 1/ 1,12/31"
     )

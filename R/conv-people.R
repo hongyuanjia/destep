@@ -1,45 +1,131 @@
 internal_gains__convert <- function(dest, ep) {
-    conv <- Filter(Negate(is.null), list(
-        OCCUPANT_GAINS = internal_gains__convert_people(dest, ep),
-        LIGHT_GAINS = internal_gains__convert_lights(dest, ep),
-        EQUIPMENT_GAINS = internal_gains__convert_electric_equipment(dest, ep)
-    ))
+    conv <- Filter(
+        Negate(is.null),
+        list(
+            PEOPLE = internal_gains__convert_people(dest, ep),
+            LIGHTS = internal_gains__convert_lights(dest, ep),
+            EQUIPMENT = internal_gains__convert_electric_equipment(dest, ep)
+        )
+    )
 
-    conv__combine_outputs(conv)
+    out <- conv__combine_outputs(conv)
+    if (is.null(out)) {
+        return(NULL)
+    }
+
+    # All three object families are projections of the same room-type record.
+    data.table::set(attr(out, "table"), NULL, "SOURCE_TABLE", "ROOM_TYPE_DATA")
+    out
+}
+
+# Internal gains used by Calload exist only when rooms can select a room-type
+# template; per-room drawing objects are not the authoritative numeric source.
+internal_gains__has_room_type_data <- function(dest) {
+    db_has_rows(dest, "ROOM") && db_has_rows(dest, "ROOM_TYPE_DATA")
+}
+
+# Fail on dangling room-type, schedule, or distribution references before an
+# invalid or silently incomplete EnergyPlus gain object can be generated.
+internal_gains__assert_references <- function(gain, label) {
+    missing_type <- is.na(gain$ROOM_TYPE_DATA_ID)
+    active <- !is.na(gain$ACTIVE) & gain$ACTIVE != 0L
+    missing_schedule <- active &
+        !missing_type &
+        (is.na(gain$SCHEDULE_ID) |
+            gain$SCHEDULE_ID == 0L |
+            is.na(gain$SCHEDULE_NAME))
+    missing_distribution <- active &
+        !missing_type &
+        (is.na(gain$DIST_MODE_ID) | is.na(gain$FRACTION_RADIANT))
+    invalid_basis <- active &
+        !missing_type &
+        (is.na(gain$CALCULATION_BASIS) |
+            !gain$CALCULATION_BASIS %in% c(0L, 1L))
+    invalid <- missing_type |
+        missing_schedule |
+        missing_distribution |
+        invalid_basis
+    if (!any(invalid)) {
+        return(invisible(NULL))
+    }
+
+    rows <- gain[invalid]
+    detail <- paste(
+        sprintf(
+            paste0(
+                "%s: TYPE=%s, SCHEDULE=%s, DIST_MODE=%s, ",
+                "CALCULATION_BASIS=%s"
+            ),
+            rows$ROOM_NAME,
+            rows$ROOM_TYPE_ID,
+            rows$SCHEDULE_ID,
+            rows$DIST_MODE_ID,
+            rows$CALCULATION_BASIS
+        ),
+        collapse = "; "
+    )
+    stop(
+        sprintf(
+            "Cannot resolve supported ROOM_TYPE_DATA %s reference(s): %s",
+            label,
+            detail
+        ),
+        call. = FALSE
+    )
 }
 
 # Split one DeST internal gain into a scheduled maximum-minus-minimum object and
 # an optional always-on minimum object, with shared source-value validation.
 internal_gains__split_minimum <- function(
-    gain, i, max_value, min_value, field, always_on, value_factory
+    gain,
+    i,
+    max_value,
+    min_value,
+    field,
+    always_on,
+    value_factory
 ) {
     min_value <- internal_gains__zero_if_na(min_value)
     name <- gain$NAME[[i]]
     if (!is.finite(max_value) || !is.finite(min_value)) {
-        stop(sprintf(
-            "Internal gain '%s' has a non-finite minimum or maximum value.",
-            name
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Internal gain '%s' has a non-finite minimum or maximum value.",
+                name
+            ),
+            call. = FALSE
+        )
     }
     if (min_value > max_value) {
-        stop(sprintf(
-            "Internal gain '%s' minimum (%s) exceeds maximum (%s).",
-            name, min_value, max_value
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Internal gain '%s' minimum (%s) exceeds maximum (%s).",
+                name,
+                min_value,
+                max_value
+            ),
+            call. = FALSE
+        )
     }
 
     variable_value <- max_value - min_value
     out <- list()
     if (variable_value > 0 || min_value <= 0) {
         value <- value_factory(
-            gain, i, name, gain$SCHEDULE_NAME[[i]]
+            gain,
+            i,
+            name,
+            gain$SCHEDULE_NAME[[i]]
         )
         value[[field]] <- variable_value
         out <- c(out, list(value))
     }
     if (min_value > 0) {
         value <- value_factory(
-            gain, i, paste(name, "Minimum"), always_on
+            gain,
+            i,
+            paste(name, "Minimum"),
+            always_on
         )
         value[[field]] <- min_value
         out <- c(out, list(value))
@@ -47,71 +133,117 @@ internal_gains__split_minimum <- function(
     out
 }
 
-# OCCUPANT_GAINS -> People
-# MIN_REQUIRE_FRESH_AIR is handled separately by
-# outdoor_air__convert() so People remains focused on
-# internal sensible/latent heat gains.
+# Resolve the version-specific zone-reference label shared by internal-gain
+# objects from field 2 of the selected target IDD class.
+internal_gains__zone_field_name <- function(ep, class) {
+    conv__idd_field_name(ep, class, 2L)
+}
+
+# Resolve the version-specific People design-level fields from the target IDD.
+internal_gains__people_field_names <- function(ep) {
+    stats::setNames(
+        vapply(
+            5:7,
+            function(field) conv__idd_field_name(ep, "People", field),
+            character(1L)
+        ),
+        c("number", "per_area", "area_per_person")
+    )
+}
+
+# ROOM.TYPE -> ROOM_TYPE_DATA occupant fields -> People. The outdoor-air field
+# is handled separately by outdoor_air__convert() so People remains focused on
+# internal sensible and latent heat gains.
 internal_gains__convert_people <- function(dest, ep) {
-    if (!db_has_rows(dest, "OCCUPANT_GAINS")) return(NULL)
+    if (!internal_gains__has_room_type_data(dest)) {
+        return(NULL)
+    }
 
     # NOTE: In DeST, the dehumidification load is calculated by the humidity
     # generated by people multiplied by the latent heat of vaporization (2500
     # kJ/kg, a fixed value). In EnergyPlus, the total heat generated by people
     # is input and latent heat is calculated from the Sensible Heat Fraction.
+    # ROOM_TYPE_DATA stores the standard 68/109/184 g/h values despite its old
+    # Access field comment saying kg/h; Calload serializes those integers
+    # unchanged. Convert g/h to W with 2.5 kJ/g before adding sensible heat.
     people <- DBI::dbGetQuery(
         dest,
         "
         SELECT
-            O.GAIN_ID          AS ID,
-            O.NAME             AS NAME,
+            R.ID               AS ID,
+            R.NAME || ' People' AS NAME,
+            R.ID               AS ROOM_ID,
             R.NAME             AS ROOM_NAME,
+            R.TYPE             AS ROOM_TYPE_ID,
+            T.ID               AS ROOM_TYPE_DATA_ID,
+            T.O_SCHEDULE       AS SCHEDULE_ID,
             S.NAME             AS SCHEDULE_NAME,
+            T.O_DIST_MODE      AS DIST_MODE_ID,
+            T.O_PER_AREA       AS CALCULATION_BASIS,
+            CASE WHEN T.O_MAXNUMBER > 0 OR T.O_MINNUMBER > 0
+                THEN 1 ELSE 0 END AS ACTIVE,
             CASE
-                WHEN O.PER_AREA = 1 THEN 'People/Area'
+                WHEN T.O_PER_AREA = 1 THEN 'People/Area'
                 ELSE 'People'
             END                AS METHOD,
             CASE
-                WHEN O.PER_AREA != 1 THEN O.MAXNUMBER
+                WHEN T.O_PER_AREA != 1 THEN T.O_MAXNUMBER
                 ELSE NULL
             END                AS NUMBER_OF_PEOPLE,
             CASE
-                WHEN O.PER_AREA = 1 THEN O.MAXNUMBER
+                WHEN T.O_PER_AREA = 1 THEN T.O_MAXNUMBER
                 ELSE NULL
             END                AS PEOPLE_PER_AREA,
             CASE
-                WHEN O.PER_AREA != 1 THEN O.MINNUMBER
+                WHEN T.O_PER_AREA != 1 THEN T.O_MINNUMBER
                 ELSE NULL
             END                AS MIN_NUMBER_OF_PEOPLE,
             CASE
-                WHEN O.PER_AREA = 1 THEN O.MINNUMBER
+                WHEN T.O_PER_AREA = 1 THEN T.O_MINNUMBER
                 ELSE NULL
             END                AS MIN_PEOPLE_PER_AREA,
-            O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6
+            T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON * 2.5 / 3.6
                                AS ACTIVITY_LEVEL,
-            O.HEAT_PER_PERSON /
-                (O.HEAT_PER_PERSON + O.DAMP_PER_PERSON * 2500 / 3.6)
+            T.O_HEAT_PER_PERSON /
+                (T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON * 2.5 / 3.6)
                                AS SENSIBLE_HEAT_FRACTION,
             ROUND(1.0 - DM.DIST_AIR, 3)
                                AS FRACTION_RADIANT,
-            O.MIN_REQUIRE_FRESH_AIR
+            T.O_MIN_REQUIRE_FRESH_AIR
                                AS MIN_FRESH_AIR
-        FROM OCCUPANT_GAINS O
-        LEFT JOIN ROOM R
-        ON O.OF_ROOM = R.ID
+        FROM ROOM R
+        LEFT JOIN ROOM_TYPE_DATA T
+        ON R.TYPE = T.ID
         LEFT JOIN SCHEDULE_YEAR S
-        ON O.SCHEDULE = S.SCHEDULE_ID
+        ON T.O_SCHEDULE = S.SCHEDULE_ID
         LEFT JOIN DIST_MODE DM
-        ON O.DIST_MODE = DM.DIST_MODE_ID
+        ON T.O_DIST_MODE = DM.DIST_MODE_ID
+        ORDER BY R.ID
         "
     )
     data.table::setDT(people)
-    dt_force_numeric(people, c(
-        "NUMBER_OF_PEOPLE", "PEOPLE_PER_AREA", "MIN_NUMBER_OF_PEOPLE",
-        "MIN_PEOPLE_PER_AREA", "ACTIVITY_LEVEL", "SENSIBLE_HEAT_FRACTION",
-        "FRACTION_RADIANT", "MIN_FRESH_AIR"
-    ))
+    internal_gains__assert_references(people, "occupant")
+    people <- people[ACTIVE != 0L]
+    if (nrow(people) == 0L) {
+        return(NULL)
+    }
+    dt_force_numeric(
+        people,
+        c(
+            "NUMBER_OF_PEOPLE",
+            "PEOPLE_PER_AREA",
+            "MIN_NUMBER_OF_PEOPLE",
+            "MIN_PEOPLE_PER_AREA",
+            "ACTIVITY_LEVEL",
+            "SENSIBLE_HEAT_FRACTION",
+            "FRACTION_RADIANT",
+            "MIN_FRESH_AIR"
+        )
+    )
     data.table::set(
-        people, NULL, "ACTIVITY_SCHEDULE_NAME",
+        people,
+        NULL,
+        "ACTIVITY_SCHEDULE_NAME",
         sprintf("Activity Level %.2f W", people$ACTIVITY_LEVEL)
     )
 
@@ -128,13 +260,25 @@ internal_gains__convert_people <- function(dest, ep) {
     # the DeST minimum is non-zero, represent the same profile with two People
     # objects: a constant minimum object plus a scheduled (max - min) object.
     always_on <- "Always On - DeST Minimum People"
-    people_objects <- unlist(lapply(seq_len(nrow(people)), function(i) {
-        internal_gains__people_values(people, i, always_on)
-    }), recursive = FALSE)
+    zone_field_name <- internal_gains__zone_field_name(ep, "People")
+    field_names <- internal_gains__people_field_names(ep)
+    people_objects <- unlist(
+        lapply(seq_len(nrow(people)), function(i) {
+            internal_gains__people_values(
+                people,
+                i,
+                always_on,
+                zone_field_name,
+                field_names
+            )
+        }),
+        recursive = FALSE
+    )
 
     parts <- list(
         activity = conv__add(
-            dest, ep,
+            dest,
+            ep,
             # TODO: handle the case when a generated activity-level schedule
             #       name already exists in the converted model.
             "Schedule:Constant" := list(
@@ -147,7 +291,9 @@ internal_gains__convert_people <- function(dest, ep) {
 
     if (has_min) {
         parts$minimum_schedule <- internal_gains__always_on(
-            dest, ep, always_on
+            dest,
+            ep,
+            always_on
         )
     }
 
@@ -159,91 +305,143 @@ internal_gains__convert_people <- function(dest, ep) {
     conv__combine_outputs(parts, table = people)
 }
 
-internal_gains__people_values <- function(people, i, always_on) {
+internal_gains__people_values <- function(
+    people,
+    i,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name",
+    field_names = c(
+        number = "number_of_people",
+        per_area = "people_per_floor_area",
+        area_per_person = "floor_area_per_person"
+    )
+) {
     if (people$METHOD[[i]] == "People") {
         max_value <- people$NUMBER_OF_PEOPLE[[i]]
         min_value <- people$MIN_NUMBER_OF_PEOPLE[[i]]
-        field <- "number_of_people"
+        field <- field_names[["number"]]
     } else {
         max_value <- people$PEOPLE_PER_AREA[[i]]
         min_value <- people$MIN_PEOPLE_PER_AREA[[i]]
-        field <- "people_per_floor_area"
+        field <- field_names[["per_area"]]
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__people_value(
+            gain,
+            row,
+            name,
+            schedule,
+            zone_field_name,
+            field_names
+        )
+    }
     internal_gains__split_minimum(
-        people, i, max_value, min_value, field, always_on,
-        internal_gains__people_value
+        people,
+        i,
+        max_value,
+        min_value,
+        field,
+        always_on,
+        value_factory
     )
 }
 
-internal_gains__people_value <- function(people, i, name, schedule) {
-    # NOTE: Older EnergyPlus versions used a shorter People field 2 name before
-    # the Space concept was introduced. eplusr accepts the current canonical
-    # field name for supported IDDs, so keep named fields instead of positional
-    # loading here.
-    list(
+internal_gains__people_value <- function(
+    people,
+    i,
+    name,
+    schedule,
+    zone_field_name,
+    field_names
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = people$ROOM_NAME[[i]],
         number_of_people_schedule_name = schedule,
         number_of_people_calculation_method = people$METHOD[[i]],
-        number_of_people = NULL,
-        people_per_floor_area = NULL,
-        floor_area_per_person = NULL,
         fraction_radiant = people$FRACTION_RADIANT[[i]],
         sensible_heat_fraction = people$SENSIBLE_HEAT_FRACTION[[i]],
         activity_level_schedule_name = people$ACTIVITY_SCHEDULE_NAME[[i]]
     )
+    value[[zone_field_name]] <- people$ROOM_NAME[[i]]
+    for (field in field_names) {
+        value[[field]] <- NULL
+    }
+    value
 }
 
-# LIGHT_GAINS -> Lights
+# ROOM.TYPE -> ROOM_TYPE_DATA lighting fields -> Lights.
 internal_gains__convert_lights <- function(dest, ep) {
-    if (!db_has_rows(dest, "LIGHT_GAINS")) return(NULL)
+    if (!internal_gains__has_room_type_data(dest)) {
+        return(NULL)
+    }
 
     lights <- DBI::dbGetQuery(
         dest,
         "
         SELECT
-            L.GAIN_ID        AS ID,
-            L.NAME           AS NAME,
+            R.ID             AS ID,
+            R.NAME || ' Lights' AS NAME,
+            R.ID             AS ROOM_ID,
             R.NAME           AS ROOM_NAME,
+            R.TYPE           AS ROOM_TYPE_ID,
+            T.ID             AS ROOM_TYPE_DATA_ID,
+            T.L_SCHEDULE     AS SCHEDULE_ID,
             S.NAME           AS SCHEDULE_NAME,
+            T.L_DIST_MODE    AS DIST_MODE_ID,
+            T.L_PER_AREA     AS CALCULATION_BASIS,
+            CASE WHEN T.L_MAXPOWER > 0 OR T.L_MINPOWER > 0
+                THEN 1 ELSE 0 END AS ACTIVE,
             CASE
-                WHEN L.PER_AREA = 1 THEN 'Watts/Area'
+                WHEN T.L_PER_AREA = 1 THEN 'Watts/Area'
                 ELSE 'LightingLevel'
             END              AS METHOD,
             CASE
-                WHEN L.PER_AREA != 1 THEN L.MAXPOWER
+                WHEN T.L_PER_AREA != 1 THEN T.L_MAXPOWER
                 ELSE NULL
             END              AS LIGHTING_LEVEL,
             CASE
-                WHEN L.PER_AREA = 1 THEN L.MAXPOWER
+                WHEN T.L_PER_AREA = 1 THEN T.L_MAXPOWER
                 ELSE NULL
             END              AS WATTS_PER_AREA,
             CASE
-                WHEN L.PER_AREA != 1 THEN L.MINPOWER
+                WHEN T.L_PER_AREA != 1 THEN T.L_MINPOWER
                 ELSE NULL
             END              AS MIN_LIGHTING_LEVEL,
             CASE
-                WHEN L.PER_AREA = 1 THEN L.MINPOWER
+                WHEN T.L_PER_AREA = 1 THEN T.L_MINPOWER
                 ELSE NULL
             END              AS MIN_WATTS_PER_AREA,
             ROUND(1.0 - DM.DIST_AIR, 3)
                              AS FRACTION_RADIANT,
-            L.HEAT_RATE      AS FRACTION_REPLACEABLE
-        FROM LIGHT_GAINS L
-        LEFT JOIN ROOM R
-        ON L.OF_ROOM = R.ID
+            T.L_HEAT_RATE    AS HEAT_TO_ELECTRIC_RATIO
+        FROM ROOM R
+        LEFT JOIN ROOM_TYPE_DATA T
+        ON R.TYPE = T.ID
         LEFT JOIN SCHEDULE_YEAR S
-        ON L.SCHEDULE = S.SCHEDULE_ID
+        ON T.L_SCHEDULE = S.SCHEDULE_ID
         LEFT JOIN DIST_MODE DM
-        ON L.DIST_MODE = DM.DIST_MODE_ID
+        ON T.L_DIST_MODE = DM.DIST_MODE_ID
+        ORDER BY R.ID
         "
     )
     data.table::setDT(lights)
-    dt_force_numeric(lights, c(
-        "LIGHTING_LEVEL", "WATTS_PER_AREA", "MIN_LIGHTING_LEVEL",
-        "MIN_WATTS_PER_AREA", "FRACTION_RADIANT", "FRACTION_REPLACEABLE"
-    ))
+    internal_gains__assert_references(lights, "lighting")
+    lights <- lights[ACTIVE != 0L]
+    if (nrow(lights) == 0L) {
+        return(NULL)
+    }
+    dt_force_numeric(
+        lights,
+        c(
+            "LIGHTING_LEVEL",
+            "WATTS_PER_AREA",
+            "MIN_LIGHTING_LEVEL",
+            "MIN_WATTS_PER_AREA",
+            "FRACTION_RADIANT",
+            "HEAT_TO_ELECTRIC_RATIO"
+        )
+    )
     watts_per_area_field <- conv__idd_field_name(ep, "Lights", 6L)
     has_min <- any(
         internal_gains__has_positive_minimum(lights$MIN_LIGHTING_LEVEL) |
@@ -254,14 +452,25 @@ internal_gains__convert_lights <- function(dest, ep) {
     # people. Use a constant minimum Lights object plus a scheduled variable
     # object when MINPOWER is non-zero.
     always_on <- "Always On - DeST Minimum Lights"
-    light_objects <- unlist(lapply(seq_len(nrow(lights)), function(i) {
-        internal_gains__light_values(lights, i, watts_per_area_field, always_on)
-    }), recursive = FALSE)
+    zone_field_name <- internal_gains__zone_field_name(ep, "Lights")
+    light_objects <- unlist(
+        lapply(seq_len(nrow(lights)), function(i) {
+            internal_gains__light_values(
+                lights,
+                i,
+                watts_per_area_field,
+                always_on,
+                zone_field_name
+            )
+        }),
+        recursive = FALSE
+    )
 
     parts <- list()
     if (has_min) {
         parts$minimum_schedule <- internal_gains__always_on(
-            dest, ep,
+            dest,
+            ep,
             always_on
         )
     }
@@ -271,7 +480,13 @@ internal_gains__convert_lights <- function(dest, ep) {
     conv__combine_outputs(parts, table = lights)
 }
 
-internal_gains__light_values <- function(lights, i, watts_per_area_field, always_on) {
+internal_gains__light_values <- function(
+    lights,
+    i,
+    watts_per_area_field,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+) {
     if (lights$METHOD[[i]] == "LightingLevel") {
         max_value <- lights$LIGHTING_LEVEL[[i]]
         min_value <- lights$MIN_LIGHTING_LEVEL[[i]]
@@ -282,78 +497,130 @@ internal_gains__light_values <- function(lights, i, watts_per_area_field, always
         field <- watts_per_area_field
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__light_value(
+            gain,
+            row,
+            name,
+            schedule,
+            zone_field_name
+        )
+    }
     internal_gains__split_minimum(
-        lights, i, max_value, min_value, field, always_on,
-        internal_gains__light_value
+        lights,
+        i,
+        max_value,
+        min_value,
+        field,
+        always_on,
+        value_factory
     )
 }
 
-internal_gains__light_value <- function(lights, i, name, schedule) {
-    list(
+internal_gains__light_value <- function(
+    lights,
+    i,
+    name,
+    schedule,
+    zone_field_name
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = lights$ROOM_NAME[[i]],
         schedule_name = schedule,
         design_level_calculation_method = lights$METHOD[[i]],
         lighting_level = NULL,
         watts_per_person = NULL,
         return_air_fraction = 0,
         fraction_radiant = lights$FRACTION_RADIANT[[i]],
-        fraction_visible = 0.2,
-        fraction_replaceable = lights$FRACTION_REPLACEABLE[[i]],
+        # DeST DIST_MODE already allocates the thermal lighting gain between
+        # zone air and surfaces. A separate visible fraction would divert heat
+        # into EnergyPlus' optical path and can lose it on zero-absorptance
+        # surfaces, which is not part of the DeST heat-gain definition.
+        fraction_visible = 0,
+        # DeST L_HEAT_RATE is a heat-to-electricity ratio. It does not describe
+        # the fraction eligible for EnergyPlus daylighting replacement.
+        fraction_replaceable = 0,
         end_use_subcategory = "General"
     )
+    value[[zone_field_name]] <- lights$ROOM_NAME[[i]]
+    value
 }
 
-# EQUIPMENT_GAINS -> ElectricEquipment
+# ROOM.TYPE -> ROOM_TYPE_DATA equipment fields -> ElectricEquipment.
 internal_gains__convert_electric_equipment <- function(dest, ep) {
-    if (!db_has_rows(dest, "EQUIPMENT_GAINS")) return(NULL)
+    if (!internal_gains__has_room_type_data(dest)) {
+        return(NULL)
+    }
 
     equipment <- DBI::dbGetQuery(
         dest,
         "
         SELECT
-            E.GAIN_ID        AS ID,
-            E.NAME           AS NAME,
+            R.ID             AS ID,
+            R.NAME || ' Equipment' AS NAME,
+            R.ID             AS ROOM_ID,
             R.NAME           AS ROOM_NAME,
+            R.TYPE           AS ROOM_TYPE_ID,
+            T.ID             AS ROOM_TYPE_DATA_ID,
+            T.E_SCHEDULE     AS SCHEDULE_ID,
             S.NAME           AS SCHEDULE_NAME,
+            T.E_DIST_MODE    AS DIST_MODE_ID,
+            T.E_PER_AREA     AS CALCULATION_BASIS,
+            CASE WHEN T.E_MAXPOWER > 0 OR T.E_MINPOWER > 0 OR
+                T.E_MAX_HUM > 0 OR T.E_MIN_HUM > 0
+                THEN 1 ELSE 0 END AS ACTIVE,
             CASE
-                WHEN E.PER_AREA = 1 THEN 'Watts/Area'
+                WHEN T.E_PER_AREA = 1 THEN 'Watts/Area'
                 ELSE 'EquipmentLevel'
             END              AS METHOD,
             CASE
-                WHEN E.PER_AREA != 1 THEN E.MAXPOWER
+                WHEN T.E_PER_AREA != 1 THEN T.E_MAXPOWER
                 ELSE NULL
             END              AS DESIGN_LEVEL,
             CASE
-                WHEN E.PER_AREA = 1 THEN E.MAXPOWER
+                WHEN T.E_PER_AREA = 1 THEN T.E_MAXPOWER
                 ELSE NULL
             END              AS WATTS_PER_AREA,
             CASE
-                WHEN E.PER_AREA != 1 THEN E.MINPOWER
+                WHEN T.E_PER_AREA != 1 THEN T.E_MINPOWER
                 ELSE NULL
             END              AS MIN_DESIGN_LEVEL,
             CASE
-                WHEN E.PER_AREA = 1 THEN E.MINPOWER
+                WHEN T.E_PER_AREA = 1 THEN T.E_MINPOWER
                 ELSE NULL
             END              AS MIN_WATTS_PER_AREA,
-            E.MAX_HUM        AS MAX_HUM,
-            E.MIN_HUM        AS MIN_HUM,
+            T.E_MAX_HUM      AS MAX_HUM,
+            T.E_MIN_HUM      AS MIN_HUM,
             ROUND(1.0 - DM.DIST_AIR, 3)
                              AS FRACTION_RADIANT
-        FROM EQUIPMENT_GAINS E
-        LEFT JOIN ROOM R
-        ON E.OF_ROOM = R.ID
+        FROM ROOM R
+        LEFT JOIN ROOM_TYPE_DATA T
+        ON R.TYPE = T.ID
         LEFT JOIN SCHEDULE_YEAR S
-        ON E.SCHEDULE = S.SCHEDULE_ID
+        ON T.E_SCHEDULE = S.SCHEDULE_ID
         LEFT JOIN DIST_MODE DM
-        ON E.DIST_MODE = DM.DIST_MODE_ID
+        ON T.E_DIST_MODE = DM.DIST_MODE_ID
+        ORDER BY R.ID
         "
     )
     data.table::setDT(equipment)
-    dt_force_numeric(equipment, c(
-        "DESIGN_LEVEL", "WATTS_PER_AREA", "MIN_DESIGN_LEVEL",
-        "MIN_WATTS_PER_AREA", "MAX_HUM", "MIN_HUM", "FRACTION_RADIANT"
-    ))
+    internal_gains__assert_references(equipment, "equipment")
+    equipment <- equipment[ACTIVE != 0L]
+    if (nrow(equipment) == 0L) {
+        return(NULL)
+    }
+    dt_force_numeric(
+        equipment,
+        c(
+            "DESIGN_LEVEL",
+            "WATTS_PER_AREA",
+            "MIN_DESIGN_LEVEL",
+            "MIN_WATTS_PER_AREA",
+            "MAX_HUM",
+            "MIN_HUM",
+            "FRACTION_RADIANT"
+        )
+    )
     equipment__assert_no_moisture(equipment)
     watts_per_area_field <- conv__idd_field_name(ep, "ElectricEquipment", 6L)
     has_min <- any(
@@ -364,19 +631,37 @@ internal_gains__convert_electric_equipment <- function(dest, ep) {
     # DeST equipment gains also store MINPOWER/MAXPOWER. Use the same
     # minimum-plus-variable representation as people and lights.
     always_on <- "Always On - DeST Minimum Equipment"
-    equipment_objects <- unlist(lapply(seq_len(nrow(equipment)), function(i) {
-        internal_gains__equipment_values(equipment, i, watts_per_area_field, always_on)
-    }), recursive = FALSE)
+    zone_field_name <- internal_gains__zone_field_name(
+        ep,
+        "ElectricEquipment"
+    )
+    equipment_objects <- unlist(
+        lapply(seq_len(nrow(equipment)), function(i) {
+            internal_gains__equipment_values(
+                equipment,
+                i,
+                watts_per_area_field,
+                always_on,
+                zone_field_name
+            )
+        }),
+        recursive = FALSE
+    )
 
     parts <- list()
     if (has_min) {
         parts$minimum_schedule <- internal_gains__always_on(
-            dest, ep, always_on
+            dest,
+            ep,
+            always_on
         )
     }
 
     parts$equipment <- conv__add_objects(
-        dest, ep, "ElectricEquipment", equipment_objects
+        dest,
+        ep,
+        "ElectricEquipment",
+        equipment_objects
     )
 
     conv__combine_outputs(parts, table = equipment)
@@ -391,22 +676,36 @@ equipment__assert_no_moisture <- function(equipment) {
     max_hum[is.na(max_hum)] <- 0
     min_hum[is.na(min_hum)] <- 0
     unsupported <- abs(max_hum) > 1e-12 | abs(min_hum) > 1e-12
-    if (!any(unsupported)) return(invisible(NULL))
+    if (!any(unsupported)) {
+        return(invisible(NULL))
+    }
 
     rows <- equipment[unsupported]
-    detail <- paste(sprintf(
-        "%s: MIN_HUM=%s, MAX_HUM=%s",
-        rows$NAME,
-        rows$MIN_HUM,
-        rows$MAX_HUM
-    ), collapse = "; ")
-    stop(sprintf(
-        "Cannot convert nonzero EQUIPMENT_GAINS moisture generation: %s",
-        detail
-    ), call. = FALSE)
+    detail <- paste(
+        sprintf(
+            "%s: MIN_HUM=%s, MAX_HUM=%s",
+            rows$NAME,
+            rows$MIN_HUM,
+            rows$MAX_HUM
+        ),
+        collapse = "; "
+    )
+    stop(
+        sprintf(
+            "Cannot convert nonzero ROOM_TYPE_DATA equipment moisture generation: %s",
+            detail
+        ),
+        call. = FALSE
+    )
 }
 
-internal_gains__equipment_values <- function(equipment, i, watts_per_area_field, always_on) {
+internal_gains__equipment_values <- function(
+    equipment,
+    i,
+    watts_per_area_field,
+    always_on,
+    zone_field_name = "Zone or ZoneList or Space or SpaceList Name"
+) {
     if (equipment$METHOD[[i]] == "EquipmentLevel") {
         max_value <- equipment$DESIGN_LEVEL[[i]]
         min_value <- equipment$MIN_DESIGN_LEVEL[[i]]
@@ -417,16 +716,35 @@ internal_gains__equipment_values <- function(equipment, i, watts_per_area_field,
         field <- watts_per_area_field
     }
 
+    value_factory <- function(gain, row, name, schedule) {
+        internal_gains__equipment_value(
+            gain,
+            row,
+            name,
+            schedule,
+            zone_field_name
+        )
+    }
     internal_gains__split_minimum(
-        equipment, i, max_value, min_value, field, always_on,
-        internal_gains__equipment_value
+        equipment,
+        i,
+        max_value,
+        min_value,
+        field,
+        always_on,
+        value_factory
     )
 }
 
-internal_gains__equipment_value <- function(equipment, i, name, schedule) {
-    list(
+internal_gains__equipment_value <- function(
+    equipment,
+    i,
+    name,
+    schedule,
+    zone_field_name
+) {
+    value <- list(
         name = name,
-        zone_or_zonelist_or_space_or_spacelist_name = equipment$ROOM_NAME[[i]],
         schedule_name = schedule,
         design_level_calculation_method = equipment$METHOD[[i]],
         design_level = NULL,
@@ -436,6 +754,8 @@ internal_gains__equipment_value <- function(equipment, i, name, schedule) {
         fraction_lost = 0,
         end_use_subcategory = "General"
     )
+    value[[zone_field_name]] <- equipment$ROOM_NAME[[i]]
+    value
 }
 
 internal_gains__has_positive_minimum <- function(x) {
@@ -448,7 +768,8 @@ internal_gains__zero_if_na <- function(x) {
 
 internal_gains__always_on <- function(dest, ep, name) {
     conv__add(
-        dest, ep,
+        dest,
+        ep,
         "Schedule:Constant" := list(
             name = name,
             schedule_type_limits_name = NULL,

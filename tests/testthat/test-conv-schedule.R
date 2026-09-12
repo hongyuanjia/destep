@@ -1,11 +1,5 @@
-# Store DeST hourly schedule data in the BLOB shape that readBin() expects when
-# `schedule__convert()` reads SCHEDULE_YEAR.DATA from SQLite.
-destep_test_schedule_blob <- function(values) {
-    writeBin(as.double(values), raw(), size = 8L)
-}
-
 test_that("schedule conversion writes resolvable week day references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -37,7 +31,7 @@ test_that("schedule conversion writes resolvable week day references", {
 })
 
 test_that("schedule conversion preserves weekday and weekend profiles", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -78,7 +72,7 @@ test_that("schedule conversion preserves weekday and weekend profiles", {
 })
 
 test_that("schedule conversion creates a dedicated week for a unique final day", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -133,7 +127,7 @@ test_that("schedule conversion creates a dedicated week for a unique final day",
 })
 
 test_that("schedule conversion ignores missing and zero references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -159,7 +153,7 @@ test_that("schedule conversion ignores missing and zero references", {
 })
 
 test_that("relative-humidity schedules convert DeST fractions to percent", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -185,8 +179,8 @@ test_that("relative-humidity schedules convert DeST fractions to percent", {
     expect_equal(unique(table[SCHEDULE_ID == 20L]$DATA[[1L]]), 60)
 })
 
-test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
-    ep <- ensure_empty_idf()
+test_that("relative-humidity schedule conversion duplicates shared units", {
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -203,14 +197,34 @@ test_that("relative-humidity schedule conversion rejects ambiguous reuse", {
         AC_SCHEDULE_ID = 10L
     ))
 
-    expect_error(
-        schedule__convert(dest, ep),
-        "also referenced by non-humidity fields"
+    schedule <- schedule__convert(dest, ep)
+    table <- attr(schedule, "table")
+
+    expect_equal(nrow(table), 2L)
+    expect_equal(
+        unique(table[NAME == "Shared Schedule"]$DATA[[1L]]),
+        0.35
+    )
+    expect_equal(
+        unique(
+            table[
+                NAME == "Shared Schedule [Relative Humidity Percent]"
+            ]$DATA[[1L]]
+        ),
+        35
+    )
+    expect_equal(
+        schedule__relative_humidity_reference_names(
+            dest,
+            10L,
+            "Shared Schedule"
+        ),
+        "Shared Schedule [Relative Humidity Percent]"
     )
 })
 
 test_that("relative-humidity schedule conversion rejects unsupported units", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -233,7 +247,7 @@ test_that("relative-humidity schedule conversion rejects unsupported units", {
 })
 
 test_that("relative-humidity schedule conversion rejects inverted bounds", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -259,7 +273,7 @@ test_that("relative-humidity schedule conversion rejects inverted bounds", {
 })
 
 test_that("schedule conversion returns null without valid references", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
