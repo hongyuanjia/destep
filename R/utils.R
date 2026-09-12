@@ -21,11 +21,15 @@ is_flag <- function(x) {
 # Test whether a DeST table exists and contains at least one row without
 # exposing SQL identifier construction to individual converters.
 db_has_rows <- function(dest, table) {
-    if (!table %in% DBI::dbListTables(dest)) return(FALSE)
+    if (!table %in% DBI::dbListTables(dest)) {
+        return(FALSE)
+    }
     table <- as.character(DBI::dbQuoteIdentifier(dest, table))
     DBI::dbGetQuery(
-        dest, paste0("SELECT COUNT(*) AS N FROM ", table)
-    )$N[[1L]] > 0L
+        dest,
+        paste0("SELECT COUNT(*) AS N FROM ", table)
+    )$N[[1L]] >
+        0L
 }
 
 # Check optional DeST schema fields before a converter builds dependent SQL.
@@ -47,7 +51,9 @@ dt_force_numeric <- function(dt, cols) {
 fmt_integer_sample <- function(x, n = 10L) {
     x <- sort(unique(as.integer(x)))
     out <- paste(utils::head(x, n), collapse = ", ")
-    if (length(x) > n) out <- paste0(out, ", ...")
+    if (length(x) > n) {
+        out <- paste0(out, ", ...")
+    }
     out
 }
 
@@ -57,7 +63,8 @@ assert_unique_name <- function(names, type) {
     if (anyDuplicated(names)) {
         stop(sprintf(
             "Duplicated %s names found: [%s]. This should already be handled when updating the names.",
-            type, paste(unique(names[duplicated(names)]), collapse = ", ")
+            type,
+            paste(unique(names[duplicated(names)]), collapse = ", ")
         ))
     }
 }
@@ -66,7 +73,9 @@ assert_unique_name <- function(names, type) {
 make_unique_name <- function(name) {
     spl_name <- collapse::gsplit(name, name)
     spl_name <- .mapply(
-        function(name, len) if (len == 1L) name else sprintf("%s (%d)", name, seq_len(len)),
+        function(name, len) {
+            if (len == 1L) name else sprintf("%s (%d)", name, seq_len(len))
+        },
         list(name = spl_name, len = collapse::vlengths(spl_name)),
         NULL
     )
@@ -95,37 +104,162 @@ warn <- function(message, class = NULL, call = NULL, ...) {
 }
 
 utils::globalVariables(c(
-    ".", ".SD", ".N", "J", ":=", ".BY", # data.table
+    ".",
+    ".SD",
+    ".N",
+    "J",
+    ":=",
+    ".BY", # data.table
 
-    "ACTIVITY_LEVEL", "ACTIVITY_SCHEDULE_NAME", "AZIMUTH", "BASE_CONSTRUCTION",
-    "BOUNDARY_MODE", "BOUNDARY_OBJECT", "BOUNDARY", "CONSTRUCTION", "COORDINATE_KEY",
-    "DETAILED_CONSTRUCTION_ID", "EDGE", "END", "END_X", "END_Y", "ERROR",
-    "FALLBACK_REASON", "FRACTION_RADIANT", "GROUP",
-    "FRACTION_REPLACEABLE", "ID", "KIND_ENCLOSURE", "LAYER_NO",
-    "INTERZONE", "i.CEILING_NAME", "i.FLOOR_NAME", "i.SNAP_X", "i.SNAP_Y",
-    "i.BASE_CONSTRUCTION", "i.CONSTRUCTION", "i.OUTSIDE_SOLAR_ABSORPTANCE",
-    "i.OUTSIDE_THERMAL_ABSORPTANCE", "i.SNAP_Z", "JUNCTION_KEY", "K",
-    "LIGHT_TRANS_RATIO", "MATERIAL_NAME",
-    "MATERIAL_ID", "NAME",
-    "ORIGINAL_NAME", "OUTPUT_ID",
-    "OUTPUT_PART_ID", "PART", "PART_AREA", "PART_COUNT", "PIECE", "PLANE",
+    "ACTIVITY_LEVEL",
+    "ACTIVITY_SCHEDULE_NAME",
+    "AZIMUTH",
+    "BASE_CONSTRUCTION",
+    "BOUNDARY_MODE",
+    "BOUNDARY_OBJECT",
+    "BOUNDARY",
+    "CONSTRUCTION",
+    "COORDINATE_KEY",
+    "DETAILED_CONSTRUCTION_ID",
+    "EDGE",
+    "END",
+    "END_X",
+    "END_Y",
+    "ERROR",
+    "FALLBACK_REASON",
+    "FRACTION_RADIANT",
+    "GROUP",
+    "FRACTION_REPLACEABLE",
+    "ID",
+    "KIND_ENCLOSURE",
+    "LAYER_NO",
+    "INTERZONE",
+    "i.CEILING_NAME",
+    "i.FLOOR_NAME",
+    "i.SNAP_X",
+    "i.SNAP_Y",
+    "i.BASE_CONSTRUCTION",
+    "i.CONSTRUCTION",
+    "i.OUTSIDE_SOLAR_ABSORPTANCE",
+    "i.OUTSIDE_THERMAL_ABSORPTANCE",
+    "i.SNAP_Z",
+    "JUNCTION_KEY",
+    "K",
+    "LIGHT_TRANS_RATIO",
+    "MATERIAL_NAME",
+    "MATERIAL_ID",
+    "NAME",
+    "ORIGINAL_NAME",
+    "OUTPUT_ID",
+    "OUTPUT_PART_ID",
+    "PART",
+    "PART_AREA",
+    "PART_COUNT",
+    "PIECE",
+    "PLANE",
     "PEER_OUTPUT_ID",
-    "PRESERVE_BASE_NAME", "PROTECTED",
-    "MIN_REQUIRE_FRESH_AIR", "N", "POINT_NO", "POINT_X", "POINT_Y",
-    "POINT_Z", "ROOM", "ROOM_ID", "ROOM_NAME", "ROOMS", "SCHEDULE_NAME",
-    "SC", "SENSIBLE_HEAT_FRACTION", "SHGC", "SIDE", "SIDE1_AZIMUTH",
+    "PRESERVE_BASE_NAME",
+    "PROTECTED",
+    "MIN_REQUIRE_FRESH_AIR",
+    "N",
+    "POINT_NO",
+    "POINT_X",
+    "POINT_Y",
+    "POINT_Z",
+    "ROOM",
+    "ROOM_ID",
+    "ROOM_NAME",
+    "ROOMS",
+    "SCHEDULE_NAME",
+    "SC",
+    "SENSIBLE_HEAT_FRACTION",
+    "SHGC",
+    "SIDE",
+    "SIDE1_AZIMUTH",
     "SIDE1_SURFACE_ID",
-    "SIDE1_SURFACE_NAME", "SIDE1_SURFACE_TYPE", "SIDE1_TILT",
-    "SIDE2_AZIMUTH", "SIDE2_SURFACE_ID", "SIDE2_SURFACE_NAME",
-    "SIDE2_SURFACE_TYPE", "SIDE2_TILT", "SOURCE_AREA", "SOURCE_ID",
-    "SOURCE_JUNCTION_OUTPUT_ID", "SOURCE_NAME", "SOURCE_TABLE", "START",
-    "START_X", "START_Y", "SUBPART", "SIMPLE_GLAZING_NAME", "STOREY_ID",
-    "STOREY_MULTIPLIER", "SURFACE_NAME", "REBUILT_AREA", "TYPICAL_PAIR_ID",
-    "TYPICAL_PART", "TYPICAL_PART_COUNT",
-    "TYPE_CONSTRUCTION_NAME", "TYPE_DATA_VALID", "TYPE_ID", "TYPE_NAME",
-    "TYPE_RECORD_FOUND", "TYPE_SURFACE", "TYPE", "WINDOW_ID", "surface", "z",
-    "INSIDE_CONVECTION_COEFFICIENT", "INSIDE_SOLAR_ABSORPTANCE",
-    "INSIDE_THERMAL_ABSORPTANCE", "OUTSIDE_CONVECTION_COEFFICIENT",
-    "OUTSIDE_SOLAR_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE",
-    "SOLAR_ABSORPTANCE", "THERMAL_ABSORPTANCE", "VISIBLE_ABSORPTANCE"
+    "SIDE1_SURFACE_NAME",
+    "SIDE1_SURFACE_TYPE",
+    "SIDE1_TILT",
+    "SIDE2_AZIMUTH",
+    "SIDE2_SURFACE_ID",
+    "SIDE2_SURFACE_NAME",
+    "SIDE2_SURFACE_TYPE",
+    "SIDE2_TILT",
+    "SOURCE_AREA",
+    "SOURCE_ID",
+    "SOURCE_JUNCTION_OUTPUT_ID",
+    "SOURCE_NAME",
+    "SOURCE_TABLE",
+    "START",
+    "START_X",
+    "START_Y",
+    "SUBPART",
+    "SIMPLE_GLAZING_NAME",
+    "STOREY_ID",
+    "STOREY_MULTIPLIER",
+    "SURFACE_NAME",
+    "REBUILT_AREA",
+    "TYPICAL_PAIR_ID",
+    "TYPICAL_PART",
+    "TYPICAL_PART_COUNT",
+    "TYPE_CONSTRUCTION_NAME",
+    "TYPE_DATA_VALID",
+    "TYPE_ID",
+    "TYPE_NAME",
+    "TYPE_RECORD_FOUND",
+    "TYPE_SURFACE",
+    "TYPE",
+    "WINDOW_ID",
+    "surface",
+    "z",
+    "INSIDE_CONVECTION_COEFFICIENT",
+    "INSIDE_SOLAR_ABSORPTANCE",
+    "INSIDE_THERMAL_ABSORPTANCE",
+    "OUTSIDE_CONVECTION_COEFFICIENT",
+    "OUTSIDE_SOLAR_ABSORPTANCE",
+    "OUTSIDE_THERMAL_ABSORPTANCE",
+    "SOLAR_ABSORPTANCE",
+    "THERMAL_ABSORPTANCE",
+    "VISIBLE_ABSORPTANCE"
+))
+
+# Register additional data.table columns used by converter modules.
+utils::globalVariables(c(
+    "..dimensions",
+    "..pair_columns",
+    "..required",
+    "ACTIVE",
+    "DATA",
+    "DEG",
+    "DEGL",
+    "DEGR",
+    "DEHUMIDIFYING_SCHEDULE_NAME",
+    "HUMIDIFYING_SCHEDULE_NAME",
+    "i.INSIDE_SOLAR_ABSORPTANCE",
+    "i.INSIDE_THERMAL_ABSORPTANCE",
+    "id",
+    "IS_AC_ROOM",
+    "KIND",
+    "LENGTH",
+    "maximum_air_changes_per_hour",
+    "maximum_supply_flow_m3_s",
+    "minimum_air_changes_per_hour",
+    "minimum_supply_flow_m3_s",
+    "name",
+    "Name",
+    "outdoor_air_flow_m3_s",
+    "SCHEDULE_ID",
+    "SET_RH_MAX_SCHEDULE",
+    "SET_RH_MIN_SCHEDULE",
+    "SIDE1_CONVECTION_COEFFICIENT",
+    "SIDE1_SOLAR_ABSORPTANCE",
+    "SIDE1_THERMAL_ABSORPTANCE",
+    "SIDE2_CONVECTION_COEFFICIENT",
+    "SIDE2_SOLAR_ABSORPTANCE",
+    "SIDE2_THERMAL_ABSORPTANCE",
+    "source_minimum_supply_flow_m3_s",
+    "volume_m3",
+    "WINDOW_NAME",
+    "Zone Name",
+    "zone_name"
 ))
