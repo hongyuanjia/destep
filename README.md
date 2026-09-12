@@ -40,15 +40,32 @@ preserves the following DeST components:
 - Exterior window overhangs and side fins
 - Climate data through `to_epw()`
 
-The opt-in `hvac = "physical"` mode supports one-room `AC_SYS_TYPE = 0`
-constant-volume systems and exactly two conditioned rooms linked to a
-shared type-0 constant-volume or type-1 VAV terminal-reheat system.
-Supported systems may use `FRESH_AIR_TYPE` 1, 5, or 6. Equipment and
-zone outdoor-air parameters that are absent from the DeST model must be
-provided explicitly through `hvac_options`; see `?to_eplus` for the
-required fields. Other physical topologies are not projected, and source
-models with an `AC_SYS_TYPE` other than 0 or 1 stop with an explicit
-error.
+The default `hvac = "ideal_loads"` path is not restricted to a
+particular air-system topology or to one or two conditioned rooms. It
+creates a `ZoneHVAC:IdealLoadsAirSystem` for each convertible
+air-conditioned DeST room and maps its availability, thermostat,
+humidity-control, and outdoor-air inputs. When a room group references a
+DeST air-conditioning system, this path does not reconstruct its
+physical fans, coils, ducts, air loop, or plant.
+
+The opt-in `hvac = "physical"` path currently implements three
+explicitly validated model structures:
+
+- one conditioned room connected to one `AC_SYS_TYPE = 0`
+  constant-volume system;
+- exactly two conditioned rooms connected to one shared
+  `AC_SYS_TYPE = 0` constant-volume terminal-reheat system; and
+- exactly two conditioned rooms connected to one shared
+  `AC_SYS_TYPE = 1` VAV terminal-reheat system.
+
+These are the current boundaries of direct physical-system generation,
+not the boundaries of the default load-oriented conversion. Supported
+physical systems may use `FRESH_AIR_TYPE` 1, 5, or 6. Equipment and zone
+outdoor-air parameters that are absent from the DeST model must be
+supplied through `hvac_options`; see `?to_eplus` for the required
+fields. Other physical topologies are not yet projected. At present,
+source models containing an `AC_SYS_TYPE` other than 0 or 1 stop with an
+explicit error in either HVAC mode.
 
 ## EnergyPlus versions
 
@@ -74,12 +91,37 @@ path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
 # make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not
 # installed
 eplusr::use_idd("9.0.1", download = "auto")
+#> ── EnergyPlus Input Data Dictionary ────────────────────────────────────────────
+#> * Version: 9.0.1
+#> * Build: bb7ca4f0da
+#> * Total Class: 799
 
 # read once, then create the EnergyPlus input and weather objects
 dest <- read_dest(path)
 idf <- to_eplus(dest, "9.0.1")
+#> Warning: EnergyPlus 9.0.1 uses the geometry compatibility profile validated
+#> against EnergyPlus 23.1.
+#> Warning: DeST window transmitted-solar distribution mode(s) [1] are not
+#> converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof,
+#> floor, and surrounding-surface fractions have no established direct EnergyPlus
+#> projection; the converted model uses the EnergyPlus building-level
+#> solar-distribution algorithm.
+#> Warning: EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem
+#> angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the
+#> converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+#> Warning: Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+#> Warning: Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the
+#> documented outdoor-temperature-band rule. This preserves the declared
+#> minimum/maximum ACH schedules but does not claim equivalence to DeST's
+#> undocumented solver-state coupling.
 epw <- to_epw(dest)
 
-idf$save("model.idf")
-epw$save("weather.epw")
+output_dir <- file.path(tempdir(), "destep-readme")
+dir.create(output_dir)
+idf$save(file.path(output_dir, "model.idf"))
+epw$save(file.path(output_dir, "weather.epw"))
+DBI::dbDisconnect(dest)
+
+file.exists(file.path(output_dir, c("model.idf", "weather.epw")))
+#> [1] TRUE TRUE
 ```
