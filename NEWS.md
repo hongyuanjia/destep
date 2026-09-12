@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Extended DeST-to-EnergyPlus translation across Calload controls, weather,
+  constructions, openings, and supported physical HVAC paths, while retaining
+  explicit errors for unsupported `AC_SYS_TYPE` values (#33).
+
 - Stopped `to_eplus()` with an explicit list of source systems when a DeST
   model contains an unsupported `AC_SYS_TYPE` other than 0 or 1, preventing
   unsupported HVAC families from being omitted silently.
