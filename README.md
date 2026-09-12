@@ -8,7 +8,8 @@
 [![R-CMD-check](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-> A toolkit to convert ‘DeST’ models to ‘EnergyPlus’ models
+> A toolkit to convert [DeST](https://www.dest.net.cn/) models to
+> [EnergyPlus](https://energyplus.net/) models
 
 ## Installation
 
@@ -23,24 +24,44 @@ install.packages("destep",
 )
 ```
 
-## Supported DeST components
+## Supported conversion boundary
 
-This package is still under heavy development and is not ready for use.
-Currently, the following components are supported:
+`destep` is under active development. The default conversion currently
+preserves the following DeST components:
 
-- [x] Geometry
-- [x] Material
-- [x] Construction
-- [x] Hourly schedules from `SCHEDULE_YEAR`
-- [x] Outdoor ventilation from `ROOM_RELATION`
-- [x] Thermostat setpoints from `ROOM_GROUP`
-- [x] Ideal loads zone equipment from `ROOM_GROUP`
-- [x] Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
-  `EQUIPMENT_GAINS`
-- [x] Outdoor air requirements from `OCCUPANT_GAINS`
-- [x] Ground temperatures from `GROUND_DATA`
-- [ ] Shading
-- [ ] HVAC
+- Geometry, opaque constructions, doors, and windows
+- Material thermal properties and aggregate or detailed glazing
+  properties
+- Hourly schedules from `SCHEDULE_YEAR`
+- Outdoor ventilation from `ROOM_RELATION`
+- Thermostat setpoints and Ideal Loads zone equipment from `ROOM_GROUP`
+- Internal gains and occupant outdoor-air requirements
+- Ground temperatures, site metadata, and ground reflectance
+- Exterior window overhangs and side fins
+- Climate data through `to_epw()`
+
+The opt-in `hvac = "physical"` mode supports one-room `AC_SYS_TYPE = 0`
+constant-volume systems and exactly two conditioned rooms linked to a
+shared type-0 constant-volume or type-1 VAV terminal-reheat system.
+Supported systems may use `FRESH_AIR_TYPE` 1, 5, or 6. Equipment and
+zone outdoor-air parameters that are absent from the DeST model must be
+provided explicitly through `hvac_options`; see `?to_eplus` for the
+required fields. Other physical topologies are not projected, and source
+models with an `AC_SYS_TYPE` other than 0 or 1 stop with an explicit
+error.
+
+## EnergyPlus versions
+
+The reproducible conversion baseline is
+[EnergyPlus](https://energyplus.net/) 9.0.1. The default load-only
+conversion can request versions supported by
+[eplusr](https://cran.r-project.org/package=eplusr), with compatibility
+warnings where a version-specific behavior has not been verified. The
+physical HVAC paths currently require EnergyPlus 9.0.1. A converted
+9.0.1 model can be transitioned to a newer EnergyPlus version with
+`eplusr`. Aggregate `WindowMaterial:SimpleGlazingSystem` output
+targeting EnergyPlus 9.0 through 9.3 emits a warning because EnergyPlus
+corrected the relevant angular-reflectance behavior in version 9.4.
 
 ## Get started
 
@@ -52,72 +73,13 @@ path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
 
 # make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not
 # installed
-eplusr::use_idd(23.1, download = "auto")
-#> IDD v23.1.0 has not been parsed before.
-#> Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.
-#> IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.
-#> Start parsing...
-#> Parsing completed.
-#> ── EnergyPlus Input Data Dictionary ────────────────────────────────────────────
-#> * Version: 23.1.0
-#> * Build: 87ed9199d4
-#> * Total Class: 840
+eplusr::use_idd("9.0.1", download = "auto")
 
-# read the DeST model and convert it to an EnergyPlus model
-read_dest(path) |> to_eplus(23.1)
-#> There are windows in the input DeST model. However, the optical properties of the glazing in DeST are not one-to-one match with the glazing in EnergyPlus. Here the optical properties of a 3mm clear glazing in EnergyPlus dataset 'WindowGlassMaterials.idf' will be used for all glazing in DeST. Please check the results in the converted IDF file.
-#> ── EnergPlus Input Data File ───────────────────────────────────────────────────
-#>  • Path: NOT LOCAL
-#>  • Version: '23.1.0'
-#>
-#> Group: <Simulation Parameters>
-#> ├─ [001<O>] Class: <Version>
-#> └─ [001<O>] Class: <Building>
-#>
-#> Group: <Location and Climate>
-#> ├─ [001<O>] Class: <Site:Location>
-#> └─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
-#>
-#> Group: <Schedules>
-#> ├─ [003<O>] Class: <ScheduleTypeLimits>
-#> │─ [100<O>] Class: <Schedule:Day:Interval>
-#> │─ [187<O>] Class: <Schedule:Week:Compact>
-#> │─ [177<O>] Class: <Schedule:Year>
-#> └─ [004<O>] Class: <Schedule:Constant>
-#>
-#> Group: <Surface Construction Elements>
-#> ├─ [014<O>] Class: <Material>
-#> │─ [001<O>] Class: <WindowMaterial:Glazing>
-#> │─ [001<O>] Class: <WindowMaterial:Gas>
-#> └─ [007<O>] Class: <Construction>
-#>
-#> Group: <Thermal Zones and Surfaces>
-#> ├─ [001<O>] Class: <GlobalGeometryRules>
-#> │─ [036<O>] Class: <Zone>
-#> │─ [003<O>] Class: <ZoneList>
-#> │─ [003<O>] Class: <ZoneGroup>
-#> │─ [371<O>] Class: <BuildingSurface:Detailed>
-#> └─ [045<O>] Class: <FenestrationSurface:Detailed>
-#>
-#> Group: <Internal Gains>
-#> ├─ [036<O>] Class: <People>
-#> │─ [072<O>] Class: <Lights>
-#> └─ [036<O>] Class: <ElectricEquipment>
-#>
-#> Group: <Zone Airflow>
-#> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
-#>
-#> Group: <HVAC Design Objects>
-#> └─ [036<O>] Class: <DesignSpecification:OutdoorAir>
-#>
-#> Group: <Zone HVAC Controls and Thermostats>
-#> ├─ [036<O>] Class: <ZoneControl:Thermostat>
-#> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
-#>
-#> Group: <Zone HVAC Forced Air Units>
-#> └─ [027<O>] Class: <ZoneHVAC:IdealLoadsAirSystem>
-#>
-#> Group: <Zone HVAC Equipment Connections>
-#> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
-#> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+# read once, then create the EnergyPlus input and weather objects
+dest <- read_dest(path)
+idf <- to_eplus(dest, "9.0.1")
+epw <- to_epw(dest)
+
+idf$save("model.idf")
+epw$save("weather.epw")
 ```
