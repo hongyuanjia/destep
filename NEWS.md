@@ -3,6 +3,9 @@
 - Extended thermal-source conversion and supported physical HVAC assembly,
   with explicit validation limits for whole-building comparisons (#34).
 
+- Simplified the README to project background, features, installation, and
+  a usage example, with links to conversion help and release notes (#34).
+
 - Kept source metadata with the owning people, lighting, and equipment
   converters in `conv-people.R`, and furniture validation in
   `conv-furniture.R`. The internal `conv-source.R` module now handles generic
