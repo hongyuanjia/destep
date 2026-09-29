@@ -49,11 +49,93 @@ library(destep)
 # Download a DeST prototype model and load the target EnergyPlus dictionary
 path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
 eplusr::use_idd("23.1", download = "auto")
+```
 
+``` r
 # Convert the model and its weather data
 dest <- read_dest(path)
 idf <- to_eplus(dest, "23.1")
+idf
+#> ── EnergPlus Input Data File ───────────────────────────────────────────────────
+#>  • Path: NOT LOCAL
+#>  • Version: '23.1.0'
+#>
+#> Group: <Simulation Parameters>
+#> ├─ [001<O>] Class: <Version>
+#> │─ [001<O>] Class: <Building>
+#> └─ [001<O>] Class: <Timestep>
+#>
+#> Group: <Location and Climate>
+#> ├─ [001<O>] Class: <Site:Location>
+#> │─ [001<O>] Class: <RunPeriod>
+#> │─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
+#> └─ [001<O>] Class: <Site:GroundReflectance>
+#>
+#> Group: <Schedules>
+#> ├─ [003<O>] Class: <ScheduleTypeLimits>
+#> │─ [100<O>] Class: <Schedule:Day:Interval>
+#> │─ [188<O>] Class: <Schedule:Week:Compact>
+#> │─ [178<O>] Class: <Schedule:Year>
+#> └─ [005<O>] Class: <Schedule:Constant>
+#>
+#> Group: <Surface Construction Elements>
+#> ├─ [021<O>] Class: <Material>
+#> │─ [001<O>] Class: <WindowMaterial:SimpleGlazingSystem>
+#> └─ [022<O>] Class: <Construction>
+#>
+#> Group: <Thermal Zones and Surfaces>
+#> ├─ [001<O>] Class: <GlobalGeometryRules>
+#> │─ [036<O>] Class: <Zone>
+#> │─ [003<O>] Class: <ZoneList>
+#> │─ [003<O>] Class: <ZoneGroup>
+#> │─ [666<O>] Class: <BuildingSurface:Detailed>
+#> │─ [092<O>] Class: <FenestrationSurface:Detailed>
+#> └─ [032<O>] Class: <InternalMass>
+#>
+#> Group: <Advanced Construction, Surface, Zone Concepts>
+#> └─ [790<O>] Class: <SurfaceProperty:ConvectionCoefficients>
+#>
+#> Group: <Internal Gains>
+#> ├─ [027<O>] Class: <People>
+#> │─ [027<O>] Class: <Lights>
+#> │─ [021<O>] Class: <ElectricEquipment>
+#> └─ [027<O>] Class: <OtherEquipment>
+#>
+#> Group: <Zone Airflow>
+#> └─ [056<O>] Class: <ZoneVentilation:DesignFlowRate>
+#>
+#> Group: <HVAC Design Objects>
+#> └─ [027<O>] Class: <DesignSpecification:OutdoorAir>
+#>
+#> Group: <Zone HVAC Controls and Thermostats>
+#> ├─ [027<O>] Class: <ZoneControl:Humidistat>
+#> │─ [027<O>] Class: <ZoneControl:Thermostat>
+#> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
+#>
+#> Group: <Zone HVAC Forced Air Units>
+#> └─ [027<O>] Class: <ZoneHVAC:IdealLoadsAirSystem>
+#>
+#> Group: <Zone HVAC Equipment Connections>
+#> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
+#> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+
 epw <- to_epw(dest)
+epw
+#> ══ EnergyPlus Weather File ═════════════════════════════════════════════════════
+#> [Location ]: Chongqin, Chongqing, P.R.China
+#>              {N 29°34'}, {E 106°28'}, {UTC+08:00}
+#> [Elevation]: 259m above see level
+#> [Data Src ]: DeST CLIMATE_DATA
+#> [WMO Stat ]: 57516
+#> [Leap Year]: No
+#> [Interval ]: 60 mins
+#>
+#> ── Data Periods ────────────────────────────────────────────────────────────────
+#>    Name StartDayOfWeek StartDay EndDay
+#> 1: Data         Monday     1/ 1  12/31
+#>
+#> ────────────────────────────────────────────────────────────────────────────────
+
 DBI::dbDisconnect(dest)
 
 # Save the EnergyPlus input and weather files

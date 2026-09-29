@@ -4,7 +4,8 @@
   with explicit validation limits for whole-building comparisons (#34).
 
 - Simplified the README to project background, features, installation, and
-  a usage example, with links to conversion help and release notes (#34).
+  a usage example showing IDF and EPW object summaries, with links to
+  conversion help and release notes (#34).
 
 - Kept source metadata with the owning people, lighting, and equipment
   converters in `conv-people.R`, and furniture validation in

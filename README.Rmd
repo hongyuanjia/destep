@@ -11,6 +11,13 @@ knitr::opts_chunk$set(
     fig.path = "man/figures/README-",
     out.width = "100%"
 )
+
+# Remove trailing spaces from generated console output, including empty #> lines.
+readme__output_hook <- knitr::knit_hooks$get("output")
+knitr::knit_hooks$set(output = function(x, options) {
+    output <- readme__output_hook(x, options)
+    gsub("[ \\t]+(\\n|$)", "\\1", output, perl = TRUE)
+})
 ```
 
 # destep
@@ -59,11 +66,17 @@ library(destep)
 # Download a DeST prototype model and load the target EnergyPlus dictionary
 path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
 eplusr::use_idd("23.1", download = "auto")
+```
 
+```{r conversion, message=FALSE, warning=FALSE}
 # Convert the model and its weather data
 dest <- read_dest(path)
 idf <- to_eplus(dest, "23.1")
+idf
+
 epw <- to_epw(dest)
+epw
+
 DBI::dbDisconnect(dest)
 
 # Save the EnergyPlus input and weather files
