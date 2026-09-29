@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Extended thermal-source conversion and supported physical HVAC assembly,
+  with explicit validation limits for whole-building comparisons (#34).
+
 - Kept source metadata with the owning people, lighting, and equipment
   converters in `conv-people.R`, and furniture validation in
   `conv-furniture.R`. The internal `conv-source.R` module now handles generic
