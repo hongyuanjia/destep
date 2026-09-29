@@ -95,12 +95,17 @@ the function falls back to using MDBTools command-line utilities</p></li>
 <li><p>Reads the entire table from Access</p></li>
 <li><p>Writes the data to SQLite</p></li>
 </ul></li>
-<li><p><strong>Schema Handling</strong>: Table structure (columns and types) is automatically
-preserved during the transfer process</p></li>
-</ol><p>For systems without proper ODBC drivers (especially some Linux distributions),
+<li><p><strong>Schema Handling</strong>:</p><ul><li><p>Column names and data values are transferred to SQLite</p></li>
+<li><p>SQLite column types are inferred from the imported data</p></li>
+<li><p>Access-specific indexes, relationships, constraints, default values,
+queries, forms, reports, and macros are not preserved</p></li>
+</ul></li>
+</ol><p>For systems without proper ODBC drivers (especially on macOS and Linux),
 consider installing one of the following:</p><ul><li><p><code>MDBTools</code>: Open-source utilities for reading Access databases</p></li>
-<li><p><code>LibreOffice Base</code>: Provides ODBC drivers for Access</p></li>
-<li><p>Commercial drivers: <code>Actual Technologies</code> or <code>Easysoft ODBC drivers</code></p></li>
+<li><p>Commercial drivers: <code>Actual Technologies</code> (macOS, read-only),
+<code>Easysoft ODBC-Access</code> (Linux/UNIX, read-write),
+<code>Devart ODBC Driver for Microsoft Access</code> (Windows/macOS/Linux, read-write),
+or <code>CData ODBC Driver for Microsoft Access</code> (Windows/macOS/Linux, read-write)'</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>

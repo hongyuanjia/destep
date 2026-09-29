@@ -50,9 +50,18 @@
 </h1></div>
 <!-- badges: start -->
 
-<blockquote>
-<p>A toolkit to convert ‘DeST’ models to ‘EnergyPlus’ models</p>
-</blockquote>
+<p><code>destep</code> is an R package for converting <a href="https://www.dest.net.cn/" class="external-link">DeST</a> building models to <a href="https://energyplus.net/" class="external-link">EnergyPlus</a>. It helps reuse existing DeST models without rebuilding their inputs manually. Converted models can be inspected, edited, and simulated with <a href="https://cran.r-project.org/package=eplusr" class="external-link">eplusr</a>.</p>
+<div class="section level2">
+<h2 id="features">Features<a class="anchor" aria-label="anchor" href="#features"></a>
+</h2>
+<ul>
+<li>Convert building geometry, materials, constructions, windows, doors, and exterior shading.</li>
+<li>Transfer schedules, internal heat and moisture gains, furniture heat storage, ventilation, and temperature and humidity controls.</li>
+<li>Generate load-calculation models and selected physical HVAC configurations.</li>
+<li>Convert DeST climate data to EnergyPlus EPW weather files.</li>
+</ul>
+<p><code>destep</code> is under active development. See <code><a href="reference/to_eplus.html">?to_eplus</a></code> for supported model features, conversion options, and EnergyPlus version requirements, and <a href="NEWS.html">NEWS</a> for recent changes.</p>
+</div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -66,95 +75,73 @@
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="supported-dest-components">Supported DeST components<a class="anchor" aria-label="anchor" href="#supported-dest-components"></a>
-</h2>
-<p>This package is still under heavy development and is not ready for use. Currently, the following components are supported:</p>
-<ul class="task-list">
-<li><label><input type="checkbox" checked>Geometry</label></li>
-<li><label><input type="checkbox" checked>Material</label></li>
-<li><label><input type="checkbox" checked>Construction</label></li>
-<li><label><input type="checkbox" checked>Hourly schedules from <code>SCHEDULE_YEAR</code></label></li>
-<li><label><input type="checkbox" checked>Outdoor ventilation from <code>ROOM_RELATION</code></label></li>
-<li><label><input type="checkbox" checked>Thermostat setpoints from <code>ROOM_GROUP</code></label></li>
-<li><label><input type="checkbox" checked>Ideal loads zone equipment from <code>ROOM_GROUP</code></label></li>
-<li><label><input type="checkbox" checked>Internal gains from <code>OCCUPANT_GAINS</code>, <code>LIGHT_GAINS</code>, and <code>EQUIPMENT_GAINS</code></label></li>
-<li><label><input type="checkbox" checked>Outdoor air requirements from <code>OCCUPANT_GAINS</code></label></li>
-<li><label><input type="checkbox" checked>Ground temperatures from <code>GROUND_DATA</code></label></li>
-<li><label><input type="checkbox">Shading</label></li>
-<li><label><input type="checkbox">HVAC</label></li>
-</ul>
-</div>
-<div class="section level2">
 <h2 id="get-started">Get started<a class="anchor" aria-label="anchor" href="#get-started"></a>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">destep</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># use a DeST typical building model as an example</span></span>
+<span><span class="co"># Download a DeST prototype model and load the target EnergyPlus dictionary</span></span>
 <span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/download_dest_model.html">download_dest_model</a></span><span class="op">(</span><span class="st">"Commercial office A"</span>, <span class="st">"Chongqin"</span>, <span class="fl">2015</span>, <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not</span></span>
-<span><span class="co"># installed</span></span>
-<span><span class="fu">eplusr</span><span class="fu">::</span><span class="fu"><a href="https://hongyuanjia.github.io/eplusr/reference/use_idd.html" class="external-link">use_idd</a></span><span class="op">(</span><span class="fl">23.1</span>, download <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; IDD v23.1.0 has not been parsed before.</span></span>
-<span><span class="co">#&gt; Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.</span></span>
-<span><span class="co">#&gt; IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.</span></span>
-<span><span class="co">#&gt; Start parsing...</span></span>
-<span><span class="co">#&gt; Parsing completed.</span></span>
-<span><span class="co">#&gt; ── EnergyPlus Input Data Dictionary ────────────────────────────────────────────</span></span>
-<span><span class="co">#&gt; * Version: 23.1.0</span></span>
-<span><span class="co">#&gt; * Build: 87ed9199d4</span></span>
-<span><span class="co">#&gt; * Total Class: 840</span></span>
-<span></span>
-<span><span class="co"># read the DeST model and convert it to an EnergyPlus model</span></span>
-<span><span class="fu"><a href="reference/read_dest.html">read_dest</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="reference/to_eplus.html">to_eplus</a></span><span class="op">(</span><span class="fl">23.1</span><span class="op">)</span></span>
-<span><span class="co">#&gt; There are windows in the input DeST model. However, the optical properties of the glazing in DeST are not one-to-one match with the glazing in EnergyPlus. Here the optical properties of a 3mm clear glazing in EnergyPlus dataset 'WindowGlassMaterials.idf' will be used for all glazing in DeST. Please check the results in the converted IDF file.</span></span>
+<span><span class="fu">eplusr</span><span class="fu">::</span><span class="fu"><a href="https://hongyuanjia.github.io/eplusr/reference/use_idd.html" class="external-link">use_idd</a></span><span class="op">(</span><span class="st">"23.1"</span>, download <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Convert the model and its weather data</span></span>
+<span><span class="va">dest</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/read_dest.html">read_dest</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span><span class="va">idf</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/to_eplus.html">to_eplus</a></span><span class="op">(</span><span class="va">dest</span>, <span class="st">"23.1"</span><span class="op">)</span></span>
+<span><span class="va">idf</span></span>
 <span><span class="co">#&gt; ── EnergPlus Input Data File ───────────────────────────────────────────────────</span></span>
 <span><span class="co">#&gt;  • Path: NOT LOCAL</span></span>
 <span><span class="co">#&gt;  • Version: '23.1.0'</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Simulation Parameters&gt;</span></span>
 <span><span class="co">#&gt; ├─ [001&lt;O&gt;] Class: &lt;Version&gt;</span></span>
-<span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;Building&gt;</span></span>
+<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;Building&gt;</span></span>
+<span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;Timestep&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Location and Climate&gt;</span></span>
 <span><span class="co">#&gt; ├─ [001&lt;O&gt;] Class: &lt;Site:Location&gt;</span></span>
-<span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;Site:GroundTemperature:BuildingSurface&gt;</span></span>
+<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;RunPeriod&gt;</span></span>
+<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;Site:GroundTemperature:BuildingSurface&gt;</span></span>
+<span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;Site:GroundReflectance&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Schedules&gt;</span></span>
 <span><span class="co">#&gt; ├─ [003&lt;O&gt;] Class: &lt;ScheduleTypeLimits&gt;</span></span>
 <span><span class="co">#&gt; │─ [100&lt;O&gt;] Class: &lt;Schedule:Day:Interval&gt;</span></span>
-<span><span class="co">#&gt; │─ [187&lt;O&gt;] Class: &lt;Schedule:Week:Compact&gt;</span></span>
-<span><span class="co">#&gt; │─ [177&lt;O&gt;] Class: &lt;Schedule:Year&gt;</span></span>
-<span><span class="co">#&gt; └─ [004&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
+<span><span class="co">#&gt; │─ [188&lt;O&gt;] Class: &lt;Schedule:Week:Compact&gt;</span></span>
+<span><span class="co">#&gt; │─ [178&lt;O&gt;] Class: &lt;Schedule:Year&gt;</span></span>
+<span><span class="co">#&gt; └─ [005&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Surface Construction Elements&gt;</span></span>
-<span><span class="co">#&gt; ├─ [014&lt;O&gt;] Class: &lt;Material&gt;</span></span>
-<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;WindowMaterial:Glazing&gt;</span></span>
-<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;WindowMaterial:Gas&gt;</span></span>
-<span><span class="co">#&gt; └─ [007&lt;O&gt;] Class: &lt;Construction&gt;</span></span>
+<span><span class="co">#&gt; ├─ [021&lt;O&gt;] Class: &lt;Material&gt;</span></span>
+<span><span class="co">#&gt; │─ [001&lt;O&gt;] Class: &lt;WindowMaterial:SimpleGlazingSystem&gt;</span></span>
+<span><span class="co">#&gt; └─ [022&lt;O&gt;] Class: &lt;Construction&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Thermal Zones and Surfaces&gt;</span></span>
 <span><span class="co">#&gt; ├─ [001&lt;O&gt;] Class: &lt;GlobalGeometryRules&gt;</span></span>
 <span><span class="co">#&gt; │─ [036&lt;O&gt;] Class: &lt;Zone&gt;</span></span>
 <span><span class="co">#&gt; │─ [003&lt;O&gt;] Class: &lt;ZoneList&gt;</span></span>
 <span><span class="co">#&gt; │─ [003&lt;O&gt;] Class: &lt;ZoneGroup&gt;</span></span>
-<span><span class="co">#&gt; │─ [371&lt;O&gt;] Class: &lt;BuildingSurface:Detailed&gt;</span></span>
-<span><span class="co">#&gt; └─ [045&lt;O&gt;] Class: &lt;FenestrationSurface:Detailed&gt;</span></span>
+<span><span class="co">#&gt; │─ [666&lt;O&gt;] Class: &lt;BuildingSurface:Detailed&gt;</span></span>
+<span><span class="co">#&gt; │─ [092&lt;O&gt;] Class: &lt;FenestrationSurface:Detailed&gt;</span></span>
+<span><span class="co">#&gt; └─ [032&lt;O&gt;] Class: &lt;InternalMass&gt;</span></span>
+<span><span class="co">#&gt;</span></span>
+<span><span class="co">#&gt; Group: &lt;Advanced Construction, Surface, Zone Concepts&gt;</span></span>
+<span><span class="co">#&gt; └─ [790&lt;O&gt;] Class: &lt;SurfaceProperty:ConvectionCoefficients&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Internal Gains&gt;</span></span>
-<span><span class="co">#&gt; ├─ [036&lt;O&gt;] Class: &lt;People&gt;</span></span>
-<span><span class="co">#&gt; │─ [072&lt;O&gt;] Class: &lt;Lights&gt;</span></span>
-<span><span class="co">#&gt; └─ [036&lt;O&gt;] Class: &lt;ElectricEquipment&gt;</span></span>
+<span><span class="co">#&gt; ├─ [027&lt;O&gt;] Class: &lt;People&gt;</span></span>
+<span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;Lights&gt;</span></span>
+<span><span class="co">#&gt; │─ [021&lt;O&gt;] Class: &lt;ElectricEquipment&gt;</span></span>
+<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;OtherEquipment&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone Airflow&gt;</span></span>
-<span><span class="co">#&gt; └─ [028&lt;O&gt;] Class: &lt;ZoneVentilation:DesignFlowRate&gt;</span></span>
+<span><span class="co">#&gt; └─ [056&lt;O&gt;] Class: &lt;ZoneVentilation:DesignFlowRate&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;HVAC Design Objects&gt;</span></span>
-<span><span class="co">#&gt; └─ [036&lt;O&gt;] Class: &lt;DesignSpecification:OutdoorAir&gt;</span></span>
+<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;DesignSpecification:OutdoorAir&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone HVAC Controls and Thermostats&gt;</span></span>
-<span><span class="co">#&gt; ├─ [036&lt;O&gt;] Class: &lt;ZoneControl:Thermostat&gt;</span></span>
+<span><span class="co">#&gt; ├─ [027&lt;O&gt;] Class: &lt;ZoneControl:Humidistat&gt;</span></span>
+<span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;ZoneControl:Thermostat&gt;</span></span>
 <span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;ThermostatSetpoint:DualSetpoint&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone HVAC Forced Air Units&gt;</span></span>
@@ -162,7 +149,30 @@
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone HVAC Equipment Connections&gt;</span></span>
 <span><span class="co">#&gt; ├─ [027&lt;O&gt;] Class: &lt;ZoneHVAC:EquipmentList&gt;</span></span>
-<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;ZoneHVAC:EquipmentConnections&gt;</span></span></code></pre></div>
+<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;ZoneHVAC:EquipmentConnections&gt;</span></span>
+<span></span>
+<span><span class="va">epw</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/to_epw.html">to_epw</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span><span class="va">epw</span></span>
+<span><span class="co">#&gt; ══ EnergyPlus Weather File ═════════════════════════════════════════════════════</span></span>
+<span><span class="co">#&gt; [Location ]: Chongqin, Chongqing, P.R.China</span></span>
+<span><span class="co">#&gt;              {N 29°34'}, {E 106°28'}, {UTC+08:00}</span></span>
+<span><span class="co">#&gt; [Elevation]: 259m above see level</span></span>
+<span><span class="co">#&gt; [Data Src ]: DeST CLIMATE_DATA</span></span>
+<span><span class="co">#&gt; [WMO Stat ]: 57516</span></span>
+<span><span class="co">#&gt; [Leap Year]: No</span></span>
+<span><span class="co">#&gt; [Interval ]: 60 mins</span></span>
+<span><span class="co">#&gt;</span></span>
+<span><span class="co">#&gt; ── Data Periods ────────────────────────────────────────────────────────────────</span></span>
+<span><span class="co">#&gt;    Name StartDayOfWeek StartDay EndDay</span></span>
+<span><span class="co">#&gt; 1: Data         Monday     1/ 1  12/31</span></span>
+<span><span class="co">#&gt;</span></span>
+<span><span class="co">#&gt; ────────────────────────────────────────────────────────────────────────────────</span></span>
+<span></span>
+<span><span class="fu">DBI</span><span class="fu">::</span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Save the EnergyPlus input and weather files</span></span>
+<span><span class="va">idf</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"model.idf"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">epw</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"weather.epw"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="license">

@@ -1,6 +1,25 @@
 # destep
 
-> A toolkit to convert ‘DeST’ models to ‘EnergyPlus’ models
+`destep` is an R package for converting [DeST](https://www.dest.net.cn/)
+building models to [EnergyPlus](https://energyplus.net/). It helps reuse
+existing DeST models without rebuilding their inputs manually. Converted
+models can be inspected, edited, and simulated with
+[eplusr](https://cran.r-project.org/package=eplusr).
+
+## Features
+
+- Convert building geometry, materials, constructions, windows, doors,
+  and exterior shading.
+- Transfer schedules, internal heat and moisture gains, furniture heat
+  storage, ventilation, and temperature and humidity controls.
+- Generate load-calculation models and selected physical HVAC
+  configurations.
+- Convert DeST climate data to EnergyPlus EPW weather files.
+
+`destep` is under active development. See
+[`?to_eplus`](reference/to_eplus.md) for supported model features,
+conversion options, and EnergyPlus version requirements, and
+[NEWS](NEWS.md) for recent changes.
 
 ## Installation
 
@@ -16,107 +35,77 @@ install.packages("destep",
 )
 ```
 
-## Supported DeST components
-
-This package is still under heavy development and is not ready for use.
-Currently, the following components are supported:
-
-Geometry
-
-Material
-
-Construction
-
-Hourly schedules from `SCHEDULE_YEAR`
-
-Outdoor ventilation from `ROOM_RELATION`
-
-Thermostat setpoints from `ROOM_GROUP`
-
-Ideal loads zone equipment from `ROOM_GROUP`
-
-Internal gains from `OCCUPANT_GAINS`, `LIGHT_GAINS`, and
-`EQUIPMENT_GAINS`
-
-Outdoor air requirements from `OCCUPANT_GAINS`
-
-Ground temperatures from `GROUND_DATA`
-
-Shading
-
-HVAC
-
 ## Get started
 
 ``` r
 
 library(destep)
 
-# use a DeST typical building model as an example
+# Download a DeST prototype model and load the target EnergyPlus dictionary
 path <- download_dest_model("Commercial office A", "Chongqin", 2015, tempdir())
+eplusr::use_idd("23.1", download = "auto")
+```
 
-# make sure EnergyPlus IDD file can be found even if EnergyPlus itself was not
-# installed
-eplusr::use_idd(23.1, download = "auto")
-#> IDD v23.1.0 has not been parsed before.
-#> Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.
-#> IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.
-#> Start parsing...
-#> Parsing completed.
-#> ── EnergyPlus Input Data Dictionary ────────────────────────────────────────────
-#> * Version: 23.1.0
-#> * Build: 87ed9199d4
-#> * Total Class: 840
+``` r
 
-# read the DeST model and convert it to an EnergyPlus model
-read_dest(path) |> to_eplus(23.1)
-#> There are windows in the input DeST model. However, the optical properties of the glazing in DeST are not one-to-one match with the glazing in EnergyPlus. Here the optical properties of a 3mm clear glazing in EnergyPlus dataset 'WindowGlassMaterials.idf' will be used for all glazing in DeST. Please check the results in the converted IDF file.
+# Convert the model and its weather data
+dest <- read_dest(path)
+idf <- to_eplus(dest, "23.1")
+idf
 #> ── EnergPlus Input Data File ───────────────────────────────────────────────────
 #>  • Path: NOT LOCAL
 #>  • Version: '23.1.0'
 #>
 #> Group: <Simulation Parameters>
 #> ├─ [001<O>] Class: <Version>
-#> └─ [001<O>] Class: <Building>
+#> │─ [001<O>] Class: <Building>
+#> └─ [001<O>] Class: <Timestep>
 #>
 #> Group: <Location and Climate>
 #> ├─ [001<O>] Class: <Site:Location>
-#> └─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
+#> │─ [001<O>] Class: <RunPeriod>
+#> │─ [001<O>] Class: <Site:GroundTemperature:BuildingSurface>
+#> └─ [001<O>] Class: <Site:GroundReflectance>
 #>
 #> Group: <Schedules>
 #> ├─ [003<O>] Class: <ScheduleTypeLimits>
 #> │─ [100<O>] Class: <Schedule:Day:Interval>
-#> │─ [187<O>] Class: <Schedule:Week:Compact>
-#> │─ [177<O>] Class: <Schedule:Year>
-#> └─ [004<O>] Class: <Schedule:Constant>
+#> │─ [188<O>] Class: <Schedule:Week:Compact>
+#> │─ [178<O>] Class: <Schedule:Year>
+#> └─ [005<O>] Class: <Schedule:Constant>
 #>
 #> Group: <Surface Construction Elements>
-#> ├─ [014<O>] Class: <Material>
-#> │─ [001<O>] Class: <WindowMaterial:Glazing>
-#> │─ [001<O>] Class: <WindowMaterial:Gas>
-#> └─ [007<O>] Class: <Construction>
+#> ├─ [021<O>] Class: <Material>
+#> │─ [001<O>] Class: <WindowMaterial:SimpleGlazingSystem>
+#> └─ [022<O>] Class: <Construction>
 #>
 #> Group: <Thermal Zones and Surfaces>
 #> ├─ [001<O>] Class: <GlobalGeometryRules>
 #> │─ [036<O>] Class: <Zone>
 #> │─ [003<O>] Class: <ZoneList>
 #> │─ [003<O>] Class: <ZoneGroup>
-#> │─ [371<O>] Class: <BuildingSurface:Detailed>
-#> └─ [045<O>] Class: <FenestrationSurface:Detailed>
+#> │─ [666<O>] Class: <BuildingSurface:Detailed>
+#> │─ [092<O>] Class: <FenestrationSurface:Detailed>
+#> └─ [032<O>] Class: <InternalMass>
+#>
+#> Group: <Advanced Construction, Surface, Zone Concepts>
+#> └─ [790<O>] Class: <SurfaceProperty:ConvectionCoefficients>
 #>
 #> Group: <Internal Gains>
-#> ├─ [036<O>] Class: <People>
-#> │─ [072<O>] Class: <Lights>
-#> └─ [036<O>] Class: <ElectricEquipment>
+#> ├─ [027<O>] Class: <People>
+#> │─ [027<O>] Class: <Lights>
+#> │─ [021<O>] Class: <ElectricEquipment>
+#> └─ [027<O>] Class: <OtherEquipment>
 #>
 #> Group: <Zone Airflow>
-#> └─ [028<O>] Class: <ZoneVentilation:DesignFlowRate>
+#> └─ [056<O>] Class: <ZoneVentilation:DesignFlowRate>
 #>
 #> Group: <HVAC Design Objects>
-#> └─ [036<O>] Class: <DesignSpecification:OutdoorAir>
+#> └─ [027<O>] Class: <DesignSpecification:OutdoorAir>
 #>
 #> Group: <Zone HVAC Controls and Thermostats>
-#> ├─ [036<O>] Class: <ZoneControl:Thermostat>
+#> ├─ [027<O>] Class: <ZoneControl:Humidistat>
+#> │─ [027<O>] Class: <ZoneControl:Thermostat>
 #> └─ [001<O>] Class: <ThermostatSetpoint:DualSetpoint>
 #>
 #> Group: <Zone HVAC Forced Air Units>
@@ -125,4 +114,27 @@ read_dest(path) |> to_eplus(23.1)
 #> Group: <Zone HVAC Equipment Connections>
 #> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
 #> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+
+epw <- to_epw(dest)
+epw
+#> ══ EnergyPlus Weather File ═════════════════════════════════════════════════════
+#> [Location ]: Chongqin, Chongqing, P.R.China
+#>              {N 29°34'}, {E 106°28'}, {UTC+08:00}
+#> [Elevation]: 259m above see level
+#> [Data Src ]: DeST CLIMATE_DATA
+#> [WMO Stat ]: 57516
+#> [Leap Year]: No
+#> [Interval ]: 60 mins
+#>
+#> ── Data Periods ────────────────────────────────────────────────────────────────
+#>    Name StartDayOfWeek StartDay EndDay
+#> 1: Data         Monday     1/ 1  12/31
+#>
+#> ────────────────────────────────────────────────────────────────────────────────
+
+DBI::dbDisconnect(dest)
+
+# Save the EnergyPlus input and weather files
+idf$save(file.path(tempdir(), "model.idf"))
+epw$save(file.path(tempdir(), "weather.epw"))
 ```
