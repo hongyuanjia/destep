@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Fixed CI initialization by replacing the removed Homebrew Actions `master`
+  reference with the upstream recommended pinned release (#34).
+
 - Extended thermal-source conversion and supported physical HVAC assembly,
   with explicit validation limits for whole-building comparisons (#34).
 
