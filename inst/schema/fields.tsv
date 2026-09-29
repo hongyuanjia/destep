@@ -570,7 +570,7 @@ AHU	MAX_D_EX_COEF	16	""	Maximum moisture-exchange coefficient.	""
 AHU	SECOND_AIR	17	""	Whether secondary return air is present.	""
 AHU	MIN_SECOND_AIR_RATIO	18	""	Minimum secondary return-air ratio.	""
 AHU	MAX_SECOND_AIR_RATIO	19	""	Maximum secondary return-air ratio.	""
-AHU	FAN	20	""	Equipment identifier in the equipment database.	""
+AHU	FAN	20	""	Rated air flow copied from the selected cooling or dehumidification device, in m3/h.	Observed in the DeST GUI for example.accdb: product 14 reports a rated air flow of 11380 m3/h and AHU.FAN stores 11380; this conflicts with the Access field description that labels the value as an equipment ID.
 AHU	AHURES	21	""	Identifier of the air-handling-unit resistance model, corresponding to DUCTNET.	""
 AHU	EXT_PROPERTY	22	""	Extended property reference, corresponding to EXT_PROPERTY.	""
 VRV_SOURCE	ID	1	primary_key	Identifier.	""

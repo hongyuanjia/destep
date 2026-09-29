@@ -1,85 +1,177 @@
 # TODO: functions to export LIB_* tables from DeST models
 
 MAP_ID_NAME <- list(
-    AC_SYS                     = c(id = "AC_SYS_ID",                     name = "NAME",      prefix = "AC Sys"),
-    AHU                        = c(id = "AHU_ID",                        name = "NAME",      prefix = "AHU"),
-    AIR_SUPPLY_PORT            = c(id = "ID",                            name = "NAME",      prefix = "Air Supply Port"),
-    BOILER                     = c(id = "BOILER_ID",                     name = "NAME",      prefix = "Boiler"),
-    BUILDING                   = c(id = "BUILDING_ID",                   name = "NAME",      prefix = "Building"),
-    CHILLER                    = c(id = "CHILLER_ID",                    name = "NAME",      prefix = "Chiller"),
-    COOLINGTOWER               = c(id = "COOLINGTOWER_ID",               name = "NAME",      prefix = "Cooling Tower"),
-    DEFAULT_COEF               = c(id = "DEFAULT_COEF_ID",               name = "COEF_NAME", prefix = "Coef"),
-    DIST_MODE                  = c(id = "DIST_MODE_ID",                  name = "NAME",      prefix = "Dist Mode"),
-    DOOR                       = c(id = "ID",                            name = "NAME",      prefix = "Door"),
-    DUCT                       = c(id = "ID",                            name = "NAME",      prefix = "Duct"),
-    DUCTNET                    = c(id = "ID",                            name = "NAME",      prefix = "Duct Net"),
-    DUCT_JOINT                 = c(id = "ID",                            name = "NAME",      prefix = "Duct Joint"),
-    DUCT_TERMINAL              = c(id = "ID",                            name = "NAME",      prefix = "Duct Terminal"),
-    ENERGY_DEVICE              = c(id = "ID",                            name = "NAME",      prefix = "Energy Device"),
-    ENERGY_HOTWATER            = c(id = "ID",                            name = "NAME",      prefix = "Energy Hot Water"),
-    ENERGY_LIFT_ESCALATOR      = c(id = "ID",                            name = "NAME",      prefix = "Energy Lift Escalator"),
-    ENERGY_PUMP_FAN            = c(id = "ID",                            name = "NAME",      prefix = "Energy Pump Fan"),
-    ENERGY_PUMP_GROUP          = c(id = "ID",                            name = "NAME",      prefix = "Energy Pump Group"),
-    ENVIRONMENT                = c(id = "ENVIRONMENT_ID",                name = "NAME",      prefix = "Environment"),
-    EQUIPMENT_GAINS            = c(id = "GAIN_ID",                       name = "NAME",      prefix = "Equipment Gains"),
-    EQUIPMENT_TEMP             = c(id = "ID",                            name = "NAME",      prefix = "Equipment Temp"),
-    FAN_COIL                   = c(id = "ID",                            name = "NAME",      prefix = "Fan Coil"),
-    GROUND                     = c(id = "GROUND_ID",                     name = "NAME",      prefix = "Ground"),
-    HACNET_BRANCH              = c(id = "BRANCH_ID",                     name = "NAME",      prefix = "Branch"),
-    HACNET_NODE                = c(id = "NODE_ID",                       name = "NAME",      prefix = "Node"),
-    HACNET_PUMP                = c(id = "PUMP_ID",                       name = "NAME",      prefix = "Pump"),
-    HACNET_SUBNET              = c(id = "SUBNET_ID",                     name = "NAME",      prefix = "Subnet"),
-    HACNET_TERMINAL            = c(id = "TERMINAL_ID",                   name = "NAME",      prefix = "Terminal"),
-    HACNET_VALVE               = c(id = "VALVE_ID",                      name = "NAME",      prefix = "Valve"),
-    HEATEXCHANGER              = c(id = "HEATEXCHANGER_ID",              name = "NAME",      prefix = "Heat Exchanger"),
-    HEATING_PIPE               = c(id = "HEATING_PIPE_ID",               name = "NAME",      prefix = "Heating Pipe"),
-    HEATING_SYSTEM             = c(id = "HEATING_SYSTEM_ID",             name = "NAME",      prefix = "Heating System"),
-    LIB_BOILER                 = c(id = "LIB_BOILER_ID",                 name = "NAME",      prefix = "Lib Boiler"),
-    LIB_CHILLER                = c(id = "LIB_CHILLER_ID",                name = "NAME",      prefix = "Lib Chiller"),
-    LIB_COOLINGTOWER           = c(id = "LIB_COOLINGTOWER_ID",           name = "NAME",      prefix = "Lib Cooling Tower"),
-    LIB_CURVE                  = c(id = "LIB_CURVE_ID",                  name = "NAME",      prefix = "Lib Curve"),
-    LIB_HEATEXCHANGER          = c(id = "LIB_HEATEXCHANGER_ID",          name = "NAME",      prefix = "Lib Heat Exchanger"),
-    LIB_PHASE_CHANGE_MAT       = c(id = "LIB_PHASE_CHANGE_MAT_ID",       name = "NAME",      prefix = "Lib Phase Change Mat"),
-    LIB_PRODUCT                = c(id = "PRODUCT_ID",                    name = "NAME",      prefix = "Lib Product"),
-    LIB_PUMP                   = c(id = "LIB_PUMP_ID",                   name = "NAME",      prefix = "Lib Pump"),
-    LIB_ROOFUNIT_DEVICE        = c(id = "ID",                            name = "NAME",      prefix = "Lib Roof Unit Device"),
-    LIB_SHADING                = c(id = "ID",                            name = "NAME",      prefix = "Lib Shading"),
-    LIB_SOLAR_ENERGY_COLLECTOR = c(id = "LIB_SOLAR_ENERGY_COLLECTOR_ID", name = "NAME",      prefix = "Lib Solar Energy Collector"),
-    LIB_VRV_SOURCE             = c(id = "ID",                            name = "NAME",      prefix = "Lib VRV Source"),
-    LIB_VRV_TERMINAL           = c(id = "ID",                            name = "NAME",      prefix = "Lib VRV Terminal"),
-    LIB_WIND_RATIO_MODEL       = c(id = "ID",                            name = "NAME",      prefix = "Lib Wind Ratio Model"),
-    LIB_WIND_RATIO_TYPE        = c(id = "ID",                            name = "NAME",      prefix = "Lib Wind Ratio Type"),
-    LIGHT_GAINS                = c(id = "GAIN_ID",                       name = "NAME",      prefix = "Light"),
-    OCCUPANT_GAINS             = c(id = "GAIN_ID",                       name = "NAME",      prefix = "Occupant"),
-    OUTSIDE                    = c(id = "OUTSIDE_ID",                    name = "NAME",      prefix = "Outside"),
-    PUMP                       = c(id = "PUMP_ID",                       name = "NAME",      prefix = "Pump"),
-    ROOM                       = c(id = "ID",                            name = "NAME",      prefix = "Room"),
-    ROOM_GROUP                 = c(id = "ROOM_GROUP_ID",                 name = "NAME",      prefix = "Room Group"),
-    SCHEDULE_YEAR              = c(id = "SCHEDULE_ID",                   name = "NAME",      prefix = "Schedule Year"),
-    SHADING                    = c(id = "ID",                            name = "NAME",      prefix = "Shading"),
-    SKY                        = c(id = "SKY_ID",                        name = "NAME",      prefix = "Sky"),
-    STOREY                     = c(id = "ID",                            name = "NAME",      prefix = "Storey"),
-    SURFACE                    = c(id = "SURFACE_ID",                    name = "NAME",      prefix = "Surface"),
-    SYS_AIRFLOOR               = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Airfloor"),
-    SYS_APP_MATERIAL           = c(id = "APP_MATERIAL_ID",               name = "CNAME",     prefix = "Sys App Material"),
-    SYS_CITY                   = c(id = "CITY_ID",                       name = "CNAME",     prefix = "Sys City"),
-    SYS_CURTAIN                = c(id = "CURTAIN_ID",                    name = "CNAME",     prefix = "Sys Curtain"),
-    SYS_DOOR                   = c(id = "DOOR_ID",                       name = "CNAME",     prefix = "Sys Door"),
-    SYS_GROUNDFLOOR            = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Groundfloor"),
-    SYS_GROUPS                 = c(id = "TYPE",                          name = "CNAME",     prefix = "Sys Groups"),
-    SYS_INWALL                 = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Inwall"),
-    SYS_MATERIAL               = c(id = "MATERIAL_ID",                   name = "CNAME",     prefix = "Sys Material"),
-    SYS_MIDDLEFLOOR            = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Middlefloor"),
-    SYS_OUTWALL                = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Outwall"),
-    SYS_ROOF                   = c(id = "STRUCT_ID",                     name = "CNAME",     prefix = "Sys Roof"),
-    SYS_SHADING                = c(id = "SHIELD_ID",                     name = "CNAME",     prefix = "Sys Shading"),
-    SYS_WINDOW                 = c(id = "WINDOW_ID",                     name = "CNAME",     prefix = "Sys Window"),
-    VRV_SOURCE                 = c(id = "ID",                            name = "NAME",      prefix = "VRV Source"),
-    VRV_TERMINAL               = c(id = "ID",                            name = "NAME",      prefix = "VRV Terminal"),
-    WATER_SYS                  = c(id = "WATER_SYS_ID",                  name = "NAME",      prefix = "Water Sys"),
-    WATER_SYSTEM               = c(id = "WATER_SYSTEM_ID",               name = "NAME",      prefix = "Water System"),
-    WINDOW                     = c(id = "ID",                            name = "NAME",      prefix = "Window"),
-    WINDOW_TYPE_DATA           = c(id = "ID",                            name = "NAME",      prefix = "Window Type Data")
+    AC_SYS = c(id = "AC_SYS_ID", name = "NAME", prefix = "AC Sys"),
+    AHU = c(id = "AHU_ID", name = "NAME", prefix = "AHU"),
+    AIR_SUPPLY_PORT = c(id = "ID", name = "NAME", prefix = "Air Supply Port"),
+    BOILER = c(id = "BOILER_ID", name = "NAME", prefix = "Boiler"),
+    BUILDING = c(id = "BUILDING_ID", name = "NAME", prefix = "Building"),
+    CHILLER = c(id = "CHILLER_ID", name = "NAME", prefix = "Chiller"),
+    COOLINGTOWER = c(
+        id = "COOLINGTOWER_ID",
+        name = "NAME",
+        prefix = "Cooling Tower"
+    ),
+    DEFAULT_COEF = c(
+        id = "DEFAULT_COEF_ID",
+        name = "COEF_NAME",
+        prefix = "Coef"
+    ),
+    DIST_MODE = c(id = "DIST_MODE_ID", name = "NAME", prefix = "Dist Mode"),
+    DOOR = c(id = "ID", name = "NAME", prefix = "Door"),
+    DUCT = c(id = "ID", name = "NAME", prefix = "Duct"),
+    DUCTNET = c(id = "ID", name = "NAME", prefix = "Duct Net"),
+    DUCT_JOINT = c(id = "ID", name = "NAME", prefix = "Duct Joint"),
+    DUCT_TERMINAL = c(id = "ID", name = "NAME", prefix = "Duct Terminal"),
+    ENERGY_DEVICE = c(id = "ID", name = "NAME", prefix = "Energy Device"),
+    ENERGY_HOTWATER = c(id = "ID", name = "NAME", prefix = "Energy Hot Water"),
+    ENERGY_LIFT_ESCALATOR = c(
+        id = "ID",
+        name = "NAME",
+        prefix = "Energy Lift Escalator"
+    ),
+    ENERGY_PUMP_FAN = c(id = "ID", name = "NAME", prefix = "Energy Pump Fan"),
+    ENERGY_PUMP_GROUP = c(
+        id = "ID",
+        name = "NAME",
+        prefix = "Energy Pump Group"
+    ),
+    ENVIRONMENT = c(
+        id = "ENVIRONMENT_ID",
+        name = "NAME",
+        prefix = "Environment"
+    ),
+    EQUIPMENT_GAINS = c(
+        id = "GAIN_ID",
+        name = "NAME",
+        prefix = "Equipment Gains"
+    ),
+    EQUIPMENT_TEMP = c(id = "ID", name = "NAME", prefix = "Equipment Temp"),
+    FAN_COIL = c(id = "ID", name = "NAME", prefix = "Fan Coil"),
+    GROUND = c(id = "GROUND_ID", name = "NAME", prefix = "Ground"),
+    HACNET_BRANCH = c(id = "BRANCH_ID", name = "NAME", prefix = "Branch"),
+    HACNET_NODE = c(id = "NODE_ID", name = "NAME", prefix = "Node"),
+    HACNET_PUMP = c(id = "PUMP_ID", name = "NAME", prefix = "Pump"),
+    HACNET_SUBNET = c(id = "SUBNET_ID", name = "NAME", prefix = "Subnet"),
+    HACNET_TERMINAL = c(id = "TERMINAL_ID", name = "NAME", prefix = "Terminal"),
+    HACNET_VALVE = c(id = "VALVE_ID", name = "NAME", prefix = "Valve"),
+    HEATEXCHANGER = c(
+        id = "HEATEXCHANGER_ID",
+        name = "NAME",
+        prefix = "Heat Exchanger"
+    ),
+    HEATING_PIPE = c(
+        id = "HEATING_PIPE_ID",
+        name = "NAME",
+        prefix = "Heating Pipe"
+    ),
+    HEATING_SYSTEM = c(
+        id = "HEATING_SYSTEM_ID",
+        name = "NAME",
+        prefix = "Heating System"
+    ),
+    LIB_BOILER = c(id = "LIB_BOILER_ID", name = "NAME", prefix = "Lib Boiler"),
+    LIB_CHILLER = c(
+        id = "LIB_CHILLER_ID",
+        name = "NAME",
+        prefix = "Lib Chiller"
+    ),
+    LIB_COOLINGTOWER = c(
+        id = "LIB_COOLINGTOWER_ID",
+        name = "NAME",
+        prefix = "Lib Cooling Tower"
+    ),
+    LIB_CURVE = c(id = "LIB_CURVE_ID", name = "NAME", prefix = "Lib Curve"),
+    LIB_HEATEXCHANGER = c(
+        id = "LIB_HEATEXCHANGER_ID",
+        name = "NAME",
+        prefix = "Lib Heat Exchanger"
+    ),
+    LIB_PHASE_CHANGE_MAT = c(
+        id = "LIB_PHASE_CHANGE_MAT_ID",
+        name = "NAME",
+        prefix = "Lib Phase Change Mat"
+    ),
+    LIB_PRODUCT = c(id = "PRODUCT_ID", name = "NAME", prefix = "Lib Product"),
+    LIB_PUMP = c(id = "LIB_PUMP_ID", name = "NAME", prefix = "Lib Pump"),
+    LIB_ROOFUNIT_DEVICE = c(
+        id = "ID",
+        name = "NAME",
+        prefix = "Lib Roof Unit Device"
+    ),
+    LIB_SHADING = c(id = "ID", name = "NAME", prefix = "Lib Shading"),
+    LIB_SOLAR_ENERGY_COLLECTOR = c(
+        id = "LIB_SOLAR_ENERGY_COLLECTOR_ID",
+        name = "NAME",
+        prefix = "Lib Solar Energy Collector"
+    ),
+    LIB_VRV_SOURCE = c(id = "ID", name = "NAME", prefix = "Lib VRV Source"),
+    LIB_VRV_TERMINAL = c(id = "ID", name = "NAME", prefix = "Lib VRV Terminal"),
+    LIB_WIND_RATIO_MODEL = c(
+        id = "ID",
+        name = "NAME",
+        prefix = "Lib Wind Ratio Model"
+    ),
+    LIB_WIND_RATIO_TYPE = c(
+        id = "ID",
+        name = "NAME",
+        prefix = "Lib Wind Ratio Type"
+    ),
+    LIGHT_GAINS = c(id = "GAIN_ID", name = "NAME", prefix = "Light"),
+    OCCUPANT_GAINS = c(id = "GAIN_ID", name = "NAME", prefix = "Occupant"),
+    OUTSIDE = c(id = "OUTSIDE_ID", name = "NAME", prefix = "Outside"),
+    PUMP = c(id = "PUMP_ID", name = "NAME", prefix = "Pump"),
+    ROOM = c(id = "ID", name = "NAME", prefix = "Room"),
+    ROOM_GROUP = c(id = "ROOM_GROUP_ID", name = "NAME", prefix = "Room Group"),
+    SCHEDULE_YEAR = c(
+        id = "SCHEDULE_ID",
+        name = "NAME",
+        prefix = "Schedule Year"
+    ),
+    SHADING = c(id = "ID", name = "NAME", prefix = "Shading"),
+    SKY = c(id = "SKY_ID", name = "NAME", prefix = "Sky"),
+    STOREY = c(id = "ID", name = "NAME", prefix = "Storey"),
+    SURFACE = c(id = "SURFACE_ID", name = "NAME", prefix = "Surface"),
+    SYS_AIRFLOOR = c(id = "STRUCT_ID", name = "CNAME", prefix = "Sys Airfloor"),
+    SYS_APP_MATERIAL = c(
+        id = "APP_MATERIAL_ID",
+        name = "CNAME",
+        prefix = "Sys App Material"
+    ),
+    SYS_CITY = c(id = "CITY_ID", name = "CNAME", prefix = "Sys City"),
+    SYS_CURTAIN = c(id = "CURTAIN_ID", name = "CNAME", prefix = "Sys Curtain"),
+    SYS_DOOR = c(id = "DOOR_ID", name = "CNAME", prefix = "Sys Door"),
+    SYS_GROUNDFLOOR = c(
+        id = "STRUCT_ID",
+        name = "CNAME",
+        prefix = "Sys Groundfloor"
+    ),
+    SYS_GROUPS = c(id = "TYPE", name = "CNAME", prefix = "Sys Groups"),
+    SYS_INWALL = c(id = "STRUCT_ID", name = "CNAME", prefix = "Sys Inwall"),
+    SYS_MATERIAL = c(
+        id = "MATERIAL_ID",
+        name = "CNAME",
+        prefix = "Sys Material"
+    ),
+    SYS_MIDDLEFLOOR = c(
+        id = "STRUCT_ID",
+        name = "CNAME",
+        prefix = "Sys Middlefloor"
+    ),
+    SYS_OUTWALL = c(id = "STRUCT_ID", name = "CNAME", prefix = "Sys Outwall"),
+    SYS_ROOF = c(id = "STRUCT_ID", name = "CNAME", prefix = "Sys Roof"),
+    SYS_SHADING = c(id = "SHIELD_ID", name = "CNAME", prefix = "Sys Shading"),
+    SYS_WINDOW = c(id = "WINDOW_ID", name = "CNAME", prefix = "Sys Window"),
+    VRV_SOURCE = c(id = "ID", name = "NAME", prefix = "VRV Source"),
+    VRV_TERMINAL = c(id = "ID", name = "NAME", prefix = "VRV Terminal"),
+    WATER_SYS = c(id = "WATER_SYS_ID", name = "NAME", prefix = "Water Sys"),
+    WATER_SYSTEM = c(
+        id = "WATER_SYSTEM_ID",
+        name = "NAME",
+        prefix = "Water System"
+    ),
+    WINDOW = c(id = "ID", name = "NAME", prefix = "Window"),
+    WINDOW_TYPE_DATA = c(id = "ID", name = "NAME", prefix = "Window Type Data")
 )
 
 #' Convert a DeST model to EnergyPlus model
@@ -101,16 +193,89 @@ MAP_ID_NAME <- list(
 #' @param verbose \[logical\] Whether to show verbose messages. Default is
 #'       `FALSE`.
 #'
+#' @param hvac \[string\] HVAC representation. `"ideal_loads"`, the default,
+#'       preserves the established load-only conversion. `"physical"` enables
+#'       one-room `AC_SYS_TYPE = 0` constant-volume systems and exactly two
+#'       conditioned rooms linked to one shared terminal-reheat system. A
+#'       two-room `AC_SYS_TYPE = 0` system uses constant-volume fans and fixes
+#'       terminal minimum flow to maximum flow; type 1 retains variable-volume
+#'       fans and the source terminal bounds. All paths accept verified
+#'       `FRESH_AIR_TYPE` values 1, 5, or 6. Outdoor-air type 1 uses the DeST
+#'       minimum as a fixed flow and retains the maximum as a source capacity
+#'       boundary. Types 5 and 6 map the source minimum and maximum flows to
+#'       differential dry-bulb and differential enthalpy economizers. The
+#'       type-1 two-zone path proportionally reconciles terminal minimum flows
+#'       when their sum falls below the system minimum outdoor-air flow by no
+#'       more than 0.01%, with a warning; larger conflicts stop conversion. The
+#'       two-zone paths map matching `AC_SYS.SUPPLY_T_MIN/MAX` schedules to the
+#'       cooling-coil setpoint and use their minimum value for cooling sizing;
+#'       distinct minimum and maximum trajectories remain unsupported. The
+#'       physical paths require `ver = "9.0.1"`, an installed matching EnergyPlus
+#'       version, and explicit `hvac_options` for parameters absent from DeST.
+#'       All HVAC representations reject models containing `AC_SYS_TYPE` values
+#'       other than 0 and 1 instead of silently omitting unsupported systems.
+#'
+#' @param hvac_options \[list or NULL\] Named equipment parameters required by
+#'       the selected `hvac = "physical"` path. Common fan fields are
+#'       `supply_fan_total_efficiency`, `supply_fan_delta_pressure_pa`,
+#'       `supply_fan_motor_efficiency`, `supply_fan_motor_in_air_fraction`, the
+#'       corresponding four `return_fan_*` fields,
+#'       `zone_exhaust_fan_total_efficiency`, and
+#'       `zone_exhaust_fan_pressure_rise_pa`. Common coil and plant fields are
+#'       `chilled_water_design_setpoint_c`, `condenser_water_design_setpoint_c`,
+#'       `chiller_type`,
+#'       `chiller_nominal_cop`, and `tower_type`. The single-zone path also
+#'       requires five `return_fan_power_coefficient_*` fields,
+#'       `cooling_coil_design_setpoint_c`,
+#'       `heating_coil_design_setpoint_c`,
+#'       `heating_coil_rated_air_water_convection_ratio`,
+#'       `hot_water_design_setpoint_c`, `boiler_type`, `boiler_efficiency`, and
+#'       `boiler_fuel_type`. The two-zone type-1 path also requires the five fan
+#'       power coefficients; the two-zone type-0 path uses constant-volume fans
+#'       and does not. Both two-zone terminal-reheat paths require
+#'       `cooling_coil_type = "ChilledWater"`,
+#'       `preheat_coil_type = "Electric"`,
+#'       `preheat_coil_design_setpoint_c`,
+#'       `reheat_coil_type = "Electric"`, and a named numeric
+#'       `zone_outdoor_air_flow_m3_s` vector. Its names must be the two DeST
+#'       `ROOM.ID` values and its sum must equal the source `AC_SYS` minimum
+#'       outdoor-air flow. Only fields required by the selected physical path
+#'       need to be supplied. These values are never inferred from reference
+#'       models.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model.
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
-to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
+to_eplus <- function(
+    dest,
+    ver = "latest",
+    copy = TRUE,
+    verbose = FALSE,
+    hvac = c("ideal_loads", "physical"),
+    hvac_options = NULL
+) {
+    hvac <- match.arg(hvac)
+    if (hvac == "physical") {
+        checkmate::assert_list(
+            hvac_options,
+            names = "unique",
+            .var.name = "hvac_options"
+        )
+    } else if (!is.null(hvac_options)) {
+        stop(
+            "'hvac_options' can only be supplied when 'hvac = \"physical\"'.",
+            call. = FALSE
+        )
+    }
+
     if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
         on.exit(DBI::dbDisconnect(dest), add = TRUE)
     } else if (!inherits(dest, "DBIConnection")) {
-        stop("'dest' should be a path to a DeST model file or a DBIConnection object.")
+        stop(
+            "'dest' should be a path to a DeST model file or a DBIConnection object."
+        )
     }
 
     if (!is_flag(copy)) {
@@ -119,6 +284,10 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     if (!is_flag(verbose)) {
         stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
+
+    # Enforce the supported DeST HVAC boundary before any conversion-side copy
+    # or EnergyPlus object generation can obscure the source system type.
+    hvac__assert_supported_system_types(dest)
 
     # copy the DeST database to a temporary SQLite database since we need to
     # update the database
@@ -145,34 +314,47 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     }
 
     # add GlobalGeometryRules
-    ep$add("GlobalGeometryRules" := list(
-        starting_vertex_position                      = "UpperLeftCorner",
-        vertex_entry_direction                        = "Counterclockwise",
-        # DeST POINT coordinates share one building-wide drawing origin. Keep
-        # every EnergyPlus Zone origin at zero and use relative coordinates so
-        # Building North Axis can rotate that drawing to true north.
-        coordinate_system                             = "Relative",
-        daylighting_reference_point_coordinate_system = "Relative"
-    ))
+    ep$add(
+        "GlobalGeometryRules" := list(
+            starting_vertex_position = "UpperLeftCorner",
+            vertex_entry_direction = "Counterclockwise",
+            # DeST POINT coordinates share one building-wide drawing origin. Keep
+            # every EnergyPlus Zone origin at zero and use relative coordinates so
+            # Building North Axis can rotate that drawing to true north.
+            coordinate_system = "Relative",
+            daylighting_reference_point_coordinate_system = "Relative"
+        )
+    )
+
+    # Use a five-minute solver step so IdealLoads humidity control converges
+    # within the converted hourly DeST control bounds. This is explicit for
+    # reproducibility instead of relying on EnergyPlus's four-step default.
+    ep$add(
+        "Timestep" := list(
+            number_of_timesteps_per_hour = 12L
+        )
+    )
 
     # DeST stores model inputs but no EnergyPlus simulation period.  Add a
     # calendar-year period so each converted model can run against an EPW file.
-    ep$add("RunPeriod" := list(
-        name                                   = "Annual",
-        begin_month                            = 1L,
-        begin_day_of_month                     = 1L,
-        end_month                              = 12L,
-        end_day_of_month                       = 31L,
-        # DeST SCHEDULE_YEAR stores the first seven profiles as Monday through
-        # Sunday. Fix the simulation calendar to that same convention instead
-        # of inheriting a weather-file weekday that can shift every schedule.
-        day_of_week_for_start_day              = "Monday",
-        use_weather_file_holidays_and_special_days = "Yes",
-        use_weather_file_daylight_saving_period = "Yes",
-        apply_weekend_holiday_rule             = "No",
-        use_weather_file_rain_indicators       = "Yes",
-        use_weather_file_snow_indicators       = "Yes"
-    ))
+    ep$add(
+        "RunPeriod" := list(
+            name = "Annual",
+            begin_month = 1L,
+            begin_day_of_month = 1L,
+            end_month = 12L,
+            end_day_of_month = 31L,
+            # DeST SCHEDULE_YEAR stores the first seven profiles as Monday through
+            # Sunday. Fix the simulation calendar to that same convention instead
+            # of inheriting a weather-file weekday that can shift every schedule.
+            day_of_week_for_start_day = "Monday",
+            use_weather_file_holidays_and_special_days = "Yes",
+            use_weather_file_daylight_saving_period = "Yes",
+            apply_weekend_holiday_rule = "No",
+            use_weather_file_rain_indicators = "Yes",
+            use_weather_file_snow_indicators = "Yes"
+        )
+    )
 
     # update object names and make sure all names are unique
     conv__update_names(tmpdb)
@@ -181,34 +363,58 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     ver <- conv__version_comment(tmpdb, ep)
     ep$Version$comment(un_list(ver$object$comment))
 
-    # Surface part geometry must be available when a window crosses a topology
-    # split, because each clipped window piece references exactly one host part.
+    # Surface part geometry must be available when an opening crosses a topology
+    # split, because each clipped piece references exactly one host part.
     geometry_profile <- eplus_geom__profile(ep$version())
     surface <- surface__convert(tmpdb, ep, geometry_profile)
     window <- window__convert(
-        tmpdb, ep, attr(surface, "table"), geometry_profile
+        tmpdb,
+        ep,
+        attr(surface, "table"),
+        geometry_profile
+    )
+    door <- door__convert(
+        tmpdb,
+        ep,
+        attr(surface, "table"),
+        geometry_profile
+    )
+    shading <- shading__convert(
+        tmpdb,
+        ep,
+        attr(window, "table"),
+        geometry_profile
     )
 
     # TODO: is it possible to have multiple locations in tmpdb?
     conv <- list(
         location = location__convert(tmpdb, ep),
+        ground_reflectance = ground_reflectance__convert(tmpdb, ep),
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
-        zone     = zone__convert(tmpdb, ep),
-        surface  = surface,
-        window   = window,
-        const    = const__convert(tmpdb, ep),
+        zone = zone__convert(tmpdb, ep),
+        surface = surface,
+        window = window,
+        door = door,
+        shading = shading,
+        const = const__convert(
+            tmpdb,
+            ep,
+            attr(surface, "table"),
+            attr(door, "table")
+        ),
         schedule = schedule__convert(tmpdb, ep),
-        thermostat = thermostat__convert(tmpdb, ep),
+        thermostat = if (hvac == "ideal_loads") {
+            thermostat__convert(tmpdb, ep)
+        },
         outdoor_air = outdoor_air__convert(tmpdb, ep),
-        ideal_loads = ideal_loads__convert(tmpdb, ep),
+        ideal_loads = if (hvac == "ideal_loads") {
+            ideal_loads__convert(tmpdb, ep)
+        },
         ventilation = ventilation__convert(tmpdb, ep)
     )
 
-    if (any(vapply(
-        c("OCCUPANT_GAINS", "LIGHT_GAINS", "EQUIPMENT_GAINS"),
-        db_has_rows, logical(1L), dest = tmpdb
-    ))) {
+    if (internal_gains__has_room_type_data(tmpdb)) {
         conv$internal_gains <- internal_gains__convert(tmpdb, ep)
     }
     conv <- Filter(Negate(is.null), conv)
@@ -227,8 +433,11 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
     add <- eplusr::add_idf_object(
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
-        obj, val,
-        default = TRUE, unique = FALSE, empty = TRUE,
+        obj,
+        val,
+        default = TRUE,
+        unique = FALSE,
+        empty = TRUE,
         level = "draft"
     )
 
@@ -240,25 +449,57 @@ to_eplus <- function(dest, ver = "latest", copy = TRUE, verbose = FALSE) {
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
+    if (hvac == "physical") {
+        ep <- hvac__convert(tmpdb, ep, hvac_options)
+    } else {
+        # EnergyPlus 9.0.1 rejects non-ASCII object names even when the IDF
+        # passes schema validation. Rename objects and references only after
+        # the complete selected HVAC graph has been assembled.
+        conv__normalize_object_names(ep)
+    }
+
     ep
+}
+
+# Give non-ASCII objects stable names accepted by the EnergyPlus 9.0.1 parser.
+conv__normalize_object_names <- function(ep) {
+    if (as.numeric_version(ep$version()) > as.numeric_version("9.0.1")) {
+        return(invisible(ep))
+    }
+
+    objects <- unique(ep$to_table()[!is.na(name), .(id, name)])
+    objects <- objects[grepl("[^\\x01-\\x7f]", name, perl = TRUE)]
+    if (nrow(objects) == 0L) {
+        return(invisible(ep))
+    }
+
+    # Object ids are deterministic within one converted model, remain short,
+    # and avoid collisions between distinct source names after normalization.
+    replacements <- sprintf("DeST Object %d", objects$id)
+    arguments <- as.list(stats::setNames(objects$id, replacements))
+    invisible(do.call(ep$rename, arguments))
+    invisible(ep)
 }
 
 conv__comment <- function(dest, ep, class = NULL, object = NULL, comment) {
     obj <- eplusr::get_idf_object(
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
-        class, object
+        class,
+        object
     )
     val <- eplusr::get_idf_value(
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
-        class, object
+        class,
+        object
     )
 
     if (length(comment) != nrow(obj)) {
         stop(sprintf(
             "The length of 'comment' (%i) did not match the number of objects (%i).",
-            length(comment), nrow(obj)
+            length(comment),
+            nrow(obj)
         ))
     }
 
@@ -267,9 +508,13 @@ conv__comment <- function(dest, ep, class = NULL, object = NULL, comment) {
         stop("Comments should not contain line breaks.")
     }
 
-    if (is.character(comment)) comment <- as.list(comment)
+    if (is.character(comment)) {
+        comment <- as.list(comment)
+    }
 
-    if (length(comment) == 1L) comment <- list(comment)
+    if (length(comment) == 1L) {
+        comment <- list(comment)
+    }
     data.table::set(obj, NULL, "comment", comment)
 
     list(object = obj, value = val)
@@ -281,9 +526,15 @@ conv__add <- function(dest, ep, ..., .env = parent.frame()) {
         eplusr::get_priv_env(ep)$idd_env(),
         eplusr::get_priv_env(ep)$idf_env(),
         ...,
-        .type = "class", .complete = TRUE, .default = TRUE,
-        .scalar = FALSE, .pair = TRUE, .ref_assign = TRUE,
-        .unique = FALSE, .empty = TRUE, .env = .env
+        .type = "class",
+        .complete = TRUE,
+        .default = TRUE,
+        .scalar = FALSE,
+        .pair = TRUE,
+        .ref_assign = TRUE,
+        .unique = FALSE,
+        .empty = TRUE,
+        .env = .env
     )
 }
 
@@ -294,9 +545,14 @@ conv__add_objects <- function(dest, ep, class, values) {
         stop("'class' should be a single character string.", call. = FALSE)
     }
     if (!is.list(values)) {
-        stop("'values' should be a list of EnergyPlus value records.", call. = FALSE)
+        stop(
+            "'values' should be a list of EnergyPlus value records.",
+            call. = FALSE
+        )
     }
-    if (length(values) == 0L) return(NULL)
+    if (length(values) == 0L) {
+        return(NULL)
+    }
 
     # expand_idf_dots_value() accepts repeated class names as ordinary named
     # arguments, which avoids evaluating dynamically constructed `:=` calls.
@@ -308,12 +564,24 @@ conv__add_objects <- function(dest, ep, class, values) {
 # independently generated sections can be appended without collisions.
 conv__combine_outputs <- function(outputs, table = NULL) {
     outputs <- Filter(Negate(is.null), outputs)
-    if (length(outputs) == 0L) return(NULL)
+    if (length(outputs) == 0L) {
+        return(NULL)
+    }
 
     num_obj <- 0L
     for (i in seq_along(outputs)) {
-        data.table::set(outputs[[i]]$object, NULL, "rleid", outputs[[i]]$object$rleid + num_obj)
-        data.table::set(outputs[[i]]$value, NULL, "rleid", outputs[[i]]$value$rleid + num_obj)
+        data.table::set(
+            outputs[[i]]$object,
+            NULL,
+            "rleid",
+            outputs[[i]]$object$rleid + num_obj
+        )
+        data.table::set(
+            outputs[[i]]$value,
+            NULL,
+            "rleid",
+            outputs[[i]]$value$rleid + num_obj
+        )
         num_obj <- max(outputs[[i]]$object$rleid)
     }
 
@@ -326,8 +594,15 @@ conv__combine_outputs <- function(outputs, table = NULL) {
         table <- data.table::rbindlist(
             lapply(names(outputs), function(name) {
                 tbl <- attr(outputs[[name]], "table")
-                if (is.null(tbl)) return(NULL)
-                data.table::set(data.table::copy(tbl), NULL, "SOURCE_TABLE", name)
+                if (is.null(tbl)) {
+                    return(NULL)
+                }
+                data.table::set(
+                    data.table::copy(tbl),
+                    NULL,
+                    "SOURCE_TABLE",
+                    name
+                )
             }),
             fill = TRUE
         )
@@ -396,10 +671,13 @@ conv__resolve_name_tables <- function(dest, tables) {
         tables <- MAP_ID_NAME[matched]
     }
 
-    if (length(tables) == 0L) return(tables)
+    if (length(tables) == 0L) {
+        return(tables)
+    }
 
     dependencies <- intersect(
-        c("OUTSIDE", "GROUND", "ROOM", "SURFACE"), names(tables)
+        c("OUTSIDE", "GROUND", "ROOM", "SURFACE"),
+        names(tables)
     )
     c(tables[dependencies], tables[setdiff(names(tables), dependencies)])
 }
@@ -407,15 +685,24 @@ conv__resolve_name_tables <- function(dest, tables) {
 # Fill missing DeST names with table-specific defaults while preserving the
 # special storey numbering convention for above- and below-ground levels.
 conv__fill_missing_names <- function(dest, table, input) {
-    missing <- DBI::dbGetQuery(dest, sprintf(
-        "SELECT COUNT(*) AS N FROM `%s` WHERE `%s` = '.' OR `%s` IS NULL",
-        table, input["name"], input["name"]
-    ))$N
-    if (missing == 0L) return(invisible(NULL))
+    missing <- DBI::dbGetQuery(
+        dest,
+        sprintf(
+            "SELECT COUNT(*) AS N FROM `%s` WHERE `%s` = '.' OR `%s` IS NULL",
+            table,
+            input["name"],
+            input["name"]
+        )
+    )$N
+    if (missing == 0L) {
+        return(invisible(NULL))
+    }
 
     if (table == "STOREY") {
-        DBI::dbExecute(dest, sprintf(
-            "
+        DBI::dbExecute(
+            dest,
+            sprintf(
+                "
             UPDATE `%s`
             SET `%s` = CASE
                 WHEN `%s` IS NULL OR `%s` = '.'
@@ -427,15 +714,27 @@ conv__fill_missing_names <- function(dest, table, input) {
                 ELSE `%s`
                 END
             ",
-            table, input["name"], input["name"], input["name"],
-            input["prefix"], input["name"]
-        ))
+                table,
+                input["name"],
+                input["name"],
+                input["name"],
+                input["prefix"],
+                input["name"]
+            )
+        )
     } else {
-        DBI::dbExecute(dest, sprintf(
-            "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
-            table, input["name"], input["name"], input["name"],
-            input["prefix"], input["name"]
-        ))
+        DBI::dbExecute(
+            dest,
+            sprintf(
+                "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
+                table,
+                input["name"],
+                input["name"],
+                input["name"],
+                input["prefix"],
+                input["name"]
+            )
+        )
     }
 
     invisible(NULL)
@@ -444,8 +743,10 @@ conv__fill_missing_names <- function(dest, table, input) {
 # Prefix room names with their owning building when DeST contains more than one
 # building and bare room names would otherwise collide across the model.
 conv__prefix_room_names <- function(dest, input) {
-    DBI::dbExecute(dest, sprintf(
-        "
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "
         WITH TMP AS (
             SELECT ROOM.`%s`, BUILDING.`%s` FROM ROOM
             LEFT JOIN STOREY ON ROOM.OF_STOREY = STOREY.`%s`
@@ -456,32 +757,45 @@ conv__prefix_room_names <- function(dest, input) {
             SELECT TMP.`%s` FROM TMP WHERE TMP.`%s` = ROOM.`%s`
         ) || ' ' || `%s`
         ",
-        input["id"], MAP_ID_NAME$BUILDING["name"],
-        MAP_ID_NAME$STOREY["id"], MAP_ID_NAME$BUILDING["id"],
-        input["name"], MAP_ID_NAME$BUILDING["name"],
-        input["id"], input["id"], input["name"]
-    ))
+            input["id"],
+            MAP_ID_NAME$BUILDING["name"],
+            MAP_ID_NAME$STOREY["id"],
+            MAP_ID_NAME$BUILDING["id"],
+            input["name"],
+            MAP_ID_NAME$BUILDING["name"],
+            input["id"],
+            input["id"],
+            input["name"]
+        )
+    )
 }
 
 # Prefix storey names with their owning building in multi-building models.
 conv__prefix_storey_names <- function(dest, input) {
-    DBI::dbExecute(dest, sprintf(
-        "
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "
         UPDATE STOREY
         SET `%s` = (
             SELECT NAME FROM BUILDING
             WHERE STOREY.OF_BUILDING = BUILDING.`%s`
         ) || ' ' || `%s`
         ",
-        input["name"], MAP_ID_NAME$BUILDING["id"], input["name"]
-    ))
+            input["name"],
+            MAP_ID_NAME$BUILDING["id"],
+            input["name"]
+        )
+    )
 }
 
 # Derive surface names from the adjacent room or boundary plus the DeST
 # enclosure kind, then fall back to the generic surface prefix.
 conv__prefix_surface_names <- function(dest, table, input) {
-    DBI::dbExecute(dest, sprintf(
-        "
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "
         WITH TMP AS (
             SELECT
                 `%s`,
@@ -517,49 +831,80 @@ conv__prefix_surface_names <- function(dest, table, input) {
             WHERE SURFACE.`%s` = TMP.`%s`
         )
         ",
-        input["id"],
-        MAP_ID_NAME$ROOM["name"], MAP_ID_NAME$OUTSIDE["name"],
-        MAP_ID_NAME$GROUND["name"], MAP_ID_NAME$SHADING["name"],
-        MAP_ID_NAME$ROOM["id"], MAP_ID_NAME$OUTSIDE["id"],
-        MAP_ID_NAME$GROUND["id"], MAP_ID_NAME$SHADING["id"],
-        input["name"], input["id"], input["id"]
-    ))
+            input["id"],
+            MAP_ID_NAME$ROOM["name"],
+            MAP_ID_NAME$OUTSIDE["name"],
+            MAP_ID_NAME$GROUND["name"],
+            MAP_ID_NAME$SHADING["name"],
+            MAP_ID_NAME$ROOM["id"],
+            MAP_ID_NAME$OUTSIDE["id"],
+            MAP_ID_NAME$GROUND["id"],
+            MAP_ID_NAME$SHADING["id"],
+            input["name"],
+            input["id"],
+            input["id"]
+        )
+    )
 
-    DBI::dbExecute(dest, sprintf(
-        "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
-        table, input["name"], input["name"], input["name"],
-        input["prefix"], input["name"]
-    ))
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "UPDATE `%s` SET `%s` = CASE WHEN `%s` IS NULL OR `%s` = '.' THEN '%s' ELSE `%s` END",
+            table,
+            input["name"],
+            input["name"],
+            input["name"],
+            input["prefix"],
+            input["name"]
+        )
+    )
 }
 
 # Add the enclosure kind to construction-library names because one DeST
 # construction identifier can occur in several EnergyPlus construction scopes.
 conv__prefix_construction_names <- function(dest, table, input) {
     prefixes <- c(
-        SYS_OUTWALL = "ExtWall", SYS_INWALL = "IntWall",
-        SYS_ROOF = "Roof", SYS_GROUNDFLOOR = "GroundFloor",
-        SYS_MIDDLEFLOOR = "Ceiling", SYS_AIRFLOOR = "Airfloor"
+        SYS_OUTWALL = "ExtWall",
+        SYS_INWALL = "IntWall",
+        SYS_ROOF = "Roof",
+        SYS_GROUNDFLOOR = "GroundFloor",
+        SYS_MIDDLEFLOOR = "Ceiling",
+        SYS_AIRFLOOR = "Airfloor"
     )
     prefix <- unname(prefixes[table])
-    if (length(prefix) == 0L || is.na(prefix)) return(invisible(NULL))
+    if (length(prefix) == 0L || is.na(prefix)) {
+        return(invisible(NULL))
+    }
 
-    DBI::dbExecute(dest, sprintf(
-        "UPDATE `%s` SET `%s` = '%s - ' || `%s`",
-        table, input["name"], prefix, input["name"]
-    ))
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "UPDATE `%s` SET `%s` = '%s - ' || `%s`",
+            table,
+            input["name"],
+            prefix,
+            input["name"]
+        )
+    )
     invisible(NULL)
 }
 
 # Apply table-specific contextual prefixes after empty names have been filled.
 conv__prefix_contextual_names <- function(dest, table, input) {
-    if (table == "ROOM" &&
-        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
+    if (
+        table == "ROOM" &&
+            DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L
+    ) {
         conv__prefix_room_names(dest, input)
-    } else if (table == "STOREY" &&
-        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L) {
+    } else if (
+        table == "STOREY" &&
+            DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM BUILDING")$N > 1L
+    ) {
         conv__prefix_storey_names(dest, input)
-    } else if (table == "SURFACE" &&
-        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM")$N > 1L) {
+    } else if (
+        table == "SURFACE" &&
+            DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM")$N > 1L
+    ) {
         conv__prefix_surface_names(dest, table, input)
     } else {
         conv__prefix_construction_names(dest, table, input)
@@ -570,8 +915,10 @@ conv__prefix_contextual_names <- function(dest, table, input) {
 # Add stable numeric suffixes to duplicate names using each table's primary key
 # as the deterministic ordering column.
 conv__deduplicate_names <- function(dest, table, input) {
-    DBI::dbExecute(dest, sprintf(
-        "-- create a temporary table to store the name suffix for duplicated names
+    DBI::dbExecute(
+        dest,
+        sprintf(
+            "-- create a temporary table to store the name suffix for duplicated names
         WITH TMP AS (
             SELECT
                 `%s`,
@@ -588,9 +935,19 @@ conv__deduplicate_names <- function(dest, table, input) {
         -- add suffix to the names
         UPDATE `%s`
         SET `%s` = `%s` || (SELECT SUFFIX FROM TMP WHERE `%s`.`%s` = TMP.`%s`)",
-        input["id"], input["id"], input["name"], input["id"], table,
-        table, input["name"], input["name"], table, input["id"], input["id"]
-    ))
+            input["id"],
+            input["id"],
+            input["name"],
+            input["id"],
+            table,
+            table,
+            input["name"],
+            input["name"],
+            table,
+            input["id"],
+            input["id"]
+        )
+    )
 }
 
 #' Update NAME column in DeST tables
@@ -634,7 +991,9 @@ conv__update_names <- function(dest, tables = NULL) {
             )
 
             # skip empty table
-            if (!db_has_rows(dest, table)) DBI::dbBreak()
+            if (!db_has_rows(dest, table)) {
+                DBI::dbBreak()
+            }
 
             conv__fill_missing_names(dest, table, input)
 
@@ -650,7 +1009,10 @@ conv__update_names <- function(dest, tables = NULL) {
 # add comment about the DeST version to be converted
 conv__version_comment <- function(dest, ep) {
     ver <- DBI::dbGetQuery(dest, "SELECT MAJOR, MINOR FROM VERSION_CONTROL")
-    conv__comment(dest, ep, "Version",
+    conv__comment(
+        dest,
+        ep,
+        "Version",
         comment = sprintf("Converted from DeST v%i.%i", ver$MAJOR, ver$MINOR)
     )
 }

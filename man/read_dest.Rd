@@ -56,16 +56,23 @@ the function falls back to using MDBTools command-line utilities
 \item Reads the entire table from Access
 \item Writes the data to SQLite
 }
-\item \strong{Schema Handling}: Table structure (columns and types) is automatically
-preserved during the transfer process
+\item \strong{Schema Handling}:
+\itemize{
+\item Column names and data values are transferred to SQLite
+\item SQLite column types are inferred from the imported data
+\item Access-specific indexes, relationships, constraints, default values,
+queries, forms, reports, and macros are not preserved
+}
 }
 
-For systems without proper ODBC drivers (especially some Linux distributions),
+For systems without proper ODBC drivers (especially on macOS and Linux),
 consider installing one of the following:
 \itemize{
 \item \code{MDBTools}: Open-source utilities for reading Access databases
-\item \verb{LibreOffice Base}: Provides ODBC drivers for Access
-\item Commercial drivers: \verb{Actual Technologies} or \verb{Easysoft ODBC drivers}
+\item Commercial drivers: \verb{Actual Technologies} (macOS, read-only),
+\verb{Easysoft ODBC-Access} (Linux/UNIX, read-write),
+\verb{Devart ODBC Driver for Microsoft Access} (Windows/macOS/Linux, read-write),
+or \verb{CData ODBC Driver for Microsoft Access} (Windows/macOS/Linux, read-write)'
 }
 }
 \note{

@@ -173,6 +173,42 @@ geom__canonicalize_polygon <- function(value, normal_tolerance = 1e-12) {
     value
 }
 
+# Rotate a correctly wound polygon to EnergyPlus's declared UpperLeftCorner.
+# The local frame is viewed from outside: global Z defines up for non-horizontal
+# faces, while roofs and floors use opposite drawing-page Y directions.
+geom__rotate_polygon_upper_left <- function(
+    value, normal_tolerance = 1e-12, coordinate_tolerance = 1e-9
+) {
+    value <- data.table::copy(value)
+    frame <- geom__polygon_frame(value, normal_tolerance)
+    if (!frame$valid) return(value)
+
+    normal <- frame$normal
+    up_reference <- if (abs(normal[[3L]]) < 1.0 - coordinate_tolerance) {
+        c(0.0, 0.0, 1.0)
+    } else {
+        c(0.0, sign(normal[[3L]]), 0.0)
+    }
+    up <- up_reference - sum(up_reference * normal) * normal
+    up <- up / sqrt(sum(up ^ 2))
+
+    # A viewer faces inward along -normal; inward cross up is screen-right.
+    right <- c(
+        -normal[[2L]] * up[[3L]] + normal[[3L]] * up[[2L]],
+        -normal[[3L]] * up[[1L]] + normal[[1L]] * up[[3L]],
+        -normal[[1L]] * up[[2L]] + normal[[2L]] * up[[1L]]
+    )
+    coordinates <- frame$coordinates
+    up_score <- as.vector(coordinates %*% up)
+    top <- which(max(up_score) - up_score <= coordinate_tolerance)
+    right_score <- as.vector(coordinates %*% right)
+    first <- top[[which.min(right_score[top])]]
+    order <- c(seq.int(first, nrow(value)), seq_len(first - 1L))
+    value <- value[order]
+    data.table::set(value, NULL, "POINT_NO", seq_len(nrow(value)) - 1L)
+    value
+}
+
 # Return whether a planar four-vertex polygon is a rectangle within the shared
 # EnergyPlus angular and distance tolerances.
 geom__polygon_is_rectangle <- function(
@@ -290,6 +326,7 @@ geom__orient_surface_polygon <- function(
         ))
     }
     if (alignment < 0.0) surface <- surface[nrow(surface):1L]
-    data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
-    surface
+    geom__rotate_polygon_upper_left(
+        surface, profile$normal_magnitude, profile$plane_distance
+    )
 }

@@ -1,20 +1,24 @@
-# ROOM_GROUP temperature setpoint schedules -> ZoneControl:Thermostat.
+# ROOM_TYPE_DATA temperature setpoint schedules -> ZoneControl:Thermostat.
 # Each EnergyPlus zone needs its own control object, but rooms with identical
 # heating/cooling schedule IDs can share the same DualSetpoint object.
 thermostat__convert <- function(dest, ep) {
-    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_GROUP")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_GROUP") ||
+        !db_has_rows(dest, "ROOM_TYPE_DATA")) {
         return(NULL)
     }
 
-    thermostat <- thermostat__room_group_table(dest)
+    thermostat <- control__room_table(dest)
     thermostat__assert_schedules(thermostat)
 
     # A room group can exist without setpoint schedules. Keep those rows in the
     # diagnostic table but do not create incomplete EnergyPlus controls.
     skip_reason <- rep(NA_character_, nrow(thermostat))
     skip_reason[is.na(thermostat$ROOM_GROUP_ID)] <- "ROOM.OF_ROOM_GROUP does not reference ROOM_GROUP"
+    missing_room_type <- is.na(skip_reason) &
+        is.na(thermostat$ROOM_TYPE_DATA_ID)
+    skip_reason[missing_room_type] <- "ROOM.TYPE does not reference ROOM_TYPE_DATA"
     missing_setpoint <- is.na(skip_reason) & !thermostat__has_setpoints(thermostat)
-    skip_reason[missing_setpoint] <- "ROOM_GROUP setpoint schedule is zero or missing"
+    skip_reason[missing_setpoint] <- "ROOM_TYPE_DATA setpoint schedule is zero or missing"
     # A ZoneControl:Thermostat is valid only for a Zone with equipment. Keep
     # this predicate aligned with IdealLoads so unconditioned DeST rooms do not
     # become EnergyPlus controlled zones without EquipmentConnections.
@@ -61,39 +65,6 @@ thermostat__convert <- function(dest, ep) {
     out
 }
 
-# Collect the room-level ROOM_GROUP thermostat inputs and resolve both setpoint
-# schedule names up front, so downstream conversion can fail before writing IDF
-# objects if a non-zero schedule ID is dangling.
-thermostat__room_group_table <- function(dest) {
-    thermostat <- DBI::dbGetQuery(
-        dest,
-        "
-        SELECT
-            R.ID AS ROOM_ID,
-            R.NAME AS ROOM_NAME,
-            R.OF_ROOM_GROUP,
-            G.ROOM_GROUP_ID,
-            G.NAME AS ROOM_GROUP_NAME,
-            G.IS_AC_ROOM,
-            G.AC_SCHEDULE_ID,
-            G.SET_T_MIN_SCHEDULE,
-            S_MIN.NAME AS HEATING_SCHEDULE_NAME,
-            G.SET_T_MAX_SCHEDULE,
-            S_MAX.NAME AS COOLING_SCHEDULE_NAME
-        FROM ROOM R
-        LEFT JOIN ROOM_GROUP G
-        ON R.OF_ROOM_GROUP = G.ROOM_GROUP_ID
-        LEFT JOIN SCHEDULE_YEAR S_MIN
-        ON G.SET_T_MIN_SCHEDULE = S_MIN.SCHEDULE_ID
-        LEFT JOIN SCHEDULE_YEAR S_MAX
-        ON G.SET_T_MAX_SCHEDULE = S_MAX.SCHEDULE_ID
-        ORDER BY R.ID
-        "
-    )
-    data.table::setDT(thermostat)
-    thermostat
-}
-
 # Non-zero setpoint IDs are explicit foreign keys to SCHEDULE_YEAR. Missing
 # targets should stop conversion instead of silently creating broken references.
 thermostat__assert_schedules <- function(thermostat) {
@@ -115,7 +86,7 @@ thermostat__assert_schedules <- function(thermostat) {
     ), collapse = "; ")
 
     stop(sprintf(
-        "Cannot resolve ROOM_GROUP thermostat schedule(s) in SCHEDULE_YEAR: %s",
+        "Cannot resolve ROOM_TYPE_DATA thermostat schedule(s) in SCHEDULE_YEAR: %s",
         detail
     ), call. = FALSE)
 }
@@ -129,7 +100,7 @@ thermostat__has_setpoints <- function(thermostat) {
         thermostat$SET_T_MAX_SCHEDULE != 0L
 }
 
-# Use stable schedule-ID based names so identical ROOM_GROUP setpoint pairs
+# Use stable schedule-ID based names so identical ROOM_TYPE_DATA setpoint pairs
 # share one ThermostatSetpoint:DualSetpoint object across all zones.
 thermostat__setpoint_names <- function(thermostat) {
     ifelse(
@@ -176,7 +147,7 @@ thermostat__setpoint_value <- function(setpoint, i) {
 }
 
 # Create one ZoneControl:Thermostat per room while reusing the shared dual
-# setpoint object selected by the room group's schedule pair.
+# setpoint object selected by the room type's schedule pair.
 thermostat__control_objects <- function(dest, ep, thermostat) {
     values <- lapply(seq_len(nrow(thermostat)), function(i) {
         thermostat__control_value(thermostat, i)

@@ -118,6 +118,28 @@ test_that("to_epw() derives finite direct normal radiation and source flags", {
     expect_lt(attr(epw, "destep_audit")$maximum_derived_dni_w_m2, 1500)
 })
 
+test_that("DNI uses centered-hour solar geometry near sunrise", {
+    environment <- epw_test__environment(latitude = 39.8, longitude = 116.4667)
+    hour <- (80L - 1L) * 24L + 6L
+    interval <- epw__solar_interval_sine(
+        hour, environment$LATITUDE, environment$LONGITUDE, 8
+    )
+    expected_dni <- 900
+    beam_horizontal <- expected_dni * interval$mean_sunlit_sine
+    climate <- data.frame(
+        HOUR = hour,
+        HORI_TOTAL_RAD = beam_horizontal + 20,
+        HORI_SCATTER_RAD = 20
+    )
+
+    radiation <- epw__radiation(climate, environment)
+
+    expect_equal(radiation$direct_normal, expected_dni, tolerance = 1e-10)
+    expect_true(radiation$daylight)
+    expect_equal(radiation$audit$solar_interval_samples, 60L)
+    expect_match(radiation$audit$solar_representative_time, "centered")
+})
+
 test_that("to_epw() writes hour-ending minute 60", {
     dest <- epw_test__database()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -128,6 +150,25 @@ test_that("to_epw() writes hour-ending minute 60", {
 
     expect_equal(fields[[4L]], "1")
     expect_equal(fields[[5L]], "60")
+})
+
+test_that("to_epw() expands sparse DeST wind observations", {
+    dest <- epw_test__database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    DBI::dbExecute(dest, paste(
+        "UPDATE CLIMATE_DATA SET WS = NULL, WD = NULL",
+        "WHERE HOUR IN (0, 1, 3, 4, 5, 6, 7)"
+    ))
+
+    epw <- to_epw(dest)
+    data <- epw$data()
+    audit <- attr(epw, "destep_audit")
+
+    expect_equal(data$wind_speed[1:8], c(0, 0, rep(2, 6)))
+    expect_equal(data$wind_direction[1:8], c(0, 0, rep(22.5, 6)))
+    expect_equal(audit$wind_speed_filled_hours, 7L)
+    expect_equal(audit$wind_direction_filled_hours, 7L)
+    expect_match(audit$wind_fill_method, "last observation carried forward")
 })
 
 test_that("to_epw() selects a city-linked climate series", {
@@ -220,9 +261,10 @@ test_that("to_epw() converts the real DeST climate series", {
     expect_equal(data$diffuse_horizontal_radiation, raw$HORI_SCATTER_RAD)
     expect_true(all(is.finite(data$direct_normal_radiation)))
     expect_equal(audit$supersaturation_hours, 125L)
-    expect_equal(audit$maximum_derived_dni_w_m2, 1174.677, tolerance = 0.01)
+    expect_equal(audit$maximum_derived_dni_w_m2, 1173.582, tolerance = 0.01)
     expect_equal(
         audit$positive_beam_horizontal_at_nonpositive_solar_altitude_hours,
-        6L
+        0L
     )
+    expect_equal(audit$solar_interval_samples, 60L)
 })

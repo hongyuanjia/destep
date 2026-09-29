@@ -1,25 +1,31 @@
 # ENVIRONMENT -> Site:Location
-# TODO: add time zone
 location__convert <- function(dest, ep) {
     loc <- DBI::dbGetQuery(dest,
         "SELECT
             ENVIRONMENT_ID       AS ID,
             NAME,
-            round(LATITUDE, 2)  AS LATITUDE,
-            round(LONGITUDE, 2) AS LONGITUDE,
-            round(ELEVATION, 2) AS ELEVATION
+            LATITUDE,
+            LONGITUDE,
+            ELEVATION,
+            PROPERTY
         FROM ENVIRONMENT"
     )
     assert_unique_name(loc$NAME, "environment")
     data.table::setDT(loc)
+    dt_force_numeric(
+        loc,
+        c("LATITUDE", "LONGITUDE", "ELEVATION", "PROPERTY")
+    )
+
+    # PROPERTY stores the standard meridian used by DeST weather calculations.
+    time_zone <- epw__time_zone(loc)
 
     out <- conv__add(dest, ep,
         "Site:Location" := list(
             name      = loc$NAME,
             latitude  = loc$LATITUDE,
             longitude = loc$LONGITUDE,
-            # TODO: handle time zone
-            time_zone = NULL,
+            time_zone = time_zone,
             elevation = loc$ELEVATION
         )
     )

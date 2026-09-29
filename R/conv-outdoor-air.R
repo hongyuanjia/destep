@@ -1,7 +1,7 @@
-# OCCUPANT_GAINS minimum fresh-air requirement -> DesignSpecification:OutdoorAir.
-# DeST stores the requirement as m3/h per person; EnergyPlus expects m3/s per
-# person for the Flow/Person method, so values are converted once here and then
-# reused by zone equipment converters such as IdealLoads.
+# ROOM.TYPE -> ROOM_TYPE_DATA minimum fresh-air requirement ->
+# DesignSpecification:OutdoorAir. DeST stores the requirement as m3/h per
+# person; EnergyPlus expects m3/s per person for the Flow/Person method, so
+# values are converted once here and reused by IdealLoads.
 outdoor_air__convert <- function(dest, ep) {
     outdoor_air <- outdoor_air__occupant_table(dest)
     if (nrow(outdoor_air) == 0L) return(NULL)
@@ -18,24 +18,27 @@ outdoor_air__convert <- function(dest, ep) {
     out
 }
 
-# Build one row per room for positive occupant outdoor-air requirements. If a
-# room has multiple occupant gain rows, their fresh-air requirements must agree;
-# otherwise the model needs a more explicit conflict-resolution rule.
+# Build one row per room for positive room-type outdoor-air requirements. The
+# serialized Calload graph derives zone fresh air from the same room-type value,
+# rather than from the per-room OCCUPANT_GAINS drawing marker.
 outdoor_air__occupant_table <- function(dest) {
     cols <- c(
-        "ROOM_ID", "ROOM_NAME", "MIN_REQUIRE_FRESH_AIR",
+        "ROOM_ID", "ROOM_NAME", "ROOM_TYPE_ID", "ROOM_TYPE_DATA_ID",
+        "MIN_REQUIRE_FRESH_AIR",
         "OUTDOOR_AIR_FLOW_PER_PERSON", "ENERGYPLUS_OUTDOOR_AIR_NAME"
     )
     empty <- data.table::data.table(
         ROOM_ID = integer(),
         ROOM_NAME = character(),
+        ROOM_TYPE_ID = integer(),
+        ROOM_TYPE_DATA_ID = integer(),
         MIN_REQUIRE_FRESH_AIR = numeric(),
         OUTDOOR_AIR_FLOW_PER_PERSON = numeric(),
         ENERGYPLUS_OUTDOOR_AIR_NAME = character()
     )
     data.table::setcolorder(empty, cols)
 
-    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "OCCUPANT_GAINS")) {
+    if (!db_has_rows(dest, "ROOM") || !db_has_rows(dest, "ROOM_TYPE_DATA")) {
         return(empty)
     }
 
@@ -43,27 +46,25 @@ outdoor_air__occupant_table <- function(dest) {
         dest,
         "
         SELECT
-            O.GAIN_ID,
-            O.OF_ROOM AS ROOM_ID,
+            R.ID AS ROOM_ID,
             R.NAME AS ROOM_NAME,
-            O.MIN_REQUIRE_FRESH_AIR
-        FROM OCCUPANT_GAINS O
-        LEFT JOIN ROOM R
-        ON O.OF_ROOM = R.ID
-        WHERE O.MIN_REQUIRE_FRESH_AIR IS NOT NULL
-            AND O.MIN_REQUIRE_FRESH_AIR > 0
-        ORDER BY O.OF_ROOM, O.GAIN_ID
+            R.TYPE AS ROOM_TYPE_ID,
+            T.ID AS ROOM_TYPE_DATA_ID,
+            T.O_MIN_REQUIRE_FRESH_AIR AS MIN_REQUIRE_FRESH_AIR
+        FROM ROOM R
+        LEFT JOIN ROOM_TYPE_DATA T
+        ON R.TYPE = T.ID
+        ORDER BY R.ID
         "
     )
     data.table::setDT(outdoor_air)
     if (nrow(outdoor_air) == 0L) return(empty)
 
-    outdoor_air__assert_rooms(outdoor_air)
-    outdoor_air__assert_consistency(outdoor_air)
-
-    outdoor_air <- unique(
-        outdoor_air[, .(ROOM_ID, ROOM_NAME, MIN_REQUIRE_FRESH_AIR)]
-    )
+    outdoor_air__assert_room_types(outdoor_air)
+    outdoor_air <- outdoor_air[
+        !is.na(MIN_REQUIRE_FRESH_AIR) & MIN_REQUIRE_FRESH_AIR > 0
+    ]
+    if (nrow(outdoor_air) == 0L) return(empty)
     dt_force_numeric(outdoor_air, "MIN_REQUIRE_FRESH_AIR")
 
     # Convert from DeST's m3/h-person to EnergyPlus' m3/s-person.
@@ -80,45 +81,22 @@ outdoor_air__occupant_table <- function(dest) {
     outdoor_air
 }
 
-# Positive fresh-air requirements must point to a known room; otherwise the
-# generated DesignSpecification object would not have a usable zone context.
-outdoor_air__assert_rooms <- function(outdoor_air) {
-    unresolved <- is.na(outdoor_air$ROOM_NAME)
+# Every room must resolve its ROOM.TYPE reference before fresh air can be
+# projected, because a missing template is different from an explicit zero.
+outdoor_air__assert_room_types <- function(outdoor_air) {
+    unresolved <- is.na(outdoor_air$ROOM_TYPE_DATA_ID)
     if (!any(unresolved)) {
         return(invisible(NULL))
     }
 
     detail <- paste(sprintf(
-        "GAIN_ID=%s OF_ROOM=%s",
-        outdoor_air$GAIN_ID[unresolved],
-        outdoor_air$ROOM_ID[unresolved]
+        "ROOM_ID=%s TYPE=%s",
+        outdoor_air$ROOM_ID[unresolved],
+        outdoor_air$ROOM_TYPE_ID[unresolved]
     ), collapse = "; ")
 
     stop(sprintf(
-        "Cannot resolve OCCUPANT_GAINS outdoor-air room reference(s): %s",
-        detail
-    ), call. = FALSE)
-}
-
-# Each room is mapped to one DesignSpecification:OutdoorAir object in this
-# converter, so conflicting per-person requirements are treated as invalid.
-outdoor_air__assert_consistency <- function(outdoor_air) {
-    conflicts <- outdoor_air[, .(
-        N = data.table::uniqueN(MIN_REQUIRE_FRESH_AIR),
-        VALUES = paste(sort(unique(MIN_REQUIRE_FRESH_AIR)), collapse = ", ")
-    ), by = .(ROOM_ID, ROOM_NAME)][N > 1L]
-    if (nrow(conflicts) == 0L) {
-        return(invisible(NULL))
-    }
-
-    detail <- paste(sprintf(
-        "%s: %s",
-        conflicts$ROOM_NAME,
-        conflicts$VALUES
-    ), collapse = "; ")
-
-    stop(sprintf(
-        "Conflicting OCCUPANT_GAINS.MIN_REQUIRE_FRESH_AIR values by room: %s",
+        "Cannot resolve ROOM.TYPE outdoor-air reference(s) in ROOM_TYPE_DATA: %s",
         detail
     ), call. = FALSE)
 }

@@ -4,7 +4,14 @@
 \alias{to_eplus}
 \title{Convert a DeST model to EnergyPlus model}
 \usage{
-to_eplus(dest, ver = "latest", copy = TRUE, verbose = FALSE)
+to_eplus(
+  dest,
+  ver = "latest",
+  copy = TRUE,
+  verbose = FALSE,
+  hvac = c("ideal_loads", "physical"),
+  hvac_options = NULL
+)
 }
 \arguments{
 \item{dest}{A [string or DBIConnection] path to a DeST model file or a
@@ -23,6 +30,56 @@ will be modified during the conversion. Default is \code{TRUE}.}
 
 \item{verbose}{[logical] Whether to show verbose messages. Default is
 \code{FALSE}.}
+
+\item{hvac}{[string] HVAC representation. \code{"ideal_loads"}, the default,
+preserves the established load-only conversion. \code{"physical"} enables
+one-room \code{AC_SYS_TYPE = 0} constant-volume systems and exactly two
+conditioned rooms linked to one shared terminal-reheat system. A
+two-room \code{AC_SYS_TYPE = 0} system uses constant-volume fans and fixes
+terminal minimum flow to maximum flow; type 1 retains variable-volume
+fans and the source terminal bounds. All paths accept verified
+\code{FRESH_AIR_TYPE} values 1, 5, or 6. Outdoor-air type 1 uses the DeST
+minimum as a fixed flow and retains the maximum as a source capacity
+boundary. Types 5 and 6 map the source minimum and maximum flows to
+differential dry-bulb and differential enthalpy economizers. The
+type-1 two-zone path proportionally reconciles terminal minimum flows
+when their sum falls below the system minimum outdoor-air flow by no
+more than 0.01\%, with a warning; larger conflicts stop conversion. The
+two-zone paths map matching \code{AC_SYS.SUPPLY_T_MIN/MAX} schedules to the
+cooling-coil setpoint and use their minimum value for cooling sizing;
+distinct minimum and maximum trajectories remain unsupported. The
+physical paths require \code{ver = "9.0.1"}, an installed matching EnergyPlus
+version, and explicit \code{hvac_options} for parameters absent from DeST.
+All HVAC representations reject models containing \code{AC_SYS_TYPE} values
+other than 0 and 1 instead of silently omitting unsupported systems.}
+
+\item{hvac_options}{[list or NULL] Named equipment parameters required by
+the selected \code{hvac = "physical"} path. Common fan fields are
+\code{supply_fan_total_efficiency}, \code{supply_fan_delta_pressure_pa},
+\code{supply_fan_motor_efficiency}, \code{supply_fan_motor_in_air_fraction}, the
+corresponding four \verb{return_fan_*} fields,
+\code{zone_exhaust_fan_total_efficiency}, and
+\code{zone_exhaust_fan_pressure_rise_pa}. Common coil and plant fields are
+\code{chilled_water_design_setpoint_c}, \code{condenser_water_design_setpoint_c},
+\code{chiller_type},
+\code{chiller_nominal_cop}, and \code{tower_type}. The single-zone path also
+requires five \verb{return_fan_power_coefficient_*} fields,
+\code{cooling_coil_design_setpoint_c},
+\code{heating_coil_design_setpoint_c},
+\code{heating_coil_rated_air_water_convection_ratio},
+\code{hot_water_design_setpoint_c}, \code{boiler_type}, \code{boiler_efficiency}, and
+\code{boiler_fuel_type}. The two-zone type-1 path also requires the five fan
+power coefficients; the two-zone type-0 path uses constant-volume fans
+and does not. Both two-zone terminal-reheat paths require
+\code{cooling_coil_type = "ChilledWater"},
+\code{preheat_coil_type = "Electric"},
+\code{preheat_coil_design_setpoint_c},
+\code{reheat_coil_type = "Electric"}, and a named numeric
+\code{zone_outdoor_air_flow_m3_s} vector. Its names must be the two DeST
+\code{ROOM.ID} values and its sum must equal the source \code{AC_SYS} minimum
+outdoor-air flow. Only fields required by the selected physical path
+need to be supplied. These values are never inferred from reference
+models.}
 }
 \value{
 [eplusr::Idf] The converted EnergyPlus model.

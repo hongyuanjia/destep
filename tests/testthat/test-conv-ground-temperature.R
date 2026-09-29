@@ -32,7 +32,7 @@ destep_test_ground_temperature_values <- function(out) {
 }
 
 test_that("skips missing or empty ground data", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     missing <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(missing), add = TRUE)
 
@@ -50,7 +50,7 @@ test_that("skips missing or empty ground data", {
 })
 
 test_that("can convert hourly ground data to monthly BuildingSurface temperatures", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ground_temperature_db(monthly = list(1:12))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -62,7 +62,7 @@ test_that("can convert hourly ground data to monthly BuildingSurface temperature
 })
 
 test_that("uses SYS_CITY.GROUND_ID when multiple ground data IDs exist", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ground_temperature_db(
         ids = c(1L, 2L),
         monthly = list(1:12, 101:112)
@@ -82,7 +82,7 @@ test_that("uses SYS_CITY.GROUND_ID when multiple ground data IDs exist", {
 })
 
 test_that("falls back to the unique GROUND_DATA ID", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ground_temperature_db(ids = 8L, monthly = list(11:22))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -93,7 +93,7 @@ test_that("falls back to the unique GROUND_DATA ID", {
 })
 
 test_that("stops when multiple ground data IDs cannot be selected", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     dest <- destep_test_ground_temperature_db(
         ids = c(1L, 2L),
         monthly = list(1:12, 101:112)
@@ -107,7 +107,7 @@ test_that("stops when multiple ground data IDs cannot be selected", {
 })
 
 test_that("stops on invalid hourly ground data", {
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
 
     missing_hour <- destep_test_ground_temperature_db()
     on.exit(DBI::dbDisconnect(missing_hour), add = TRUE)
@@ -144,7 +144,7 @@ test_that("stops on invalid hourly ground data", {
 test_that("can convert ground temperatures from a real DeST model", {
     skip_on_cran()
 
-    ep <- ensure_empty_idf()
+    ep <- eplusr::empty_idf(23.1)
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
