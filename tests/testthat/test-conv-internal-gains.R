@@ -9,6 +9,7 @@ test_that("can convert internal gains", {
         data.frame(
             ID = 1L,
             NAME = "Room 101",
+            AREA = 10,
             TYPE = 1L
         )
     )
@@ -25,7 +26,10 @@ test_that("can convert internal gains", {
         "DIST_MODE",
         data.frame(
             DIST_MODE_ID = c(2L, 3L, 4L),
-            DIST_AIR = c(0.5, 0.3, 0.7)
+            DIST_AIR = c(0.5, 0.3, 0.7),
+            DIST_AROUND = c(0.25, 0.28, 0.1),
+            DIST_FLOOR = c(0.05, 0.35, 0.1),
+            DIST_ROOF = c(0.2, 0.07, 0.1)
         )
     )
     DBI::dbWriteTable(
@@ -110,11 +114,23 @@ test_that("can convert internal gains", {
 
     gains <- internal_gains__convert(dest, ep)
 
+    # Source metadata must come from the same minimum/variable definitions as
+    # the emitted objects, preserving electric watts separately from room heat.
+    sources <- attr(gains, "sources")
+    expect_length(sources, 5L)
+    people_sources <- Filter(function(s) s$kind == "people", sources)
+    light_sources <- Filter(function(s) s$kind == "light", sources)
+    expect_equal(vapply(people_sources, `[[`, numeric(1L), "design_power"), c(1, 0.5), ignore_attr = TRUE)
+    expect_equal(vapply(light_sources, `[[`, numeric(1L), "design_power"), c(90, 18), ignore_attr = TRUE)
+    expect_equal(light_sources[[1L]]$mode, list(air = 0.3, wall = 0.28, floor = 0.35, roof = 0.07))
+    expect_equal(people_sources[[1L]]$sensible_heat, 61)
+    expect_false(people_sources[[1L]]$temperature_dependent)
+
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
     expect_equal(
         unique(gains$object$class_name),
-        c("Schedule:Constant", "People", "Lights", "ElectricEquipment")
+        c("Schedule:Constant", "People", "Lights", "OtherEquipment", "ElectricEquipment")
     )
     expect_equal(
         unique(gains$value$value_chr[
@@ -187,6 +203,72 @@ test_that("can convert internal gains", {
         ]),
         0
     )
+
+    # The new mode must preserve existing People and latent inputs while
+    # applying the nonzero minimum count at the correct heat-balance point.
+    dynamic <- internal_gains__convert(dest, ep, "temperature_dependent")
+    dynamic_sources <- Filter(function(s) s$kind == "people", attr(dynamic, "sources"))
+    expect_true(all(vapply(dynamic_sources, `[[`, logical(1L), "temperature_dependent")))
+    expect_equal(unique(unlist(lapply(dynamic_sources, `[[`, "companion_objects"))),
+        "Room 101 People Temperature Correction")
+    original_people <- gains$value[class_name == "People", .(field_name, value_chr, value_num)]
+    updated_people <- dynamic$value[class_name == "People", .(field_name, value_chr, value_num)]
+    expect_equal(updated_people, original_people)
+    expect_equal(dynamic$value[class_name == "EnergyManagementSystem:ProgramCallingManager" &
+        field_name == "EnergyPlus Model Calling Point", value_chr],
+        "BeginZoneTimestepBeforeInitHeatBalance")
+    expect_equal(dynamic$value[class_name == "OtherEquipment" &
+        field_name == "Fraction Latent", value_num], rep(0, 3L))
+    expect_equal(dynamic$value[class_name == "EnergyManagementSystem:InternalVariable" &
+        field_name == "Internal Data Type", value_chr], "Zone Floor Area")
+    expect_match(paste(dynamic$value[class_name == "EnergyManagementSystem:Program", value_chr], collapse = "\n"),
+        "SET Count = 0.05")
+    expect_true(all(grepl("temperature_dependent", unlist(dynamic$object[class_name == "People", comment]))))
+
+    # Zero reference sensible and latent heat still permits a positive cold-
+    # room feedback term; avoid the former 0/0 sensible-fraction input.
+    DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET O_HEAT_PER_PERSON=0, O_DAMP_PER_PERSON=0")
+    zero <- internal_gains__convert_people(dest, ep, "temperature_dependent")
+    expect_equal(zero$value[class_name == "People" & field_name == "Sensible Heat Fraction", value_num], c(1, 1))
+    expect_error(internal_gains__convert_people(dest, ep, "guess"), "arg")
+    # Existing moisture conversion remains available. Its new metadata must
+    # explicitly prevent accidental use by the sensible-only projection.
+    DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=1")
+    wet <- internal_gains__convert_electric_equipment(dest, ep)
+    expect_match(attr(wet, "sources")[[1L]]$unsupported_reason, "Equipment moisture")
+    expect_true(any(grepl("Moisture", wet$value$value_chr), na.rm = TRUE))
+})
+
+test_that("lighting heat ratio preserves electricity and scales minimum and variable heat", {
+    ep <- eplusr::empty_idf(23.1)
+    lights <- data.table::data.table(NAME = "Test Lights", ROOM_NAME = "Room", ROOM_AREA = 10,
+        SCHEDULE_NAME = "Occupancy", METHOD = "Watts/Area", WATTS_PER_AREA = 12,
+        MIN_WATTS_PER_AREA = 2, FRACTION_RADIANT = .7, HEAT_TO_ELECTRIC_RATIO = .9)
+    correction <- internal_gains__light_ratio_values(lights, 1L,
+        "watts_per_floor_area", "Minimum", ep)
+    expect_equal(vapply(correction, `[[`, numeric(1L), "design_level"), c(-10, -2))
+    expect_equal(vapply(correction, `[[`, character(1L), "schedule_name"), c("Occupancy", "Minimum"))
+    expect_true(all(vapply(correction, `[[`, character(1L), "fuel_type") == "None"))
+    for (fraction in c(0, .25, 1)) {
+        electric <- 10 * (2 + 10 * fraction)
+        correction_power <- correction[[1L]]$design_level * fraction + correction[[2L]]$design_level
+        expect_equal(electric + correction_power, .9 * electric)
+    }
+    lights$HEAT_TO_ELECTRIC_RATIO <- 1
+    expect_length(internal_gains__light_ratio_values(lights, 1L,
+        "watts_per_floor_area", "Minimum", ep), 0L)
+    lights$HEAT_TO_ELECTRIC_RATIO <- 0
+    lights$METHOD <- "LightingLevel"
+    lights$LIGHTING_LEVEL <- 100
+    lights$MIN_LIGHTING_LEVEL <- 20
+    zero <- internal_gains__light_ratio_values(lights, 1L,
+        "watts_per_floor_area", "Minimum", ep)
+    expect_equal(vapply(zero, `[[`, numeric(1L), "design_level"), c(-80, -20))
+    for (invalid in c(NA_real_, NaN, Inf, -1)) {
+        lights$HEAT_TO_ELECTRIC_RATIO <- invalid
+        expect_error(internal_gains__light_ratio_values(lights, 1L,
+            "watts_per_floor_area", "Minimum", ep), "finite and non-negative")
+    }
 })
 
 test_that("internal gains resolve target zone-reference fields", {
@@ -231,6 +313,10 @@ test_that("internal gains resolve target zone-reference fields", {
             "Floor Area per Person"
         )
     )
+    expect_error(internal_gains__people_temperature(NULL, old,
+        data.table::data.table(BASE_SENSIBLE_HEAT = 53)), "9.1.0 or newer")
+    expect_error(internal_gains__people_temperature(NULL, current,
+        data.table::data.table(BASE_SENSIBLE_HEAT = -1)), "non-negative finite")
 })
 
 test_that("rejects internal gain minimum values above their maximum", {
@@ -280,7 +366,7 @@ test_that("rejects internal gain minimum values above their maximum", {
     )
 })
 
-test_that("nonzero equipment moisture is rejected until it can be mapped", {
+test_that("equipment moisture preserves sensible gains and uses an unmetered source", {
     ep <- eplusr::empty_idf(23.1)
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -325,10 +411,134 @@ test_that("nonzero equipment moisture is rejected until it can be mapped", {
         )
     )
 
+    gain <- internal_gains__convert_electric_equipment(dest, ep)
+    # Older targets lack the execution point needed to preserve source timing.
+    expect_error(
+        internal_gains__convert_electric_equipment(
+            dest,
+            eplusr::empty_idf("9.0.1")
+        ),
+        "Nonzero equipment moisture requires EnergyPlus 9.1.0 or newer"
+    )
+    expect_equal(sum(gain$object$class_name == "ElectricEquipment"), 1L)
+    expect_equal(sum(gain$object$class_name == "OtherEquipment"), 1L)
+    expect_equal(
+        gain$value[
+            class_name == "ElectricEquipment" &
+                field_name == "Design Level",
+            value_num
+        ],
+        40
+    )
+    expect_equal(
+        gain$value[
+            class_name == "ElectricEquipment" &
+                field_name == "Fraction Latent",
+            value_num
+        ],
+        0
+    )
+    expect_equal(
+        gain$value[
+            class_name == "OtherEquipment" &
+                field_name == "Fuel Type",
+            value_chr
+        ],
+        "None"
+    )
+    expect_equal(
+        gain$value[
+            class_name == "OtherEquipment" &
+                field_name == "Fraction Latent",
+            value_num
+        ],
+        1
+    )
+    expect_equal(
+        gain$value[
+            class_name == "OtherEquipment" &
+                field_name %in% c("Fraction Radiant", "Fraction Lost"),
+            value_num
+        ],
+        c(0, 0)
+    )
+    expect_equal(
+        sum(
+            gain$object$class_name == "EnergyManagementSystem:InternalVariable"
+        ),
+        0L
+    )
+
+    # A pure moisture source with a nonzero minimum must also be supported.
+    DBI::dbExecute(
+        dest,
+        paste(
+            "UPDATE ROOM_TYPE_DATA SET E_MAXPOWER=0, E_MINPOWER=0,",
+            "E_MIN_HUM=0.1, E_PER_AREA=1"
+        )
+    )
+    area_gain <- internal_gains__convert_electric_equipment(dest, ep)
+    expect_equal(
+        area_gain$value[
+            class_name == "OtherEquipment" &
+                field_name == "Design Level Calculation Method",
+            value_chr
+        ],
+        "Watts/Area"
+    )
+    expect_equal(
+        area_gain$value[
+            class_name == "EnergyManagementSystem:InternalVariable" &
+                field_name == "Internal Data Type",
+            value_chr
+        ],
+        "Zone Floor Area"
+    )
+
+    # Unsupported negative sources must not disappear through the ACTIVE filter.
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0, E_MIN_HUM=-0.1"
+    )
     expect_error(
         internal_gains__convert_electric_equipment(dest, ep),
-        "Cannot convert nonzero ROOM_TYPE_DATA equipment moisture generation"
+        "Invalid ROOM_TYPE_DATA equipment moisture generation"
     )
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0.1, E_MIN_HUM=0.2"
+    )
+    expect_error(
+        internal_gains__convert_electric_equipment(dest, ep),
+        "MIN_HUM <= MAX_HUM"
+    )
+
+    # Zero-moisture equipment keeps its original older-version support.
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0, E_MIN_HUM=0, E_MAXPOWER=40"
+    )
+    dry_gain <- internal_gains__convert_electric_equipment(
+        dest,
+        eplusr::empty_idf("9.0.1")
+    )
+    expect_equal(unique(dry_gain$object$class_name), "ElectricEquipment")
+})
+
+test_that("equipment moisture rejects non-finite and inverted source ranges", {
+    for (pair in list(c(Inf, 0), c(NaN, 0), c(0, -1), c(1, 2), c(-1, 0))) {
+        equipment <- data.table::data.table(
+            NAME = "Invalid moisture",
+            MAX_HUM = pair[[1L]],
+            MIN_HUM = pair[[2L]]
+        )
+        expect_error(equipment__assert_moisture(equipment), "Invalid moisture")
+    }
+    expect_silent(equipment__assert_moisture(data.table::data.table(
+        NAME = "Absent moisture",
+        MAX_HUM = NA_real_,
+        MIN_HUM = NA_real_
+    )))
 })
 
 test_that("can convert internal gains from a real DeST model", {
@@ -386,4 +596,11 @@ test_that("can convert internal gains from a real DeST model", {
         expected$EQUIPMENT[[1L]]
     )
     expect_equal(unique(attr(gains, "table")$SOURCE_TABLE), "ROOM_TYPE_DATA")
+    # A real DeST schema must supply metadata for every emitted primary gain,
+    # including any nonzero minimum, directly from its source distribution.
+    sources <- attr(gains, "sources")
+    expect_length(sources, sum(gains$object$class_name %in% c("People", "Lights", "ElectricEquipment")))
+    expect_true(all(vapply(sources, function(s)
+        is.finite(s$design_power) && s$design_power >= 0 &&
+            identical(names(s$mode), c("air", "wall", "floor", "roof")), logical(1L))))
 })

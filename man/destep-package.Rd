@@ -11,5 +11,10 @@ A toolkit to convert 'DeST' models to 'EnergyPlus' models.
 \author{
 \strong{Maintainer}: Hongyuan Jia \email{hongyuanjia@cqust.edu.cn} (\href{https://orcid.org/0000-0002-0075-8183}{ORCID})
 
+Authors:
+\itemize{
+  \item Hongyuan Jia \email{hongyuanjia@cqust.edu.cn} (\href{https://orcid.org/0000-0002-0075-8183}{ORCID})
+}
+
 }
 \keyword{internal}

@@ -5,11 +5,11 @@ test_that("maps verified DeST outdoor-air control types", {
     expect_error(hvac__economizer_type(2L), "DeST FRESH_AIR_TYPE")
 })
 
-test_that("selects fan parameters for each two-zone operating mode", {
+test_that("selects fan parameters for each multizone operating mode", {
     coefficients <- paste0("return_fan_power_coefficient_", seq_len(5L))
 
-    expect_false(any(coefficients %in% hvac__required_options("two_zone_cav")))
-    expect_true(all(coefficients %in% hvac__required_options("two_zone_vav")))
+    expect_false(any(coefficients %in% hvac__required_options("multizone_cav")))
+    expect_true(all(coefficients %in% hvac__required_options("multizone_vav")))
 })
 
 test_that("reconciles only small VAV minimum-flow closure gaps", {

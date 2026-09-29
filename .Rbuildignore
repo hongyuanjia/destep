@@ -12,8 +12,8 @@
 ^README\.Rmd$
 
 ^data-raw$
-^research$
-^tmp$
+^[Rr]esearch($|/)
+^[Tt][Mm][Pp]($|/)
 ^\.uvr$
 
 ^tests/testthat/fixture/.*[.]accdb$

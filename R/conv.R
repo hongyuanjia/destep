@@ -194,54 +194,81 @@ MAP_ID_NAME <- list(
 #'       `FALSE`.
 #'
 #' @param hvac \[string\] HVAC representation. `"ideal_loads"`, the default,
-#'       preserves the established load-only conversion. `"physical"` enables
-#'       one-room `AC_SYS_TYPE = 0` constant-volume systems and exactly two
-#'       conditioned rooms linked to one shared terminal-reheat system. A
-#'       two-room `AC_SYS_TYPE = 0` system uses constant-volume fans and fixes
-#'       terminal minimum flow to maximum flow; type 1 retains variable-volume
-#'       fans and the source terminal bounds. All paths accept verified
+#'       preserves the established load-only conversion. `"physical"` groups
+#'       conditioned rooms by their referenced `AC_SYS` and generates each
+#'       supported air loop independently. A one-room `AC_SYS_TYPE = 0` system
+#'       uses a dedicated constant-volume graph. Type-0 systems with multiple
+#'       rooms use constant-volume fans and fix every terminal minimum flow to
+#'       its maximum flow. Type-1 systems with one or more rooms retain
+#'       variable-volume fans and source terminal bounds. Multiple referenced
+#'       systems may be generated in one model when each has exactly one `AHU`
+#'       and satisfies the same documented constraints. All paths accept verified
 #'       `FRESH_AIR_TYPE` values 1, 5, or 6. Outdoor-air type 1 uses the DeST
 #'       minimum as a fixed flow and retains the maximum as a source capacity
 #'       boundary. Types 5 and 6 map the source minimum and maximum flows to
-#'       differential dry-bulb and differential enthalpy economizers. The
-#'       type-1 two-zone path proportionally reconciles terminal minimum flows
-#'       when their sum falls below the system minimum outdoor-air flow by no
-#'       more than 0.01%, with a warning; larger conflicts stop conversion. The
-#'       two-zone paths map matching `AC_SYS.SUPPLY_T_MIN/MAX` schedules to the
-#'       cooling-coil setpoint and use their minimum value for cooling sizing;
-#'       distinct minimum and maximum trajectories remain unsupported. The
-#'       physical paths require `ver = "9.0.1"`, an installed matching EnergyPlus
-#'       version, and explicit `hvac_options` for parameters absent from DeST.
-#'       All HVAC representations reject models containing `AC_SYS_TYPE` values
-#'       other than 0 and 1 instead of silently omitting unsupported systems.
+#'       differential dry-bulb and differential enthalpy economizers. The type-1
+#'       path proportionally reconciles terminal minimum flows when their sum
+#'       falls below the system minimum outdoor-air flow by no more than 0.01%,
+#'       with a warning; larger conflicts stop conversion. Multizone paths require
+#'       one shared availability schedule per system and map matching
+#'       `AC_SYS.SUPPLY_T_MIN/MAX` schedules to the cooling-coil setpoint and use
+#'       their minimum value for cooling sizing; distinct minimum and maximum
+#'       trajectories remain unsupported. Physical paths require
+#'       `ver = "9.0.1"`, an installed matching EnergyPlus version, and explicit
+#'       `hvac_options` for parameters absent from DeST. All HVAC representations
+#'       reject models containing `AC_SYS_TYPE` values other than 0 and 1 instead
+#'       of silently omitting unsupported systems.
 #'
 #' @param hvac_options \[list or NULL\] Named equipment parameters required by
-#'       the selected `hvac = "physical"` path. Common fan fields are
+#'       the selected `hvac = "physical"` paths. Common fan fields are
 #'       `supply_fan_total_efficiency`, `supply_fan_delta_pressure_pa`,
 #'       `supply_fan_motor_efficiency`, `supply_fan_motor_in_air_fraction`, the
 #'       corresponding four `return_fan_*` fields,
 #'       `zone_exhaust_fan_total_efficiency`, and
 #'       `zone_exhaust_fan_pressure_rise_pa`. Common coil and plant fields are
 #'       `chilled_water_design_setpoint_c`, `condenser_water_design_setpoint_c`,
-#'       `chiller_type`,
-#'       `chiller_nominal_cop`, and `tower_type`. The single-zone path also
-#'       requires five `return_fan_power_coefficient_*` fields,
+#'       `chiller_type`, `chiller_nominal_cop`, and `tower_type`. A model with
+#'       any single-zone type-0 path also requires five
+#'       `return_fan_power_coefficient_*` fields,
 #'       `cooling_coil_design_setpoint_c`,
 #'       `heating_coil_design_setpoint_c`,
 #'       `heating_coil_rated_air_water_convection_ratio`,
 #'       `hot_water_design_setpoint_c`, `boiler_type`, `boiler_efficiency`, and
-#'       `boiler_fuel_type`. The two-zone type-1 path also requires the five fan
-#'       power coefficients; the two-zone type-0 path uses constant-volume fans
-#'       and does not. Both two-zone terminal-reheat paths require
-#'       `cooling_coil_type = "ChilledWater"`,
-#'       `preheat_coil_type = "Electric"`,
-#'       `preheat_coil_design_setpoint_c`,
+#'       `boiler_fuel_type`. Type-1 paths also require the five fan power
+#'       coefficients; multizone type-0 paths use constant-volume fans and do not.
+#'       All terminal-reheat paths require `cooling_coil_type = "ChilledWater"`,
+#'       `preheat_coil_type = "Electric"`, `preheat_coil_design_setpoint_c`,
 #'       `reheat_coil_type = "Electric"`, and a named numeric
-#'       `zone_outdoor_air_flow_m3_s` vector. Its names must be the two DeST
-#'       `ROOM.ID` values and its sum must equal the source `AC_SYS` minimum
-#'       outdoor-air flow. Only fields required by the selected physical path
-#'       need to be supplied. These values are never inferred from reference
-#'       models.
+#'       `zone_outdoor_air_flow_m3_s` vector. Its names must be exactly the DeST
+#'       `ROOM.ID` values served by terminal-reheat paths. Allocations are checked
+#'       per `AC_SYS`, and each system sum must equal that source system's minimum
+#'       outdoor-air flow. One flat option list currently applies the same
+#'       equipment and shared plant assumptions to all generated systems. Only
+#'       fields required by the selected paths need to be supplied. These values
+#'       are never inferred from reference models.
+#'
+#' @param people_heat \[string\] People sensible-heat mode. `"constant"`
+#'       preserves the existing conversion and corresponds to DeST bshell's
+#'       `--const_occupant` option. Use `"temperature_dependent"` for the
+#'       default behavior verified with DeST 0.2.230705: per-person sensible
+#'       heat is `max(0, input + 5.536 * (26 - previous temperature))` W.
+#'       This mode requires EnergyPlus 9.1 or newer and uses the preceding
+#'       EnergyPlus zone-step air temperature. Record both engines' time steps
+#'       when comparing results. The source database does not store the DeST
+#'       execution option. Moisture input is unchanged; radiant recipient
+#'       fractions and full-building numerical equivalence remain limitations.
+#'
+#' @param window_optics \[string\] Aggregate-window optical representation.
+#'       `"simple_glazing"` preserves the existing default. The opt-in
+#'       `"dest_solar"` mode uses SC and pane count to derive solar angle tables
+#'       for the simplified model verified with DeST 0.2.230705. It supports
+#'       exterior two/three-pane aggregate windows and EnergyPlus 23.1 or newer.
+#'       SC specifies a normal-transmittance objective of `0.87 * SC`, not SHGC.
+#'       Glass resistance and the existing exposed emissivity are preserved.
+#'       EnergyPlus retains its own diffuse integration and heat-balance solver;
+#'       native glass storage, sky exchange and room solar distribution are not
+#'       added by this option. The tables are solar-only: visible/daylighting
+#'       optics are not represented, and existing daylighting objects are rejected.
 #'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model.
 #'
@@ -253,9 +280,13 @@ to_eplus <- function(
     copy = TRUE,
     verbose = FALSE,
     hvac = c("ideal_loads", "physical"),
-    hvac_options = NULL
+    hvac_options = NULL,
+    people_heat = c("constant", "temperature_dependent"),
+    window_optics = c("simple_glazing", "dest_solar")
 ) {
     hvac <- match.arg(hvac)
+    people_heat <- match.arg(people_heat)
+    window_optics <- match.arg(window_optics)
     if (hvac == "physical") {
         checkmate::assert_list(
             hvac_options,
@@ -393,6 +424,7 @@ to_eplus <- function(
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
         zone = zone__convert(tmpdb, ep),
+        furniture = furniture__convert(tmpdb, ep),
         surface = surface,
         window = window,
         door = door,
@@ -415,7 +447,7 @@ to_eplus <- function(
     )
 
     if (internal_gains__has_room_type_data(tmpdb)) {
-        conv$internal_gains <- internal_gains__convert(tmpdb, ep)
+        conv$internal_gains <- internal_gains__convert(tmpdb, ep, people_heat)
     }
     conv <- Filter(Negate(is.null), conv)
 
@@ -447,6 +479,12 @@ to_eplus <- function(
         eplusr::get_priv_env(ep)$log_unsaved()
         eplusr::get_priv_env(ep)$log_new_uuid()
         eplusr::get_priv_env(ep)$update_idf_env(add)
+    }
+
+    # Apply opt-in solar semantics after all geometry and constructions exist,
+    # before legacy-version object-name normalization changes their references.
+    if (window_optics == "dest_solar") {
+        solar__apply(tmpdb, ep)
     }
 
     if (hvac == "physical") {

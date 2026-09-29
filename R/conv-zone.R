@@ -2,12 +2,14 @@
 # ROOM$OF_STOREY -> STOREY$ID + MULTIPLE
 # ROOM$OF_STORY -> ZoneList
 zone__convert <- function(dest, ep) {
+    # Floor area scales both sensible and moisture gains. Keep source precision
+    # so small rooms do not acquire a systematic per-area source bias.
     room <- DBI::dbGetQuery(dest,
         "SELECT
             R.ID                 AS ID,
             R.NAME               AS NAME,
             ROUND(R.VOLUME, 3)   AS VOLUME,
-            ROUND(R.AREA, 3)     AS AREA,
+            R.AREA               AS AREA,
             S.NAME               AS STOREY_NAME,
             S.MULTIPLE           AS STOREY_MULTIPLIER,
             ROUND(S.HEIGHT, 3)   AS HEIGHT
