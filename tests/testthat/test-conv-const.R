@@ -451,6 +451,33 @@ test_that("maps DeST's near-zero heat capacity layers to Material:NoMass", {
     )
 })
 
+test_that("whole-window K preserves glass resistance across nominal film conventions", {
+    # These values follow independently verified native k=1,2,4 load increments
+    # and EnergyPlus's documented glass resistance, not fitted annual loads.
+    expect_equal(
+        const__simple_glazing_u_factor(c(1, 2, 4, 5.8)),
+        c(0.979973204612678, 1.939886612478319, 3.833477670199475,
+            5.528375218691142),
+        tolerance = 1e-10
+    )
+    expect_length(const__simple_glazing_u_factor(numeric()), 0L)
+    # The EnergyPlus film correlation has a small discontinuity at U=5.85.
+    # Verify a resistance in that branch gap instead of rejecting a valid input.
+    branch_u <- const__simple_glazing_u_factor(1 / (0.0049 + 1 / 8.7 + 1 / 23.3))
+    expect_gt(branch_u, 5.85)
+    expect_lt(branch_u, 6.4)
+    expect_equal(1 / branch_u - 1 / (1.788041 * branch_u - 2.886625) -
+        1 / (0.025342 * branch_u + 29.163853), 0.0049, tolerance = 1e-10)
+    expect_error(const__simple_glazing_u_factor(c(2, NA_real_)),
+        "cannot preserve glass thermal resistance")
+    expect_error(const__simple_glazing_u_factor(0),
+        "cannot preserve glass thermal resistance")
+    # A nominal K of 6.3 requires U above the simple-window limit; silent
+    # clamping would create a different construction.
+    expect_error(const__simple_glazing_u_factor(6.3),
+        "cannot preserve glass thermal resistance")
+})
+
 test_that("can convert 'Construction' and 'Material'", {
     skip_on_cran()
 

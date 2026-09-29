@@ -8,7 +8,6 @@ Description: A toolkit to convert 'DeST' models to 'EnergyPlus' models.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 SystemRequirements: mdbtools (<https://github.com/mdbtools/mdbtools>, required
     on macOS and Linux); Microsoft Access ODBC Driver on Windows
 Imports: 
@@ -28,3 +27,4 @@ Suggests:
     httr2,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0

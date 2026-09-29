@@ -13,7 +13,7 @@ test_that("can convert 'Zone'", {
         ID = c(10L, 11L, 20L),
         NAME = c("Room 101", "Room 102", "Room 201"),
         VOLUME = c(96, 80, 123),
-        AREA = c(30, 25, 30),
+        AREA = c(30, 6.0416, 30),
         OF_STOREY = c(1L, 1L, 2L)
     ))
 
@@ -23,6 +23,13 @@ test_that("can convert 'Zone'", {
     expect_equal(unique(zone$object$class_name), c("Zone", "ZoneList", "ZoneGroup"))
     expect_s3_class(attr(zone, "table"), "data.table")
     expect_equal(attr(zone, "table")$HEIGHT, c(3.2, 3.2, 4.1))
+    expect_equal(
+        zone$value$value_num[
+            zone$value$class_name == "Zone" &
+                zone$value$field_name == "Floor Area"
+        ],
+        c(30, 6.0416, 30)
+    )
     expect_equal(
         zone$value$value_num[
             zone$value$class_name == "Zone" &

@@ -36,9 +36,61 @@ preserves the following DeST components:
 - Outdoor ventilation from `ROOM_RELATION`
 - Thermostat setpoints and Ideal Loads zone equipment from `ROOM_GROUP`
 - Internal gains and occupant outdoor-air requirements
+- Furniture storage from the effective room-type coefficient
 - Ground temperatures, site metadata, and ground reflectance
 - Exterior window overhangs and side fins
 - Climate data through `to_epw()`
+
+Furniture storage uses `ROOM.TYPE` to select
+`ROOM_TYPE_DATA.FURNITURE_COEF`. The conversion follows the
+area-dependent slab rule verified for DeST 0.2.230705, including its 50
+m2 branch, and uses EnergyPlus `InternalMass` with negligible radiative
+absorptance. Capacity and free-floating temperature comparisons were
+checked independently in EnergyPlus 26.1. This does not establish
+equivalence of DeST’s inter-room partition treatment or whole-building
+results.
+
+For default DeST bshell runs, select
+`to_eplus(..., people_heat = "temperature_dependent")` to include the
+verified `max(0, input + 5.536 * (26 - previous temperature))` W/person
+rule. The existing `"constant"` default corresponds to bshell’s
+`--const_occupant` option. The database does not identify that execution
+choice. The new mode requires EnergyPlus 9.1 or newer, uses the previous
+zone-step temperature, and preserves the source minimum occupancy and
+moisture input. Four separate changing-occupancy tests passed in
+EnergyPlus 26.1; directional radiant allocation and full-school
+agreement remain unresolved.
+
+Lighting room heat includes `ROOM_TYPE_DATA.L_HEAT_RATE`: sensible heat
+is the scheduled electrical power multiplied by this ratio. Lighting
+electricity is preserved, while an unmetered sensible correction follows
+the same source schedule and minimum power. This correction does not
+require EMS.
+
+For the simplified DeST solar model, opt in to
+`to_eplus(..., ver = "26.1", window_optics = "dest_solar")`. This maps
+SC and two/three-pane counts to solar angle tables while preserving
+glass resistance. The existing `"simple_glazing"` default remains
+available. EnergyPlus retains solar-position, diffuse-integration and
+heat-balance algorithms. This solar-only option does not preserve
+daylighting optics, native glass storage, sky exchange or room solar
+recipient allocation.
+
+Equipment moisture is read through `ROOM.TYPE` from
+`ROOM_TYPE_DATA.E_MIN_HUM`, `E_MAX_HUM`, `E_PER_AREA`, and `E_SCHEDULE`.
+The source rate is `minimum + (maximum - minimum) * schedule`, in kg/h,
+multiplied by zone floor area for per-area inputs. Sensible equipment
+gains remain independent. An all-latent `OtherEquipment` object with
+fuel type `None` supplies moisture without adding an energy-meter entry.
+EMS adjusts its latent watts using EnergyPlus’s water-vapor enthalpy
+function and the latest available zone temperature. Abrupt temperature
+changes can leave a one-zone-step residual; whole-model DeST/EnergyPlus
+numerical equivalence is not implied by this source mapping. Nonzero
+equipment moisture requires EnergyPlus 9.1 or newer because older
+versions lack the required EMS calling point. Use
+`to_eplus(model, ver = "9.6.0", hvac = "ideal_loads")` for the
+real-model path validated with this mapping. The current physical-HVAC
+path, which targets 9.0.1, still rejects nonzero equipment moisture.
 
 The default `hvac = "ideal_loads"` path is not restricted to a
 particular air-system topology or to one or two conditioned rooms. It
@@ -48,24 +100,33 @@ humidity-control, and outdoor-air inputs. When a room group references a
 DeST air-conditioning system, this path does not reconstruct its
 physical fans, coils, ducts, air loop, or plant.
 
-The opt-in `hvac = "physical"` path currently implements three
-explicitly validated model structures:
+The opt-in `hvac = "physical"` path groups conditioned rooms by their
+referenced `AC_SYS` and generates each supported air loop independently.
+It accepts:
 
-- one conditioned room connected to one `AC_SYS_TYPE = 0`
-  constant-volume system;
-- exactly two conditioned rooms connected to one shared
-  `AC_SYS_TYPE = 0` constant-volume terminal-reheat system; and
-- exactly two conditioned rooms connected to one shared
-  `AC_SYS_TYPE = 1` VAV terminal-reheat system.
+- one-room `AC_SYS_TYPE = 0` constant-volume systems;
+- `AC_SYS_TYPE = 0` systems with multiple rooms, represented by
+  constant-volume fans and terminal-reheat branches; and
+- `AC_SYS_TYPE = 1` systems with one or more rooms, represented by VAV
+  terminal-reheat branches.
 
-These are the current boundaries of direct physical-system generation,
-not the boundaries of the default load-oriented conversion. Supported
-physical systems may use `FRESH_AIR_TYPE` 1, 5, or 6. Equipment and zone
-outdoor-air parameters that are absent from the DeST model must be
-supplied through `hvac_options`; see `?to_eplus` for the required
-fields. Other physical topologies are not yet projected. At present,
-source models containing an `AC_SYS_TYPE` other than 0 or 1 stop with an
-explicit error in either HVAC mode.
+A model may contain multiple supported `AC_SYS` records. Each system
+must have one `AHU`; rooms in a multizone system must share one
+availability schedule; and supported systems may use `FRESH_AIR_TYPE` 1,
+5, or 6. Parameters absent from the DeST model, including allocations
+named for every room served by a terminal-reheat path, must be supplied
+through `hvac_options`; see `?to_eplus` for the required fields. The
+current flat option list applies the same equipment assumptions to every
+generated air loop. All generated air loops share one option-defined
+chilled-water plant and, when required, one hot-water plant.
+
+Existing real-model numerical regression coverage comprises a one-room
+type-0 system, a two-room type-0 system, and a two-room type-1 system.
+Higher room counts and multiple-system assembly are implemented, but
+remain outside that numerical evidence set until suitable real source
+models and reference results are added. Other physical topologies are
+not projected. Source models containing an `AC_SYS_TYPE` other than 0 or
+1 stop with an explicit error in either HVAC mode.
 
 ## EnergyPlus versions
 

@@ -1,8 +1,9 @@
-internal_gains__convert <- function(dest, ep) {
+# Collect source room-type gains under the explicitly selected people mode.
+internal_gains__convert <- function(dest, ep, people_heat = "constant") {
     conv <- Filter(
         Negate(is.null),
         list(
-            PEOPLE = internal_gains__convert_people(dest, ep),
+            PEOPLE = internal_gains__convert_people(dest, ep, people_heat),
             LIGHTS = internal_gains__convert_lights(dest, ep),
             EQUIPMENT = internal_gains__convert_electric_equipment(dest, ep)
         )
@@ -15,6 +16,8 @@ internal_gains__convert <- function(dest, ep) {
 
     # All three object families are projections of the same room-type record.
     data.table::set(attr(out, "table"), NULL, "SOURCE_TABLE", "ROOM_TYPE_DATA")
+    # Each owning converter supplies its source metadata alongside the objects.
+    attr(out, "sources") <- unname(unlist(lapply(conv, attr, "sources"), recursive = FALSE))
     out
 }
 
@@ -154,7 +157,8 @@ internal_gains__people_field_names <- function(ep) {
 # ROOM.TYPE -> ROOM_TYPE_DATA occupant fields -> People. The outdoor-air field
 # is handled separately by outdoor_air__convert() so People remains focused on
 # internal sensible and latent heat gains.
-internal_gains__convert_people <- function(dest, ep) {
+internal_gains__convert_people <- function(dest, ep, people_heat = "constant") {
+    people_heat <- match.arg(people_heat, c("constant", "temperature_dependent"))
     if (!internal_gains__has_room_type_data(dest)) {
         return(NULL)
     }
@@ -204,8 +208,10 @@ internal_gains__convert_people <- function(dest, ep) {
             END                AS MIN_PEOPLE_PER_AREA,
             T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON * 2.5 / 3.6
                                AS ACTIVITY_LEVEL,
-            T.O_HEAT_PER_PERSON /
-                (T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON * 2.5 / 3.6)
+            T.O_HEAT_PER_PERSON AS BASE_SENSIBLE_HEAT,
+            CASE WHEN T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON = 0
+                THEN 1 ELSE T.O_HEAT_PER_PERSON /
+                (T.O_HEAT_PER_PERSON + T.O_DAMP_PER_PERSON * 2.5 / 3.6) END
                                AS SENSIBLE_HEAT_FRACTION,
             ROUND(1.0 - DM.DIST_AIR, 3)
                                AS FRACTION_RADIANT,
@@ -235,6 +241,7 @@ internal_gains__convert_people <- function(dest, ep) {
             "MIN_NUMBER_OF_PEOPLE",
             "MIN_PEOPLE_PER_AREA",
             "ACTIVITY_LEVEL",
+            "BASE_SENSIBLE_HEAT",
             "SENSIBLE_HEAT_FRACTION",
             "FRACTION_RADIANT",
             "MIN_FRESH_AIR"
@@ -301,8 +308,96 @@ internal_gains__convert_people <- function(dest, ep) {
     # schedules. However, in DeST, it is a fixed value. So here we create a
     # constant activity-level schedule for each distinct activity level.
     parts$people <- conv__add_objects(dest, ep, "People", people_objects)
+    # The bshell execution switch is absent from the source database. Preserve
+    # the caller's choice in the saved People objects as well as the API call.
+    data.table::set(parts$people$object, NULL, "comment",
+        rep(list(paste0("DeST people_heat mode: ", people_heat)), nrow(parts$people$object)))
+    if (people_heat == "temperature_dependent") {
+        parts$temperature <- internal_gains__people_temperature(dest, ep, people)
+    }
 
-    conv__combine_outputs(parts, table = people)
+    out <- conv__combine_outputs(parts, table = people)
+    attr(out, "sources") <- internal_gains__source_specs(dest, people,
+        people_objects, "people", field_names[["number"]], field_names[["per_area"]],
+        people_heat)
+    out
+}
+
+# Generate the native sensible-heat relation in one place for both the people
+# correction and any subsequent redistribution of that same sensible heat.
+internal_gains__people_sensible_lines <- function(heat, temperature, variable) {
+    c(sprintf("SET %s = %.17g + 5.536 * (26 - %s)", variable, heat, temperature),
+        sprintf("SET %s = @MAX 0 %s", variable, variable))
+}
+
+# Preserve the native previous-temperature sensible source while leaving the
+# independently represented People count and moisture input unchanged. Native
+# hourly equipment replay and changing-occupancy free-float checks establish
+# the source rule; radiant recipient fractions still follow EnergyPlus.
+internal_gains__people_temperature <- function(dest, ep, people) {
+    if (numeric_version(as.character(ep$version())) < numeric_version("9.1.0")) {
+        stop("Temperature-dependent people heat requires EnergyPlus 9.1.0 or newer.",
+            call. = FALSE)
+    }
+    if (any(!is.finite(people$BASE_SENSIBLE_HEAT) | people$BASE_SENSIBLE_HEAT < 0)) {
+        stop("Temperature-dependent people heat requires non-negative finite sensible inputs.",
+            call. = FALSE)
+    }
+    classes <- c("OtherEquipment", "EnergyManagementSystem:Sensor",
+        "EnergyManagementSystem:InternalVariable", "EnergyManagementSystem:Actuator",
+        "EnergyManagementSystem:Program", "EnergyManagementSystem:ProgramCallingManager")
+    values <- stats::setNames(lapply(classes, function(class) list()), classes)
+    always_on <- "Always On - DeST People Temperature"
+    zone_field <- conv__idd_field_name(ep, "OtherEquipment", 3L)
+    for (i in seq_len(nrow(people))) {
+        prefix <- paste0("DeST_People_T_", i)
+        name <- paste(people$NAME[[i]], "Temperature Correction")
+        per_area <- people$CALCULATION_BASIS[[i]] == 1L
+        maximum <- if (per_area) people$PEOPLE_PER_AREA[[i]] else people$NUMBER_OF_PEOPLE[[i]]
+        minimum <- internal_gains__zero_if_na(if (per_area) people$MIN_PEOPLE_PER_AREA[[i]] else people$MIN_NUMBER_OF_PEOPLE[[i]])
+        source <- list(name = name, fuel_type = "None", schedule_name = always_on,
+            design_level_calculation_method = "EquipmentLevel", design_level = 0,
+            fraction_latent = 0, fraction_radiant = people$FRACTION_RADIANT[[i]],
+            fraction_lost = 0, end_use_subcategory = "DeST People Temperature Correction")
+        source[[zone_field]] <- people$ROOM_NAME[[i]]
+        values$OtherEquipment <- c(values$OtherEquipment, list(source))
+        values[["EnergyManagementSystem:Sensor"]] <- c(values[["EnergyManagementSystem:Sensor"]], list(
+            list(name = paste0(prefix, "_Temperature"),
+                output_variable_or_output_meter_index_key_name = people$ROOM_NAME[[i]],
+                output_variable_or_output_meter_name = "Zone Mean Air Temperature"),
+            list(name = paste0(prefix, "_Schedule"),
+                output_variable_or_output_meter_index_key_name = people$SCHEDULE_NAME[[i]],
+                output_variable_or_output_meter_name = "Schedule Value")))
+        if (per_area) {
+            values[["EnergyManagementSystem:InternalVariable"]] <- c(values[["EnergyManagementSystem:InternalVariable"]],
+                list(list(name = paste0(prefix, "_Area"),
+                    internal_data_index_key_name = people$ROOM_NAME[[i]], internal_data_type = "Zone Floor Area")))
+        }
+        values[["EnergyManagementSystem:Actuator"]] <- c(values[["EnergyManagementSystem:Actuator"]],
+            list(list(name = paste0(prefix, "_Power"), actuated_component_unique_name = name,
+                actuated_component_type = "OtherEquipment", actuated_component_control_type = "Power Level")))
+        # Apply minimum plus scheduled range once, before the zone multiplier.
+        # Clamp the total native sensible power before subtracting the existing
+        # constant People contribution, so high-temperature correction can be negative.
+        lines <- c(
+            sprintf("SET Count = %.17g + %.17g * %s_Schedule", minimum, maximum - minimum, prefix),
+            if (per_area) sprintf("SET Count = Count * %s_Area", prefix),
+            internal_gains__people_sensible_lines(people$BASE_SENSIBLE_HEAT[[i]],
+                paste0(prefix, "_Temperature"), "Sensible"),
+            sprintf("SET %s_Power = (Sensible - %.17g) * Count", prefix, people$BASE_SENSIBLE_HEAT[[i]]))
+        fields <- vapply(seq_along(lines) + 1L,
+            function(field) conv__idd_field_name(ep, "EnergyManagementSystem:Program", field), character(1L))
+        values[["EnergyManagementSystem:Program"]] <- c(values[["EnergyManagementSystem:Program"]],
+            list(c(list(name = paste0(prefix, "_Control")), stats::setNames(as.list(lines), fields))))
+        # Gains are consumed during heat-balance initialization. Calling this
+        # before the predictor leaves an extra, experimentally confirmed lag.
+        values[["EnergyManagementSystem:ProgramCallingManager"]] <- c(values[["EnergyManagementSystem:ProgramCallingManager"]],
+            list(list(name = paste0(prefix, "_Manager"),
+                energyplus_model_calling_point = "BeginZoneTimestepBeforeInitHeatBalance",
+                program_name_1 = paste0(prefix, "_Control"))))
+    }
+    conv__combine_outputs(c(list(internal_gains__always_on(dest, ep, always_on)),
+        lapply(classes, function(class) conv__add_objects(dest, ep, class, values[[class]]))))
 }
 
 internal_gains__people_values <- function(
@@ -386,6 +481,7 @@ internal_gains__convert_lights <- function(dest, ep) {
             R.NAME           AS ROOM_NAME,
             R.TYPE           AS ROOM_TYPE_ID,
             T.ID             AS ROOM_TYPE_DATA_ID,
+            R.AREA           AS ROOM_AREA,
             T.L_SCHEDULE     AS SCHEDULE_ID,
             S.NAME           AS SCHEDULE_NAME,
             T.L_DIST_MODE    AS DIST_MODE_ID,
@@ -438,6 +534,7 @@ internal_gains__convert_lights <- function(dest, ep) {
             "WATTS_PER_AREA",
             "MIN_LIGHTING_LEVEL",
             "MIN_WATTS_PER_AREA",
+            "ROOM_AREA",
             "FRACTION_RADIANT",
             "HEAT_TO_ELECTRIC_RATIO"
         )
@@ -476,10 +573,66 @@ internal_gains__convert_lights <- function(dest, ep) {
     }
 
     parts$lights <- conv__add_objects(dest, ep, "Lights", light_objects)
+    # Native lighting heat equals scheduled electrical power times HEAT_RATE.
+    # Keep Lights electricity unchanged and apply the thermal difference with
+    # an unmetered source following the exact same minimum/variable schedules.
+    heat_ratio_objects <- unlist(
+        lapply(seq_len(nrow(lights)), function(i) {
+            internal_gains__light_ratio_values(lights, i,
+                watts_per_area_field, always_on, ep)
+        }),
+        recursive = FALSE
+    )
+    if (length(heat_ratio_objects)) {
+        parts$heat_ratio <- conv__add_objects(dest, ep,
+            "OtherEquipment", heat_ratio_objects)
+    }
 
-    conv__combine_outputs(parts, table = lights)
+    out <- conv__combine_outputs(parts, table = lights)
+    attr(out, "sources") <- internal_gains__source_specs(dest, lights,
+        light_objects, "light", "lighting_level", watts_per_area_field)
+    out
 }
 
+# Correct only room sensible heat; OtherEquipment supports signed design
+# levels, so a constant heat ratio needs no EMS or additional timestep delay.
+internal_gains__light_ratio_values <- function(lights, i, watts_per_area_field,
+    always_on, ep) {
+    ratio <- lights$HEAT_TO_ELECTRIC_RATIO[[i]]
+    if (!is.finite(ratio) || ratio < 0) {
+        stop(sprintf("Lighting heat-to-electricity ratio for '%s' must be finite and non-negative.",
+            lights$NAME[[i]]), call. = FALSE)
+    }
+    if (ratio == 1) return(list())
+    source <- internal_gains__light_values(lights, i, watts_per_area_field,
+        always_on, internal_gains__zone_field_name(ep, "Lights"))
+    zone_field <- conv__idd_field_name(ep, "OtherEquipment", 3L)
+    lapply(source, function(light) {
+        per_area <- lights$METHOD[[i]] == "Watts/Area"
+        area <- if (per_area) lights$ROOM_AREA[[i]] else 1
+        if (!is.finite(area) || area <= 0) {
+            stop(sprintf("Lighting heat correction for '%s' requires a positive finite room area.",
+                lights$NAME[[i]]), call. = FALSE)
+        }
+        value <- list(name = paste(light$name, "Heat Ratio Correction"),
+            fuel_type = "None", schedule_name = light$schedule_name,
+            design_level_calculation_method = "EquipmentLevel",
+            fraction_latent = 0, fraction_radiant = light$fraction_radiant,
+            fraction_lost = 0, end_use_subcategory = "DeST Lighting Heat Ratio")
+        value[[zone_field]] <- lights$ROOM_NAME[[i]]
+        # Sum of the Lights source and this correction is ratio * P, with
+        # convective/radiant shares retained and zero change to electric power.
+        # EnergyPlus accepts negative total design power, but rejects a
+        # negative per-area input despite the IDD's general signed-input note.
+        # ROOM.AREA is also copied without rounding to the EnergyPlus Zone.
+        watts <- if (per_area) light[[watts_per_area_field]] * area else light$lighting_level
+        value$design_level <- (ratio - 1) * watts
+        value
+    })
+}
+
+# Split the electrical lighting input into its constant minimum and scheduled
+# range; the heat-ratio correction reuses these same object definitions.
 internal_gains__light_values <- function(
     lights,
     i,
@@ -546,7 +699,7 @@ internal_gains__light_value <- function(
     value
 }
 
-# ROOM.TYPE -> ROOM_TYPE_DATA equipment fields -> ElectricEquipment.
+# ROOM.TYPE -> ROOM_TYPE_DATA equipment fields -> sensible and moisture sources.
 internal_gains__convert_electric_equipment <- function(dest, ep) {
     if (!internal_gains__has_room_type_data(dest)) {
         return(NULL)
@@ -567,7 +720,7 @@ internal_gains__convert_electric_equipment <- function(dest, ep) {
             T.E_DIST_MODE    AS DIST_MODE_ID,
             T.E_PER_AREA     AS CALCULATION_BASIS,
             CASE WHEN T.E_MAXPOWER > 0 OR T.E_MINPOWER > 0 OR
-                T.E_MAX_HUM > 0 OR T.E_MIN_HUM > 0
+                T.E_MAX_HUM != 0 OR T.E_MIN_HUM != 0
                 THEN 1 ELSE 0 END AS ACTIVE,
             CASE
                 WHEN T.E_PER_AREA = 1 THEN 'Watts/Area'
@@ -621,7 +774,7 @@ internal_gains__convert_electric_equipment <- function(dest, ep) {
             "FRACTION_RADIANT"
         )
     )
-    equipment__assert_no_moisture(equipment)
+    equipment__assert_moisture(equipment)
     watts_per_area_field <- conv__idd_field_name(ep, "ElectricEquipment", 6L)
     has_min <- any(
         internal_gains__has_positive_minimum(equipment$MIN_DESIGN_LEVEL) |
@@ -663,24 +816,77 @@ internal_gains__convert_electric_equipment <- function(dest, ep) {
         "ElectricEquipment",
         equipment_objects
     )
+    parts$moisture <- equipment__moisture_objects(dest, ep, equipment)
 
-    conv__combine_outputs(parts, table = equipment)
+    out <- conv__combine_outputs(parts, table = equipment)
+    attr(out, "sources") <- internal_gains__source_specs(dest, equipment,
+        equipment_objects, "equipment", "design_level", watts_per_area_field)
+    out
 }
 
-# ElectricEquipment has no direct moisture-generation input. Until that DeST
-# semantic is mapped independently, reject nonzero equipment moisture instead
-# of silently discarding latent gains that would bias total cooling.
-equipment__assert_no_moisture <- function(equipment) {
+# Describe the exact named values just created by an internal-gain converter.
+# This does not parse an IDF: object identity, minimum splits and design levels
+# come from that converter's own value lists; source fractions come from DeST.
+internal_gains__source_specs <- function(dest, gain, values, kind, total_field,
+    area_field, people_heat = "constant") {
+    columns <- c("DIST_MODE_ID", "DIST_AIR", "DIST_AROUND", "DIST_FLOOR", "DIST_ROOF")
+    # Older partial schemas can still use the existing gain conversion, but
+    # cannot supply a complete prescribed surface distribution. Never invent
+    # missing fractions; the source projector rejects this absent inventory.
+    if (!db_has_fields(dest, "DIST_MODE", columns)) return(NULL)
+    distributions <- DBI::dbGetQuery(dest, paste("SELECT", paste(columns, collapse = ","), "FROM DIST_MODE"))
+    rooms <- DBI::dbGetQuery(dest, "SELECT ID, AREA FROM ROOM")
+    lapply(values, function(value) {
+        row <- match(value$name, gain$NAME)
+        if (is.na(row)) row <- match(value$name, paste(gain$NAME, "Minimum"))
+        stopifnot(!is.na(row))
+        per_area <- gain$CALCULATION_BASIS[[row]] == 1L
+        area <- rooms$AREA[match(gain$ROOM_ID[[row]], rooms$ID)]
+        power <- if (per_area) value[[area_field]] * area else value[[total_field]]
+        mode <- distributions[match(gain$DIST_MODE_ID[[row]], distributions$DIST_MODE_ID), -1L]
+        mode <- stats::setNames(as.list(mode), c("air", "wall", "floor", "roof"))
+        item <- list(name = value$name, zone = gain$ROOM_NAME[[row]], kind = kind,
+            design_power = power, schedule = if (kind == "people")
+                value$number_of_people_schedule_name else value$schedule_name,
+            mode = mode, existing_radiant = value$fraction_radiant,
+            existing_air = 1 - value$fraction_radiant, companion_objects = character())
+        if (kind == "people") {
+            item$sensible_heat <- gain$BASE_SENSIBLE_HEAT[[row]]
+            item$temperature_dependent <- people_heat == "temperature_dependent"
+            # One temperature correction covers both the minimum and the
+            # scheduled count; those two source streams share its identity.
+            if (item$temperature_dependent) item$companion_objects <-
+                paste(gain$NAME[[row]], "Temperature Correction")
+        } else if (kind == "light") {
+            ratio <- gain$HEAT_TO_ELECTRIC_RATIO[[row]]
+            item$design_power <- power * ratio
+            if (ratio != 1) item$companion_objects <- paste(value$name, "Heat Ratio Correction")
+        } else if (any(c(gain$MAX_HUM[[row]], gain$MIN_HUM[[row]]) != 0, na.rm = TRUE)) {
+            # Moisture still converts through its established owner. The
+            # sensible-only projection must explicitly decline that extension.
+            item$unsupported_reason <- "Equipment moisture is not supported by the prescribed source projector."
+        }
+        item
+    })
+}
+
+# Moisture generation must define a finite, nonnegative minimum/maximum pair.
+# Access NULL retains the established zero-source convention.
+equipment__assert_moisture <- function(equipment) {
     max_hum <- equipment$MAX_HUM
     min_hum <- equipment$MIN_HUM
-    max_hum[is.na(max_hum)] <- 0
-    min_hum[is.na(min_hum)] <- 0
-    unsupported <- abs(max_hum) > 1e-12 | abs(min_hum) > 1e-12
-    if (!any(unsupported)) {
+    max_hum[is.na(max_hum) & !is.nan(max_hum)] <- 0
+    min_hum[is.na(min_hum) & !is.nan(min_hum)] <- 0
+    invalid <- !is.finite(max_hum) |
+        !is.finite(min_hum) |
+        max_hum < 0 |
+        min_hum < 0 |
+        min_hum > max_hum
+    if (!any(invalid)) {
         return(invisible(NULL))
     }
 
-    rows <- equipment[unsupported]
+    rows <- equipment[invalid]
     detail <- paste(
         sprintf(
             "%s: MIN_HUM=%s, MAX_HUM=%s",
@@ -692,11 +898,162 @@ equipment__assert_no_moisture <- function(equipment) {
     )
     stop(
         sprintf(
-            "Cannot convert nonzero ROOM_TYPE_DATA equipment moisture generation: %s",
+            "Invalid ROOM_TYPE_DATA equipment moisture generation (require finite 0 <= MIN_HUM <= MAX_HUM): %s",
             detail
         ),
         call. = FALSE
     )
+}
+
+# Keep the DeST kg/h source independent of sensible gains and energy meters.
+# Native DeST applies MIN_HUM + (MAX_HUM - MIN_HUM) * E_SCHEDULE in kg/h,
+# multiplied by zone floor area only when E_PER_AREA = 1.
+# EnergyPlus divides internal latent watts by PsyHgAirFnWTdb in its moisture
+# balance, so use that same built-in function instead of a fixed 2500 kJ/kg.
+equipment__moisture_objects <- function(dest, ep, equipment) {
+    max_hum <- equipment$MAX_HUM
+    min_hum <- equipment$MIN_HUM
+    max_hum[is.na(max_hum)] <- 0
+    min_hum[is.na(min_hum)] <- 0
+    rows <- which(max_hum > 0)
+    if (!length(rows)) {
+        return(NULL)
+    }
+
+    # Earlier calling points cannot update moisture before current-step gains
+    # are evaluated. Reject them instead of shifting the source schedule.
+    if (
+        numeric_version(as.character(ep$version())) < numeric_version("9.1.0")
+    ) {
+        stop(
+            paste(
+                "Nonzero equipment moisture requires EnergyPlus 9.1.0 or newer",
+                "for BeginZoneTimestepBeforeInitHeatBalance.",
+                "Use to_eplus(..., ver = '9.6.0', hvac = 'ideal_loads')",
+                "for the validated real-model path."
+            ),
+            call. = FALSE
+        )
+    }
+
+    classes <- c(
+        "OtherEquipment",
+        "EnergyManagementSystem:Sensor",
+        "EnergyManagementSystem:InternalVariable",
+        "EnergyManagementSystem:Actuator",
+        "EnergyManagementSystem:Program",
+        "EnergyManagementSystem:ProgramCallingManager"
+    )
+    values <- stats::setNames(lapply(classes, function(class) list()), classes)
+    zone_field <- conv__idd_field_name(ep, "OtherEquipment", 3L)
+    area_field <- conv__idd_field_name(ep, "OtherEquipment", 7L)
+    for (i in rows) {
+        prefix <- paste0("DeST_Moisture_", i)
+        name <- paste(equipment$NAME[[i]], "Moisture")
+        per_area <- equipment$CALCULATION_BASIS[[i]] == 1L
+        source <- list(
+            name = name,
+            fuel_type = "None",
+            schedule_name = equipment$SCHEDULE_NAME[[i]],
+            design_level_calculation_method = equipment$METHOD[[i]],
+            fraction_latent = 1,
+            fraction_radiant = 0,
+            fraction_lost = 0,
+            end_use_subcategory = "DeST Equipment Moisture"
+        )
+        source[[zone_field]] <- equipment$ROOM_NAME[[i]]
+        # Nominal watts document the source size; EMS supplies actual power,
+        # including nonzero minimum moisture when the equipment schedule is zero.
+        source[[if (per_area) area_field else "design_level"]] <-
+            max_hum[[i]] * 2500000 / 3600
+        values$OtherEquipment <- c(values$OtherEquipment, list(source))
+        sensors <- list(
+            list(
+                name = paste0(prefix, "_Temperature"),
+                output_variable_or_output_meter_index_key_name = equipment$ROOM_NAME[[
+                    i
+                ]],
+                output_variable_or_output_meter_name = "Zone Air Temperature"
+            ),
+            list(
+                name = paste0(prefix, "_Schedule"),
+                output_variable_or_output_meter_index_key_name = equipment$SCHEDULE_NAME[[
+                    i
+                ]],
+                output_variable_or_output_meter_name = "Schedule Value"
+            )
+        )
+        values[["EnergyManagementSystem:Sensor"]] <-
+            c(values[["EnergyManagementSystem:Sensor"]], sensors)
+        if (per_area) {
+            values[["EnergyManagementSystem:InternalVariable"]] <- c(
+                values[["EnergyManagementSystem:InternalVariable"]],
+                list(list(
+                    name = paste0(prefix, "_Area"),
+                    internal_data_index_key_name = equipment$ROOM_NAME[[i]],
+                    internal_data_type = "Zone Floor Area"
+                ))
+            )
+        }
+        values[["EnergyManagementSystem:Actuator"]] <- c(
+            values[["EnergyManagementSystem:Actuator"]],
+            list(list(
+                name = paste0(prefix, "_Power"),
+                actuated_component_unique_name = name,
+                actuated_component_type = "OtherEquipment",
+                actuated_component_control_type = "Power Level"
+            ))
+        )
+        # Use a local program variable for kg/s; no zone multiplier is applied
+        # here because EnergyPlus applies it in the zone demand calculation.
+        lines <- c(
+            sprintf(
+                "SET MassRate = %.17g + %.17g * %s_Schedule",
+                min_hum[[i]] / 3600,
+                (max_hum[[i]] - min_hum[[i]]) / 3600,
+                prefix
+            ),
+            if (per_area) sprintf("SET MassRate = MassRate * %s_Area", prefix),
+            sprintf(
+                "SET VaporEnthalpy = @HgAirFnWTdb 0 %s_Temperature",
+                prefix
+            ),
+            sprintf("SET %s_Power = MassRate * VaporEnthalpy", prefix)
+        )
+        # Program lines are extensible; resolve all labels from the target IDD.
+        fields <- vapply(
+            seq_along(lines) + 1L,
+            function(field) {
+                conv__idd_field_name(
+                    ep,
+                    "EnergyManagementSystem:Program",
+                    field
+                )
+            },
+            character(1L)
+        )
+        values[["EnergyManagementSystem:Program"]] <- c(
+            values[["EnergyManagementSystem:Program"]],
+            list(c(
+                list(name = paste0(prefix, "_Control")),
+                stats::setNames(as.list(lines), fields)
+            ))
+        )
+        # Internal gains are evaluated during heat-balance initialization.
+        # The latest available zone temperature removes fixed-enthalpy bias;
+        # abrupt temperature changes can still cause a one-zone-step residual.
+        values[["EnergyManagementSystem:ProgramCallingManager"]] <- c(
+            values[["EnergyManagementSystem:ProgramCallingManager"]],
+            list(list(
+                name = paste0(prefix, "_Manager"),
+                energyplus_model_calling_point = "BeginZoneTimestepBeforeInitHeatBalance",
+                program_name_1 = paste0(prefix, "_Control")
+            ))
+        )
+    }
+    conv__combine_outputs(lapply(classes, function(class) {
+        conv__add_objects(dest, ep, class, values[[class]])
+    }))
 }
 
 internal_gains__equipment_values <- function(

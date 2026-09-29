@@ -1032,6 +1032,60 @@ const__warn_simple_glazing_version <- function(ep, glazing_count) {
     invisible(NULL)
 }
 
+# Convert the DeST whole-window K value to an EnergyPlus simple-glazing U value
+# with the same glass-to-glass thermal resistance. DeST removes nominal films
+# of 1/8.7 + 1/23.3 m2 K/W; EnergyPlus uses U-dependent winter-film correlations
+# (Engineering Reference, Simple Window Model, step 1). Copying K directly
+# therefore changes material resistance even when actual surface films match.
+const__simple_glazing_u_factor <- function(k) {
+    # These are the correlations used by MaterialGlass in EnergyPlus, before
+    # the separate user-supplied surface convection coefficients are applied.
+    glass_resistance <- function(u) {
+        inside <- ifelse(
+            u < 5.85,
+            1 / (0.359073 * log(u) + 6.949915),
+            1 / (1.788041 * u - 2.886625)
+        )
+        1 / u - inside - 1 / (0.025342 * u + 29.163853)
+    }
+    target <- 1 / k - 1 / 8.7 - 1 / 23.3
+    # The winter-film fit changes branches at U=5.85 and is not globally
+    # monotonic. Prefer the lower-U root; use the second branch only for the
+    # small resistance interval below the first branch's minimum.
+    lower <- 1e-6
+    first_upper <- 5.85 - 1e-10
+    second_lower <- 5.85
+    second_upper <- 6.4
+    valid <- is.finite(k) & k > 0 & is.finite(target) &
+        target >= glass_resistance(second_lower) &
+        target <= glass_resistance(lower)
+    if (any(!valid)) {
+        stop(
+            sprintf(
+                paste(
+                    "DeST window K value(s) cannot preserve glass thermal",
+                    "resistance in EnergyPlus SimpleGlazingSystem: %s.",
+                    "Provide a supported detailed glazing construction."
+                ),
+                paste(k[!valid], collapse = ", ")
+            ),
+            call. = FALSE
+        )
+    }
+    vapply(target, function(resistance) {
+        interval <- if (resistance >= glass_resistance(first_upper)) {
+            c(lower, first_upper)
+        } else {
+            c(second_lower, second_upper)
+        }
+        stats::uniroot(
+            function(u) glass_resistance(u) - resistance,
+            interval,
+            tol = 1e-12
+        )$root
+    }, numeric(1L), USE.NAMES = FALSE)
+}
+
 # Assemble the heterogeneous material and construction classes after the
 # converter has normalized every source table and resolved its fallbacks.
 const__assemble_objects <- function(
@@ -1097,7 +1151,7 @@ const__assemble_objects <- function(
             glazing <- win_type_glazing[index]
             value <- list(
                 name = glazing$SIMPLE_GLAZING_NAME,
-                u_factor = glazing$K,
+                u_factor = const__simple_glazing_u_factor(glazing$K),
                 solar_heat_gain_coefficient = glazing$SHGC,
                 visible_transmittance = if (!is.na(glazing$LIGHT_TRANS_RATIO)) {
                     glazing$LIGHT_TRANS_RATIO
