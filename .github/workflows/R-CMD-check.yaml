@@ -105,6 +105,26 @@ jobs:
           stopifnot(file.exists(eplusr::path_eplus(23.1, "Energy+.idd", strict = TRUE)))
         shell: Rscript {0}
 
+      # Sky-boundary objects are validated against the schema used by the
+      # opt-in public source mode, while legacy conversion tests retain 23.1.
+      - name: Cache EnergyPlus 26.1
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Applications/EnergyPlus-26-1-0
+            ~/.local/EnergyPlus-26-1-0
+            ~/AppData/Local/EnergyPlusV26-1-0
+          key: ${{ runner.os }}-energyplus-26.1-portable-v1
+
+      - name: Install EnergyPlus 26.1
+        run: |
+          if (!eplusr::is_avail_eplus(26.1)) {
+              eplusr::install_eplus(26.1, local = TRUE, portable = TRUE)
+          }
+          eplusr::use_eplus(26.1)
+          stopifnot(file.exists(eplusr::path_eplus(26.1, "Energy+.idd", strict = TRUE)))
+        shell: Rscript {0}
+
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true

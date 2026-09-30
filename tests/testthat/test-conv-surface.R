@@ -113,7 +113,7 @@ test_that("maps DeST surface coefficients by room-side boundary semantics", {
     expect_null(convection[[2L]]$convection_coefficient_2)
 })
 
-test_that("resolves an exposed-floor outdoor-property sentinel", {
+test_that("preserves exposed-floor zeros independently of adjacent wall values", {
     surface <- data.table::data.table(
         OUTPUT_ID = c("exposed-floor", "exterior-wall"),
         NAME = c("Exposed Floor", "Exterior Wall"),
@@ -134,16 +134,16 @@ test_that("resolves an exposed-floor outdoor-property sentinel", {
 
     expect_equal(floor$INSIDE_SOLAR_ABSORPTANCE, 0.1)
     expect_equal(floor$INSIDE_THERMAL_ABSORPTANCE, 0.9)
-    expect_equal(floor$OUTSIDE_SOLAR_ABSORPTANCE, 0.6)
-    expect_equal(floor$OUTSIDE_THERMAL_ABSORPTANCE, 0.9)
+    expect_equal(floor$OUTSIDE_SOLAR_ABSORPTANCE, 0.0)
+    expect_equal(floor$OUTSIDE_THERMAL_ABSORPTANCE, 1e-6)
     expect_match(
         floor$CONSTRUCTION,
-        "i-a0.1-e0.9 o-a0.6-e0.9",
+        "i-a0.1-e0.9 o-a0-e1e-06",
         fixed = TRUE
     )
 })
 
-test_that("keeps an unresolved exposed-floor exterior on the base material", {
+test_that("preserves exposed-floor zeros without another exterior reference", {
     surface <- data.table::data.table(
         OUTPUT_ID = "exposed-floor",
         NAME = "Exposed Floor",
@@ -161,9 +161,9 @@ test_that("keeps an unresolved exposed-floor exterior on the base material", {
 
     mapped <- surface_property__assign_constructions(surface)
 
-    expect_true(is.na(mapped$OUTSIDE_SOLAR_ABSORPTANCE))
-    expect_true(is.na(mapped$OUTSIDE_THERMAL_ABSORPTANCE))
-    expect_false(grepl(" o-a", mapped$CONSTRUCTION, fixed = TRUE))
+    expect_equal(mapped$OUTSIDE_SOLAR_ABSORPTANCE, 0.0)
+    expect_equal(mapped$OUTSIDE_THERMAL_ABSORPTANCE, 1e-6)
+    expect_match(mapped$CONSTRUCTION, " o-a0-e1e-06", fixed = TRUE)
 })
 
 test_that("maps DeST thermal-emissivity limits to valid EnergyPlus values", {

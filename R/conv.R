@@ -264,13 +264,56 @@ MAP_ID_NAME <- list(
 #'       for the simplified model verified with DeST 0.2.230705. It supports
 #'       exterior two/three-pane aggregate windows and EnergyPlus 23.1 or newer.
 #'       SC specifies a normal-transmittance objective of `0.87 * SC`, not SHGC.
-#'       Glass resistance and the existing exposed emissivity are preserved.
+#'       Glass resistance and each window face's source blackness are preserved.
 #'       EnergyPlus retains its own diffuse integration and heat-balance solver;
 #'       native glass storage, sky exchange and room solar distribution are not
 #'       added by this option. The tables are solar-only: visible/daylighting
 #'       optics are not represented, and existing daylighting objects are rejected.
 #'
-#' @return \[eplusr::Idf\] The converted EnergyPlus model.
+#' @param source_distribution \[string\] `"energyplus"` retains the default
+#'       surface allocation. `"dest"` preserves the literal DeST air, wall,
+#'       floor and roof fractions, including sums below one. This opt-in mode
+#'       currently requires EnergyPlus 26.1 and `hvac = "ideal_loads"`.
+#'       With windows it also requires `window_optics = "dest_solar"` and runs
+#'       a weather-specific solar prepass. Unsupported moisture combinations,
+#'       doors, daylighting and dynamic shading fail explicitly. Exterior
+#'       radiation retains EnergyPlus defaults unless selected separately in
+#'       `source_options`; native time-integration algorithms are not reproduced.
+#'
+#' @param source_options \[list or NULL\] Options for `source_distribution =
+#'       "dest"`. Models with windows require `weather`, an existing EPW path,
+#'       and `directory`, a persistent directory for generated time tables and
+#'       prepass records. Cache reuse checks the converted model, weather,
+#'       external files, engine and generated data. `partition_boundary`
+#'       defaults to `"energyplus"`, retaining coupled interzone surfaces;
+#'       `"dest_air"` explicitly selects the neighbor-air plus prescribed
+#'       radiation boundary verified with DeST 0.2.230705. The latter is a
+#'       version-specific approximation, not a general interzone equivalence.
+#'       Generated solar time tables use a full non-leap year at five-minute
+#'       resolution. Reconvert after changing weather, geometry, optics,
+#'       schedules or timestep; running or editing the returned `Idf` does not
+#'       refresh them. Keep the directory or copy external files when saving.
+#'       `exterior_boundary` defaults to `"energyplus"`; `"dest_sky"` selects
+#'       the linear sky-only boundary verified with DeST 0.2.230705 for vertical
+#'       walls/windows and horizontal roofs/exposed floors. Single-layer
+#'       constructions and existing local environments are unsupported.
+#'       This reads `OPTION.CAL_SKY_RADIATION`; the optional logical
+#'       `sky_radiation` explicitly overrides that saved switch for a particular
+#'       run. Missing switches require an explicit override. This boundary mode
+#'       needs `weather` and `directory`, even with sky exchange disabled, to
+#'       preserve dry-bulb convection when the weather indicates rain. An additional
+#'       weather prepass preserves the target's height corrections and time grid;
+#'       Windows receive the current time-table value through surface EMS
+#'       actuators because the local-environment object excludes windows in
+#'       the official input schema. No surface-temperature feedback is used.
+#'       The target's default longwave exchange is suppressed with an outdoor
+#'       emissivity of `1e-8`, leaving a small numerical residual. The returned
+#'       `exterior_boundary` attribute records source coefficients, switch
+#'       overrides and generated time tables. Reconvert when inputs change.
+#'
+#' @return \[eplusr::Idf\] The converted EnergyPlus model. The opt-in source
+#'       mode attaches a `source_distribution` attribute containing its input
+#'       and cache audit. It does not establish whole-building equivalence.
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
@@ -282,11 +325,17 @@ to_eplus <- function(
     hvac = c("ideal_loads", "physical"),
     hvac_options = NULL,
     people_heat = c("constant", "temperature_dependent"),
-    window_optics = c("simple_glazing", "dest_solar")
+    window_optics = c("simple_glazing", "dest_solar"),
+    source_distribution = c("energyplus", "dest"),
+    source_options = NULL
 ) {
     hvac <- match.arg(hvac)
     people_heat <- match.arg(people_heat)
     window_optics <- match.arg(window_optics)
+    source_distribution <- match.arg(source_distribution)
+    if (source_distribution == "energyplus" && !is.null(source_options)) {
+        stop("'source_options' requires source_distribution = 'dest'.", call. = FALSE)
+    }
     if (hvac == "physical") {
         checkmate::assert_list(
             hvac_options,
@@ -342,6 +391,10 @@ to_eplus <- function(
         ep <- eplusr::with_verbose(eplusr::empty_idf(ver))
     } else {
         ep <- eplusr::empty_idf(ver)
+    }
+    if (source_distribution == "dest") {
+        source_options <- source__options(source_options, ep, hvac, window_optics,
+            db_has_rows(tmpdb, "WINDOW"))
     }
 
     # add GlobalGeometryRules
@@ -402,7 +455,8 @@ to_eplus <- function(
         tmpdb,
         ep,
         attr(surface, "table"),
-        geometry_profile
+        geometry_profile,
+        source_distribution = source_distribution
     )
     door <- door__convert(
         tmpdb,
@@ -424,7 +478,7 @@ to_eplus <- function(
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
         zone = zone__convert(tmpdb, ep),
-        furniture = furniture__convert(tmpdb, ep),
+        furniture = furniture__convert(tmpdb, ep, source_distribution),
         surface = surface,
         window = window,
         door = door,
@@ -484,8 +538,22 @@ to_eplus <- function(
     # Apply opt-in solar semantics after all geometry and constructions exist,
     # before legacy-version object-name normalization changes their references.
     if (window_optics == "dest_solar") {
-        solar__apply(tmpdb, ep)
+        solar__apply(tmpdb, ep, source_distribution, attr(window, "table"))
     }
+
+    # Collect powers from their owning converters; only geometry is read back
+    # from the completed IDF, so clipped receiving areas match the target.
+    sky_audit <- NULL
+    if (source_distribution == "dest" && source_options$exterior_boundary == "dest_sky") {
+        sky <- sky__apply(tmpdb, ep, attr(surface, "table"), attr(window, "table"),
+            source_options, verbose)
+        ep <- sky$model
+        sky_audit <- sky$audit
+    }
+    if (source_distribution == "dest") {
+        ep <- source__apply(tmpdb, ep, conv, source_options, verbose)
+    }
+    if (!is.null(sky_audit)) attr(ep, "exterior_boundary") <- sky_audit
 
     if (hvac == "physical") {
         ep <- hvac__convert(tmpdb, ep, hvac_options)

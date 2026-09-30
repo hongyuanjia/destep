@@ -254,28 +254,10 @@ surface_property__assign_constructions <- function(surface) {
     outside_fields <- c(
         "OUTSIDE_SOLAR_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE"
     )
-    # Some DeST exposed floors serialize 0/0 on the outdoor pseudo-surface as
-    # an absent-property sentinel. Reuse the value shared by the model's other
-    # exterior faces when it is unambiguous; otherwise retain the base
-    # construction's exterior material properties.
-    outdoor_sentinel <- object$KIND_ENCLOSURE == 6L &
-        object$BOUNDARY == "Outdoors" &
-        object$OUTSIDE_SOLAR_ABSORPTANCE == 0.0 &
-        object$OUTSIDE_THERMAL_ABSORPTANCE == 0.0
-    exterior_reference <- unique(object[
-        BOUNDARY == "Outdoors" & !outdoor_sentinel,
-        .(OUTSIDE_SOLAR_ABSORPTANCE, OUTSIDE_THERMAL_ABSORPTANCE)
-    ])
-    unresolved_outdoor_sentinel <- outdoor_sentinel
-    if (any(outdoor_sentinel)) {
-        if (nrow(exterior_reference) == 1L) {
-            object[outdoor_sentinel, (outside_fields) := exterior_reference]
-            unresolved_outdoor_sentinel[] <- FALSE
-        } else {
-            object[outdoor_sentinel, (outside_fields) := NA_real_]
-        }
-    }
-
+    # Zero on an exposed-floor outside face is a literal source coefficient.
+    # Native ground-reflection checks distinguish alpha=0 from alpha=0.6;
+    # borrowing a wall's properties would introduce an absent solar gain.
+    # Apply only the EnergyPlus thermal-absorptance limit below.
     invalid_inside <- object[
         !is.finite(INSIDE_SOLAR_ABSORPTANCE) |
             INSIDE_SOLAR_ABSORPTANCE < 0.0 |
@@ -286,7 +268,7 @@ surface_property__assign_constructions <- function(surface) {
         OUTPUT_ID
     ]
     invalid_outside <- object[
-        BOUNDARY == "Outdoors" & !unresolved_outdoor_sentinel & (
+        BOUNDARY == "Outdoors" & (
             !is.finite(OUTSIDE_SOLAR_ABSORPTANCE) |
                 OUTSIDE_SOLAR_ABSORPTANCE < 0.0 |
                 OUTSIDE_SOLAR_ABSORPTANCE > 1.0 |
@@ -1974,4 +1956,63 @@ surface__simplify_polygon <- function(
 
     data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
     surface
+}
+
+# Build the radiant receiving inventory from the emitted polygons. Net host
+# areas subtract every opening exactly once, including topology-split pieces.
+surface__source_faces <- function(objects) {
+    enclosure <- Filter(function(o) o[[1L]] == "BuildingSurface:Detailed", objects)
+    openings <- Filter(function(o) o[[1L]] == "FenestrationSurface:Detailed", objects)
+    if (any(vapply(openings, function(o) o[[3L]] != "Window", logical(1L)))) {
+        stop("DeST source distribution currently supports windows, not door receiving faces.", call. = FALSE)
+    }
+    faces <- lapply(c(enclosure, openings), function(o) {
+        window <- o[[1L]] == "FenestrationSurface:Detailed"
+        start <- if (window) 11L else 13L
+        count <- suppressWarnings(as.integer(o[[start - 1L]]))
+        if (is.na(count) || count < 3L || length(o) < start + count * 3L - 1L) {
+            stop("Incomplete receiving polygon.", call. = FALSE)
+        }
+        xyz <- matrix(as.double(o[seq.int(start, length.out = count * 3L)]), ncol = 3L, byrow = TRUE)
+        if (any(!is.finite(xyz))) stop("Invalid receiving coordinates.", call. = FALSE)
+        host <- if (window) objects[[source__index(objects, "BuildingSurface:Detailed", o[[5L]])]] else o
+        construction <- objects[[source__index(objects, "Construction", o[[4L]])]]
+        inner <- utils::tail(construction, 1L)
+        candidates <- Filter(function(m) m[[1L]] %in% c("Material", "Material:NoMass", "WindowMaterial:Glazing") &&
+            m[[2L]] == inner, objects)
+        if (length(candidates) != 1L) stop("Unsupported receiving construction.", call. = FALSE)
+        material <- candidates[[1L]]
+        index <- switch(material[[1L]], Material = 8L, "Material:NoMass" = 5L, "WindowMaterial:Glazing" = 14L)
+        category <- if (window) "wall" else switch(o[[3L]], Wall = "wall", Floor = "floor",
+            Roof = "roof", Ceiling = "roof", stop("Unsupported receiving surface type.", call. = FALSE))
+        data.frame(name = o[[2L]], zone = host[[5L]], area = geom__polygon_area(xyz),
+            category = category, is_window = window, epsilon = as.double(material[[index]]),
+            construction = o[[4L]], host = if (window) host[[2L]] else "")
+    })
+    faces <- as.data.frame(data.table::rbindlist(faces))
+    for (host in unique(faces$host[faces$is_window])) {
+        i <- match(host, faces$name)
+        if (is.na(i)) stop("Missing receiving-window host.", call. = FALSE)
+        faces$area[[i]] <- faces$area[[i]] - sum(faces$area[faces$host == host])
+    }
+    faces <- furniture__source_faces(objects, faces)
+    source__check_faces(faces)
+    faces
+}
+# Carry each emitted exterior piece back to its physical source outdoor face.
+# This keeps per-face coefficients when a roof is split into several polygons.
+surface__sky_faces <- function(dest, surface) {
+    if (is.null(surface) || !nrow(surface)) return(NULL)
+    pieces <- unique(as.data.frame(surface)[, c("ID", "NAME", "TYPE", "BOUNDARY", "BOUNDARY_MODE")])
+    pieces <- pieces[pieces$BOUNDARY == "Outdoors", ]
+    if (!nrow(pieces)) return(NULL)
+    if (any(pieces$BOUNDARY_MODE != "source")) {
+        stop("DeST sky boundary requires explicit source exterior faces.", call. = FALSE)
+    }
+    source <- DBI::dbGetQuery(dest, "SELECT S.SURFACE_ID AS ID,
+        O.SURFACE_ID AS OUTSIDE_ID, O.TILT, O.VENTILATION_COEF, O.SKY_RADIA_COEF
+        FROM MAIN_ENCLOSURE E JOIN SURFACE S ON S.SURFACE_ID IN (E.SIDE1,E.SIDE2)
+        JOIN SURFACE O ON O.SURFACE_ID = CASE WHEN E.SIDE1 = S.SURFACE_ID
+            THEN E.SIDE2 ELSE E.SIDE1 END WHERE O.TYPE = 1 AND S.TYPE <> 1")
+    merge(pieces[, c("ID", "NAME", "TYPE")], source, by = "ID", all.x = TRUE)
 }

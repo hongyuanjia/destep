@@ -12,7 +12,9 @@ to_eplus(
   hvac = c("ideal_loads", "physical"),
   hvac_options = NULL,
   people_heat = c("constant", "temperature_dependent"),
-  window_optics = c("simple_glazing", "dest_solar")
+  window_optics = c("simple_glazing", "dest_solar"),
+  source_distribution = c("energyplus", "dest"),
+  source_options = NULL
 )
 }
 \arguments{
@@ -104,14 +106,56 @@ fractions and full-building numerical equivalence remain limitations.}
 for the simplified model verified with DeST 0.2.230705. It supports
 exterior two/three-pane aggregate windows and EnergyPlus 23.1 or newer.
 SC specifies a normal-transmittance objective of \code{0.87 * SC}, not SHGC.
-Glass resistance and the existing exposed emissivity are preserved.
+Glass resistance and each window face's source blackness are preserved.
 EnergyPlus retains its own diffuse integration and heat-balance solver;
 native glass storage, sky exchange and room solar distribution are not
 added by this option. The tables are solar-only: visible/daylighting
 optics are not represented, and existing daylighting objects are rejected.}
+
+\item{source_distribution}{[string] \code{"energyplus"} retains the default
+surface allocation. \code{"dest"} preserves the literal DeST air, wall,
+floor and roof fractions, including sums below one. This opt-in mode
+currently requires EnergyPlus 26.1 and \code{hvac = "ideal_loads"}.
+With windows it also requires \code{window_optics = "dest_solar"} and runs
+a weather-specific solar prepass. Unsupported moisture combinations,
+doors, daylighting and dynamic shading fail explicitly. Exterior
+radiation retains EnergyPlus defaults unless selected separately in
+\code{source_options}; native time-integration algorithms are not reproduced.}
+
+\item{source_options}{[list or NULL] Options for \code{source_distribution = "dest"}. Models with windows require \code{weather}, an existing EPW path,
+and \code{directory}, a persistent directory for generated time tables and
+prepass records. Cache reuse checks the converted model, weather,
+external files, engine and generated data. \code{partition_boundary}
+defaults to \code{"energyplus"}, retaining coupled interzone surfaces;
+\code{"dest_air"} explicitly selects the neighbor-air plus prescribed
+radiation boundary verified with DeST 0.2.230705. The latter is a
+version-specific approximation, not a general interzone equivalence.
+Generated solar time tables use a full non-leap year at five-minute
+resolution. Reconvert after changing weather, geometry, optics,
+schedules or timestep; running or editing the returned \code{Idf} does not
+refresh them. Keep the directory or copy external files when saving.
+\code{exterior_boundary} defaults to \code{"energyplus"}; \code{"dest_sky"} selects
+the linear sky-only boundary verified with DeST 0.2.230705 for vertical
+walls/windows and horizontal roofs/exposed floors. Single-layer
+constructions and existing local environments are unsupported.
+This reads \code{OPTION.CAL_SKY_RADIATION}; the optional logical
+\code{sky_radiation} explicitly overrides that saved switch for a particular
+run. Missing switches require an explicit override. This boundary mode
+needs \code{weather} and \code{directory}, even with sky exchange disabled, to
+preserve dry-bulb convection when the weather indicates rain. An additional
+weather prepass preserves the target's height corrections and time grid;
+Windows receive the current time-table value through surface EMS
+actuators because the local-environment object excludes windows in
+the official input schema. No surface-temperature feedback is used.
+The target's default longwave exchange is suppressed with an outdoor
+emissivity of \code{1e-8}, leaving a small numerical residual. The returned
+\code{exterior_boundary} attribute records source coefficients, switch
+overrides and generated time tables. Reconvert when inputs change.}
 }
 \value{
-[eplusr::Idf] The converted EnergyPlus model.
+[eplusr::Idf] The converted EnergyPlus model. The opt-in source
+mode attaches a \code{source_distribution} attribute containing its input
+and cache audit. It does not establish whole-building equivalence.
 }
 \description{
 Convert a DeST model to EnergyPlus model
