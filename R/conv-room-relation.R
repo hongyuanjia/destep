@@ -45,6 +45,7 @@ ventilation__convert <- function(dest, ep) {
     # Resolve and validate every documented range-control dependency before
     # building objects, so malformed ranges cannot silently fall back to their
     # minimum ACH schedule.
+    selection <- ventilation__variant_selection(dest)
     range <- ventilation__range_controls(dest)
     range_index <- match(relation$ID, range$RELATION_ID)
     range_fields <- c(
@@ -72,14 +73,15 @@ ventilation__convert <- function(dest, ep) {
     data.table::set(relation, NULL, "CAN_CONVERT", is.na(skip_reason))
     data.table::set(
         relation, NULL, "RANGE_CONTROL_CONVERTED",
-        relation$VENT_TYPE != 1L |
+        relation$VENT_TYPE != 1L | !selection$enabled |
             !is.na(relation$INCREMENT_AIR_CHANGES_PER_HOUR)
     )
     data.table::set(
         relation, NULL, "RANGE_CONTROL_METHOD",
         ifelse(
             relation$VENT_TYPE == 1L,
-            "documented_outdoor_temperature_band",
+            if (selection$enabled) "documented_outdoor_temperature_band" else
+                "saved_switch_minimum_only",
             "fixed_schedule"
         )
     )
@@ -87,11 +89,14 @@ ventilation__convert <- function(dest, ep) {
         relation, NULL, "RANGE_CONTROL_FIDELITY",
         ifelse(
             relation$VENT_TYPE == 1L,
-            "documented_rule_not_solver_equivalent",
+            if (selection$enabled) "documented_rule_not_solver_equivalent" else
+                "source_disabled_range",
             "source_schedule"
         )
     )
     data.table::set(relation, NULL, "HVAC_AVAILABILITY_GATED", FALSE)
+    data.table::set(relation, NULL, "VARIANT_VENT_ENABLED", selection$enabled)
+    data.table::set(relation, NULL, "VARIANT_VENT_SELECTION", selection$source)
     # EnergyPlus multiplies the ACH design level by the schedule fraction/value;
     # use a unit ACH design level so the referenced DeST schedule DATA values
     # pass through as the actual hourly ACH sequence.
@@ -125,7 +130,7 @@ ventilation__convert <- function(dest, ep) {
             fmt_integer_sample(relation$ID[unresolved_range])
         ))
     }
-    range_converted <- relation$CAN_CONVERT & relation$VENT_TYPE == 1L &
+    range_converted <- selection$enabled & relation$CAN_CONVERT & relation$VENT_TYPE == 1L &
         relation$RANGE_CONTROL_CONVERTED
     if (any(range_converted)) {
         warn(sprintf(
@@ -133,7 +138,11 @@ ventilation__convert <- function(dest, ep) {
                 "Mapped %i DeST ventilation-range ROOM_RELATION row(s) using ",
                 "the documented outdoor-temperature-band rule. This preserves ",
                 "the declared minimum/maximum ACH schedules but does not claim ",
-                "equivalence to DeST's undocumented solver-state coupling."
+                "equivalence to DeST's undocumented solver-state coupling.",
+                if (selection$source == "legacy_missing_option") {
+                    paste0(" No saved VARIANT_VENT switch was found; ",
+                        "the legacy enabled setting is assumed.")
+                } else ""
             ),
             sum(range_converted)
         ))
@@ -147,7 +156,7 @@ ventilation__convert <- function(dest, ep) {
         ventilation__value(ventilation, i, zone_field_name)
     })
     supplement <- ventilation[
-        ventilation$VENT_TYPE == 1L &
+        selection$enabled & ventilation$VENT_TYPE == 1L &
             ventilation$INCREMENT_AIR_CHANGES_PER_HOUR > 0
     ]
     supplement_values <- lapply(seq_len(nrow(supplement)), function(i) {
@@ -166,6 +175,25 @@ ventilation__convert <- function(dest, ep) {
     )
 
     out
+}
+
+# A saved zero disables only the variable increment; fixed/minimum ventilation
+# still follows its source schedule. Older or exported schemas can omit this
+# GUI option, in which case retain the documented legacy rule and record that
+# the enabled state was assumed rather than read from the source.
+ventilation__variant_selection <- function(dest) {
+    fallback <- list(enabled = TRUE, source = "legacy_missing_option")
+    if (!"OPTION" %in% DBI::dbListTables(dest) ||
+        !db_has_fields(dest, "OPTION", c("KEYWORD", "OPTION_STRING"))) {
+        return(fallback)
+    }
+    values <- DBI::dbGetQuery(dest, "SELECT OPTION_STRING FROM OPTION
+        WHERE KEYWORD = 'VARIANT_VENT'")$OPTION_STRING
+    if (!length(values)) return(fallback)
+    if (length(values) != 1L || is.na(values) || !values %in% c("0", "1")) {
+        abort("Invalid or ambiguous VARIANT_VENT option.")
+    }
+    list(enabled = values == "1", source = "saved_option")
 }
 
 # Resolve the version-specific zone-reference label at its stable IDD position.
@@ -216,6 +244,11 @@ ventilation__schedule_values <- function(blob, schedule_id, role) {
 # max-minus-min schedule for every unique schedule pair. This reproduces the
 # manual rule only; no HVAC-availability gate is inferred here.
 ventilation__range_controls <- function(dest) {
+    # Disabled ranges do not consume the maximum or temperature limits. Do not
+    # validate unused foreign keys or emit an unused derived increment schedule.
+    if (!ventilation__variant_selection(dest)$enabled) {
+        return(data.table::data.table())
+    }
     required_tables <- c(
         "ROOM_RELATION", "ROOM", "OUTSIDE", "ROOM_TYPE_DATA", "SCHEDULE_YEAR"
     )

@@ -174,6 +174,61 @@ test_that("normalizes a varying DeST ventilation range increment", {
         c(0.5, 1)
     )
     expect_equal(unique(derived$DATA[[1L]]), c(0.5, 1))
+
+    # The saved run switch must suppress only the increment, even when unused
+    # maximum and temperature references no longer resolve in the source.
+    DBI::dbWriteTable(dest, "OPTION", data.frame(
+        KEYWORD = "VARIANT_VENT", OPTION_STRING = "0"
+    ))
+    DBI::dbExecute(dest, "UPDATE ROOM_RELATION SET VENT_SET_MAX = 999")
+    DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET SET_T_MIN_SCHEDULE = 998")
+    disabled_schedule <- schedule__convert(dest, ep)
+    expect_no_warning(disabled <- ventilation__convert(dest, ep))
+    expect_equal(nrow(disabled$object), 1L)
+    expect_equal(
+        disabled$value$value_chr[disabled$value$field_name == "Schedule Name"],
+        "Minimum"
+    )
+    expect_equal(
+        disabled$value$value_num[disabled$value$field_name == "Air Changes per Hour"],
+        1
+    )
+    expect_false(any(grepl(
+        "DeST Derived Ventilation", attr(disabled_schedule, "table")$NAME
+    )))
+    expect_identical(
+        attr(disabled, "table")$RANGE_CONTROL_METHOD,
+        "saved_switch_minimum_only"
+    )
+    expect_false(attr(disabled, "table")$VARIANT_VENT_ENABLED)
+    expect_identical(attr(disabled, "table")$VARIANT_VENT_SELECTION, "saved_option")
+
+    # Re-enabling range ventilation must validate the missing dependencies.
+    DBI::dbExecute(dest, "UPDATE OPTION SET OPTION_STRING = '1'")
+    expect_error(ventilation__range_controls(dest), "Cannot resolve")
+})
+
+test_that("validates saved ventilation switches without guessing malformed values", {
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    expect_identical(
+        ventilation__variant_selection(dest),
+        list(enabled = TRUE, source = "legacy_missing_option")
+    )
+    DBI::dbWriteTable(dest, "OPTION", data.frame(
+        KEYWORD = "VARIANT_VENT", OPTION_STRING = "1"
+    ))
+    expect_identical(
+        ventilation__variant_selection(dest),
+        list(enabled = TRUE, source = "saved_option")
+    )
+    for (invalid in c("2", "true", "", NA_character_)) {
+        DBI::dbExecute(dest, "UPDATE OPTION SET OPTION_STRING = ?", params = list(invalid))
+        expect_error(ventilation__variant_selection(dest), "Invalid or ambiguous VARIANT_VENT")
+    }
+    DBI::dbExecute(dest, "UPDATE OPTION SET OPTION_STRING = '0'")
+    DBI::dbExecute(dest, "INSERT INTO OPTION VALUES ('VARIANT_VENT', '0')")
+    expect_error(ventilation__variant_selection(dest), "Invalid or ambiguous VARIANT_VENT")
 })
 
 test_that("rejects an inverted DeST ventilation range", {
