@@ -7,6 +7,16 @@ test_that("can convert 'BuildingSurface:Detailed'", {
 
     # can convert 'BuildingSurface:Detailed'
     expect_type(surface <- surface__convert(dest, ep), "list")
+    automatic <- surface__convert(dest, ep, surface_convection = "energyplus")
+    expect_false(
+        "SurfaceProperty:ConvectionCoefficients" %in%
+            automatic$object$class_name
+    )
+    expect_equal(attr(automatic, "table"), attr(surface, "table"))
+    expect_equal(
+        automatic$value,
+        surface$value[class_name == "BuildingSurface:Detailed"]
+    )
     expect_named(surface, c("object", "value"))
     expect_setequal(
         unique(surface$object$class_name),

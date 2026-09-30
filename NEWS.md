@@ -1,5 +1,30 @@
 # destep 0.0.0.9000
 
+- Preserved opaque shading-panel reflectance in ordinary EnergyPlus shading
+  property objects, including overhang and side-fin pieces. Reflection remains
+  controlled by the selected solar-distribution method (#37).
+
+- Added `destep_opts()` settings for terrain, solar distribution and
+  periodic shadow updates. Explicit choices apply before weather/solar prepasses,
+  enter cache identities and remain visible in conversion metadata and IDF comments (#37).
+
+- Unified conversion configuration in `to_eplus(options = )`: accept
+  `"objects"`, `"dest"`, or a reusable `destep_opts()` object with explicit
+  per-feature settings. Previous top-level feature, HVAC and simulation
+  arguments move into `destep_opts()`; weather and boundary settings have a
+  single location. Effective options and EMS purposes remain auditable.
+  Basic conversion retains EMS required for source equipment moisture.
+  Surface convection can be selected independently, and DeST sky boundaries
+  no longer require DeST heat-source allocation (#37).
+
+- Fixed ventilation conversion to honor a saved `VARIANT_VENT = 0` switch.
+  Minimum ventilation is retained and the range supplement is omitted. Missing
+  saved switches retain the legacy rule and are identified in conversion metadata (#37).
+
+- Added single-pane aggregate windows to `window_optics = "dest_solar"`,
+  preserving glass resistance, solar absorption location and face blackness,
+  including use with DeST source distribution and sky-boundary options (#37).
+
 - Fixed exposed-floor outside absorptance conversion to preserve literal zero
   values. The converter no longer substitutes unrelated exterior-wall or
   default material properties, which could introduce ground-reflected solar

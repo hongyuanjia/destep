@@ -4,7 +4,7 @@ The optional `source_distribution = "dest"` mode preserves source heat-input
 fractions. It is separate from EnergyPlus's default surface allocation and from
 the choice of interzone heat-transfer boundary. The current implementation is
 limited to EnergyPlus 26.1, ideal loads, ordinary aggregate exterior windows,
-and the explicitly checked input combinations described in `to_eplus()`.
+and the explicitly checked input combinations described in `destep_opts()`.
 
 ## Evidence and implementation decisions
 
@@ -30,10 +30,11 @@ pieces; `conv-solar.R` owns window source identities and optical inputs.
 idf <- to_eplus(
     dest,
     "26.1",
-    people_heat = "temperature_dependent",
-    window_optics = "dest_solar",
-    source_distribution = "dest",
-    source_options = list(
+    options = destep_opts(
+        "objects",
+        people_heat = "temperature_dependent",
+        window_optics = "dest_solar",
+        source_distribution = "dest",
         weather = "model.epw",
         directory = "model-source-data"
     )

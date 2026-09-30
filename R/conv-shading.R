@@ -5,18 +5,39 @@ shading__source_table <- function(dest) {
         WINDOW = c("ID", "NAME", "SC", "SHADINGID"),
         SHADING = c("ID", "TAO", "ROU", "LIB_SHADING_ID"),
         LIB_SHADING = c(
-            "ID", "B0", "B1", "B2", "DEG", "DIST", "W", "N",
-            "HF", "HL", "WL", "DEGL", "HR", "WR", "DEGR"
+            "ID",
+            "B0",
+            "B1",
+            "B2",
+            "DEG",
+            "DIST",
+            "W",
+            "N",
+            "HF",
+            "HL",
+            "WL",
+            "DEGL",
+            "HR",
+            "WR",
+            "DEGR"
         )
     )
-    if (!all(names(required) %in% DBI::dbListTables(dest)) ||
-            !all(vapply(names(required), function(table) {
-                db_has_fields(dest, table, required[[table]])
-            }, logical(1L)))) {
+    if (
+        !all(names(required) %in% DBI::dbListTables(dest)) ||
+            !all(vapply(
+                names(required),
+                function(table) {
+                    db_has_fields(dest, table, required[[table]])
+                },
+                logical(1L)
+            ))
+    ) {
         return(data.table::data.table())
     }
 
-    shading <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+    shading <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        "
         SELECT
             W.ID AS WINDOW_ID,
             W.NAME AS WINDOW_NAME,
@@ -44,12 +65,17 @@ shading__source_table <- function(dest) {
         LEFT JOIN LIB_SHADING L ON S.LIB_SHADING_ID = L.ID
         WHERE W.SC > 0
         ORDER BY W.ID
-    "))
-    if (nrow(shading) == 0L) return(shading)
+    "
+    ))
+    if (nrow(shading) == 0L) {
+        return(shading)
+    }
 
     duplicate <- shading[, .N, by = "WINDOW_ID"][N != 1L, WINDOW_ID]
     if (length(duplicate) > 0L) {
-        stop("A DeST window must resolve to exactly one active shading definition.")
+        stop(
+            "A DeST window must resolve to exactly one active shading definition."
+        )
     }
     numeric_fields <- setdiff(names(shading), c("WINDOW_NAME"))
     dt_force_numeric(shading, numeric_fields)
@@ -63,7 +89,23 @@ shading__source_table <- function(dest) {
 # evidence. Unsupported shapes fail explicitly so conversion cannot silently
 # invent them.
 shading__validate_parameters <- function(shading, tolerance = 1e-7) {
-    if (nrow(shading) == 0L) return(invisible(shading))
+    if (nrow(shading) == 0L) {
+        return(invisible(shading))
+    }
+    # The opaque-panel reflectance is a bounded fraction. Reject invalid source
+    # values instead of silently replacing them with EnergyPlus's default.
+    invalid_reflectance <- !is.finite(shading$ROU) |
+        shading$ROU < 0 |
+        shading$ROU > 1
+    if (any(invalid_reflectance)) {
+        stop(
+            sprintf(
+                "Invalid DeST shading reflectance ROU for window(s): %s. Expected a finite value from 0 to 1.",
+                paste(shading$WINDOW_NAME[invalid_reflectance], collapse = ", ")
+            ),
+            call. = FALSE
+        )
+    }
     unsupported_angle <- apply(
         abs(as.matrix(shading[, .(DEG, DEGL, DEGR)])) > tolerance,
         1L,
@@ -74,26 +116,47 @@ shading__validate_parameters <- function(shading, tolerance = 1e-7) {
     asymmetric <- abs(shading$B1 - shading$B2) > tolerance |
         abs(shading$HL - shading$HR) > tolerance |
         abs(shading$WL - shading$WR) > tolerance
-    dimensions <- c("B0", "B1", "B2", "DIST", "W", "N", "HF",
-        "HL", "WL", "HR", "WR")
+    dimensions <- c(
+        "B0",
+        "B1",
+        "B2",
+        "DIST",
+        "W",
+        "N",
+        "HF",
+        "HL",
+        "WL",
+        "HR",
+        "WR"
+    )
     negative <- apply(as.matrix(shading[, ..dimensions]) < -tolerance, 1L, any)
     inconsistent_fin <- xor(
         shading$HL > tolerance,
         shading$WL > tolerance
-    ) | xor(shading$HR > tolerance, shading$WR > tolerance)
+    ) |
+        xor(shading$HR > tolerance, shading$WR > tolerance)
     empty <- shading$W <= tolerance &
-        shading$WL <= tolerance & shading$WR <= tolerance
-    unsupported <- unsupported_angle | non_opaque | nonzero_header_fin |
-        asymmetric | negative | inconsistent_fin | empty
+        shading$WL <= tolerance &
+        shading$WR <= tolerance
+    unsupported <- unsupported_angle |
+        non_opaque |
+        nonzero_header_fin |
+        asymmetric |
+        negative |
+        inconsistent_fin |
+        empty
     if (any(unsupported)) {
-        stop(sprintf(
-            paste(
-                "Unsupported DeST window shading geometry for window(s): %s.",
-                "Only opaque, symmetric, zero-rotation overhangs and side fins",
-                "on one axis-aligned window are currently validated."
+        stop(
+            sprintf(
+                paste(
+                    "Unsupported DeST window shading geometry for window(s): %s.",
+                    "Only opaque, symmetric, zero-rotation overhangs and side fins",
+                    "on one axis-aligned window are currently validated."
+                ),
+                paste(shading$WINDOW_NAME[unsupported], collapse = ", ")
             ),
-            paste(shading$WINDOW_NAME[unsupported], collapse = ", ")
-        ), call. = FALSE)
+            call. = FALSE
+        )
     }
     invisible(shading)
 }
@@ -109,7 +172,10 @@ shading__object_values <- function(name, base_surface, vertices) {
     for (vertex in seq_len(4L)) {
         for (axis in seq_len(3L)) {
             value[[paste0(
-                "vertex_", vertex, "_", c("x", "y", "z")[[axis]],
+                "vertex_",
+                vertex,
+                "_",
+                c("x", "y", "z")[[axis]],
                 "_coordinate"
             )]] <- vertices[vertex, axis]
         }
@@ -129,16 +195,21 @@ shading__window_objects <- function(window, parameter, profile) {
     frame <- geom__polygon_frame(window, profile$normal_magnitude)
     vertical <- frame$valid && abs(frame$normal[[3L]]) <= profile$angle
     if (length(plane_axis) != 1L || !vertical) {
-        stop(sprintf(
-            "DeST shading for window '%s' requires one axis-aligned vertical polygon.",
-            parameter$WINDOW_NAME
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "DeST shading for window '%s' requires one axis-aligned vertical polygon.",
+                parameter$WINDOW_NAME
+            ),
+            call. = FALSE
+        )
     }
 
     span_axis <- setdiff(1:2, plane_axis)
     outward <- sign(frame$normal[[plane_axis]])
     if (outward == 0.0) {
-        stop("Could not determine the outward direction of a shaded DeST window.")
+        stop(
+            "Could not determine the outward direction of a shaded DeST window."
+        )
     }
     plane <- coordinates[1L, plane_axis]
     span <- range(coordinates[, span_axis])
@@ -159,7 +230,9 @@ shading__window_objects <- function(window, parameter, profile) {
         vertices <- rbind(outside_low, wall_low, wall_high, outside_high)
         name <- paste(window$NAME[[1L]], "DeST Overhang")
         objects[[length(objects) + 1L]] <- shading__object_values(
-            name, window$SURFACE_NAME[[1L]], vertices
+            name,
+            window$SURFACE_NAME[[1L]],
+            vertices
         )
         provenance[[length(provenance) + 1L]] <- data.table::data.table(
             WINDOW_ID = parameter$WINDOW_ID,
@@ -173,7 +246,9 @@ shading__window_objects <- function(window, parameter, profile) {
     for (side in c("low", "high")) {
         depth <- if (side == "low") parameter$WL else parameter$WR
         height <- if (side == "low") parameter$HL else parameter$HR
-        if (depth <= tolerance || height <= tolerance) next
+        if (depth <= tolerance || height <= tolerance) {
+            next
+        }
         span_value <- if (side == "low") span[[1L]] else span[[2L]]
         bottom <- top - height
         wall_top <- wall_bottom <- outside_top <- outside_bottom <- c(0, 0, 0)
@@ -188,7 +263,9 @@ shading__window_objects <- function(window, parameter, profile) {
         label <- if (side == "low") "Low Fin" else "High Fin"
         name <- paste(window$NAME[[1L]], "DeST", label)
         objects[[length(objects) + 1L]] <- shading__object_values(
-            name, window$SURFACE_NAME[[1L]], vertices
+            name,
+            window$SURFACE_NAME[[1L]],
+            vertices
         )
         provenance[[length(provenance) + 1L]] <- data.table::data.table(
             WINDOW_ID = parameter$WINDOW_ID,
@@ -200,55 +277,116 @@ shading__window_objects <- function(window, parameter, profile) {
     list(objects = objects, provenance = provenance)
 }
 
+# Preserve the scalar reflectance of validated opaque panels as diffuse solar
+# reflectance. No glazed/specular fraction or visible reflectance is inferred;
+# reflection calculations are still selected by the Building solar method.
+shading__reflectance_objects <- function(dest, ep, provenance, shading) {
+    reflectance <- shading$ROU[match(provenance$WINDOW_ID, shading$WINDOW_ID)]
+    values <- lapply(seq_len(nrow(provenance)), function(i) {
+        list(
+            shading_surface_name = provenance$SHADING_NAME[[i]],
+            diffuse_solar_reflectance_of_unglazed_part_of_shading_surface = reflectance[[
+                i
+            ]],
+            fraction_of_shading_surface_that_is_glazed = 0.0
+        )
+    })
+    conv__add_objects(dest, ep, "ShadingProperty:Reflectance", values)
+}
+
 # Convert the validated active WINDOW -> SHADING -> LIB_SHADING chain into
 # opaque zone-attached EnergyPlus polygons after final window clipping.
 shading__convert <- function(
-    dest, ep, window,
+    dest,
+    ep,
+    window,
     geometry_profile = eplus_geom__profile(ep$version())
 ) {
     shading <- shading__source_table(dest)
-    if (nrow(shading) == 0L) return(NULL)
+    if (nrow(shading) == 0L) {
+        return(NULL)
+    }
     shading__validate_parameters(shading)
     if (is.null(window) || nrow(window) == 0L) {
         stop("Active DeST window shading could not resolve a converted window.")
     }
 
-    mapped <- window[shading, on = c("ID" = "WINDOW_ID"), nomatch = 0L,
-        allow.cartesian = TRUE]
+    mapped <- window[
+        shading,
+        on = c("ID" = "WINDOW_ID"),
+        nomatch = 0L,
+        allow.cartesian = TRUE
+    ]
     resolved <- unique(mapped$ID)
     missing <- shading[!WINDOW_ID %in% resolved, WINDOW_NAME]
     if (length(missing) > 0L) {
-        stop(sprintf(
-            "Active DeST shading could not resolve exterior window(s): %s.",
-            paste(missing, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Active DeST shading could not resolve exterior window(s): %s.",
+                paste(missing, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
     invalid_window <- unique(mapped[
         INTERZONE | PART_COUNT != 1L,
         WINDOW_NAME
     ])
     if (length(invalid_window) > 0L) {
-        stop(sprintf(
-            paste(
-                "Unsupported DeST shading host for window(s): %s.",
-                "Only one-piece exterior windows are currently validated."
+        stop(
+            sprintf(
+                paste(
+                    "Unsupported DeST shading host for window(s): %s.",
+                    "Only one-piece exterior windows are currently validated."
+                ),
+                paste(invalid_window, collapse = ", ")
             ),
-            paste(invalid_window, collapse = ", ")
-        ), call. = FALSE)
+            call. = FALSE
+        )
     }
 
-    built <- mapped[, {
-        parameter <- shading[WINDOW_ID == ID[[1L]]][1L]
-        list(result = list(shading__window_objects(.SD, parameter,
-            geometry_profile)))
-    }, by = "OUTPUT_PART_ID"]$result
+    built <- mapped[,
+        {
+            parameter <- shading[WINDOW_ID == ID[[1L]]][1L]
+            list(
+                result = list(shading__window_objects(
+                    .SD,
+                    parameter,
+                    geometry_profile
+                ))
+            )
+        },
+        by = "OUTPUT_PART_ID"
+    ]$result
     values <- unlist(lapply(built, `[[`, "objects"), recursive = FALSE)
     provenance <- data.table::rbindlist(
         unlist(lapply(built, `[[`, "provenance"), recursive = FALSE),
         fill = TRUE
     )
     assert_unique_name(provenance$SHADING_NAME, "window shading")
-    out <- conv__add_objects(dest, ep, "Shading:Zone:Detailed", values)
-    attr(out, "table") <- provenance
-    out
+    # Emit the property on every generated piece, including both side fins.
+    # It remains an ordinary input object in either conversion preset.
+    data.table::set(
+        provenance,
+        NULL,
+        "SOLAR_REFLECTANCE",
+        shading$ROU[match(provenance$WINDOW_ID, shading$WINDOW_ID)]
+    )
+    conv__combine_outputs(
+        list(
+            geometry = conv__add_objects(
+                dest,
+                ep,
+                "Shading:Zone:Detailed",
+                values
+            ),
+            reflectance = shading__reflectance_objects(
+                dest,
+                ep,
+                provenance,
+                shading
+            )
+        ),
+        table = provenance
+    )
 }

@@ -730,10 +730,12 @@ subsurface__convert <- function(
     ep,
     surface_type,
     surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
+    geometry_profile = eplus_geom__profile(ep$version()),
+    surface_convection = "dest"
 ) {
     checkmate::assert_data_table(source, min.rows = 1L)
     checkmate::assert_choice(surface_type, c("Window", "Door"))
+    surface_convection <- match.arg(surface_convection, c("dest", "energyplus"))
 
     # One middle-plane polygon becomes one room-facing copy for an exterior
     # opening and two reciprocal copies for an interzone opening.
@@ -786,12 +788,16 @@ subsurface__convert <- function(
         "FenestrationSurface:Detailed",
         value
     )
-    convection <- conv__add_objects(
-        dest,
-        ep,
-        "SurfaceProperty:ConvectionCoefficients",
-        subsurface_property__convection_values(subsurface)
-    )
+    # Use the same explicit film policy for windows and opaque doors as for
+    # their hosts; do not remove unrelated furniture exchange definitions.
+    convection <- if (surface_convection == "dest") {
+        conv__add_objects(
+            dest,
+            ep,
+            "SurfaceProperty:ConvectionCoefficients",
+            subsurface_property__convection_values(subsurface)
+        )
+    }
     out <- conv__combine_outputs(
         list(opening = opening, convection = convection),
         table = subsurface
@@ -866,13 +872,16 @@ window__convert <- function(
     ep,
     surface = NULL,
     geometry_profile = eplus_geom__profile(ep$version()),
-    source_distribution = "energyplus"
+    source_distribution = "energyplus",
+    surface_convection = "dest"
 ) {
     if (!db_has_rows(dest, "WINDOW")) {
         return(NULL)
     }
 
-    if (source_distribution == "energyplus") window__warn_transmitted_solar_distribution(dest)
+    if (source_distribution == "energyplus") {
+        window__warn_transmitted_solar_distribution(dest)
+    }
 
     # Detailed and aggregate window constructions share the same geometry path.
     source <- window__source_table(dest)
@@ -882,7 +891,8 @@ window__convert <- function(
         ep,
         "Window",
         surface,
-        geometry_profile
+        geometry_profile,
+        surface_convection
     )
 }
 
@@ -891,34 +901,69 @@ window__convert <- function(
 # supply these properties, including when several windows share one type.
 window__emissivity_table <- function(dest, windows = NULL) {
     if (!db_has_fields(dest, "SURFACE", c("SURFACE_ID", "TYPE", "BLACKNESS"))) {
-        stop("DeST solar windows require SURFACE.TYPE and BLACKNESS.", call. = FALSE)
+        stop(
+            "DeST solar windows require SURFACE.TYPE and BLACKNESS.",
+            call. = FALSE
+        )
     }
-    source <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+    source <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        "
         SELECT W.ID, W.NAME, S1.TYPE AS SIDE1_TYPE, S2.TYPE AS SIDE2_TYPE,
             S1.BLACKNESS AS SIDE1_EMISSIVITY, S2.BLACKNESS AS SIDE2_EMISSIVITY
         FROM WINDOW W
         LEFT JOIN SURFACE S1 ON W.SIDE1 = S1.SURFACE_ID
         LEFT JOIN SURFACE S2 ON W.SIDE2 = S2.SURFACE_ID
-    "))
-    for (field in c("SIDE1_TYPE", "SIDE2_TYPE", "SIDE1_EMISSIVITY", "SIDE2_EMISSIVITY")) {
-        data.table::set(source, NULL, field, suppressWarnings(as.double(source[[field]])))
+    "
+    ))
+    for (field in c(
+        "SIDE1_TYPE",
+        "SIDE2_TYPE",
+        "SIDE1_EMISSIVITY",
+        "SIDE2_EMISSIVITY"
+    )) {
+        data.table::set(
+            source,
+            NULL,
+            field,
+            suppressWarnings(as.double(source[[field]]))
+        )
     }
     exterior <- (source$SIDE1_TYPE == 1 & source$SIDE2_TYPE == 0) |
         (source$SIDE2_TYPE == 1 & source$SIDE1_TYPE == 0)
     if (anyNA(exterior) || !all(exterior)) {
-        stop("DeST solar emissivity requires one outside and one room window face.", call. = FALSE)
+        stop(
+            "DeST solar emissivity requires one outside and one room window face.",
+            call. = FALSE
+        )
     }
     values <- c(source$SIDE1_EMISSIVITY, source$SIDE2_EMISSIVITY)
     if (any(!is.finite(values)) || any(values < 0 | values > 1)) {
-        stop("Invalid DeST window SURFACE.BLACKNESS; expected values in [0, 1].", call. = FALSE)
+        stop(
+            "Invalid DeST window SURFACE.BLACKNESS; expected values in [0, 1].",
+            call. = FALSE
+        )
     }
     source[, `:=`(
-        OUTSIDE_EMISSIVITY = ifelse(SIDE1_TYPE == 1, SIDE1_EMISSIVITY, SIDE2_EMISSIVITY),
-        INSIDE_EMISSIVITY = ifelse(SIDE1_TYPE == 0, SIDE1_EMISSIVITY, SIDE2_EMISSIVITY)
+        OUTSIDE_EMISSIVITY = ifelse(
+            SIDE1_TYPE == 1,
+            SIDE1_EMISSIVITY,
+            SIDE2_EMISSIVITY
+        ),
+        INSIDE_EMISSIVITY = ifelse(
+            SIDE1_TYPE == 0,
+            SIDE1_EMISSIVITY,
+            SIDE2_EMISSIVITY
+        )
     )]
     # Use the same representable limiting values as opaque surface conversion.
     for (field in c("OUTSIDE_EMISSIVITY", "INSIDE_EMISSIVITY")) {
-        data.table::set(source, NULL, field, pmin(pmax(source[[field]], 1e-6), 0.99999))
+        data.table::set(
+            source,
+            NULL,
+            field,
+            pmin(pmax(source[[field]], 1e-6), 0.99999)
+        )
     }
     if (is.null(windows)) {
         pieces <- source[, .(ID, NAME)]
@@ -934,7 +979,8 @@ door__convert <- function(
     dest,
     ep,
     surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
+    geometry_profile = eplus_geom__profile(ep$version()),
+    surface_convection = "dest"
 ) {
     if (!db_has_rows(dest, "DOOR")) {
         return(NULL)
@@ -947,17 +993,23 @@ door__convert <- function(
         ep,
         "Door",
         surface,
-        geometry_profile
+        geometry_profile,
+        surface_convection
     )
 }
 # Resolve window exterior sky fields independently of the host wall's fields.
 # SIDE1 and SIDE2 are storage directions and must not imply outdoor exposure.
 window__sky_faces <- function(dest, windows) {
-    if (is.null(windows) || !nrow(windows)) return(NULL)
+    if (is.null(windows) || !nrow(windows)) {
+        return(NULL)
+    }
     pieces <- unique(as.data.frame(windows)[, c("ID", "NAME")])
     pieces$TYPE <- "Window"
-    source <- DBI::dbGetQuery(dest, "SELECT W.ID, S.SURFACE_ID AS OUTSIDE_ID,
+    source <- DBI::dbGetQuery(
+        dest,
+        "SELECT W.ID, S.SURFACE_ID AS OUTSIDE_ID,
         S.TILT, S.VENTILATION_COEF, S.SKY_RADIA_COEF FROM WINDOW W JOIN SURFACE S
-        ON S.SURFACE_ID IN (W.SIDE1,W.SIDE2) WHERE S.TYPE = 1")
+        ON S.SURFACE_ID IN (W.SIDE1,W.SIDE2) WHERE S.TYPE = 1"
+    )
     merge(pieces, source, by = "ID", all.x = TRUE)
 }
