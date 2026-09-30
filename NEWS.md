@@ -4,13 +4,16 @@
   property objects, including overhang and side-fin pieces. Reflection remains
   controlled by the selected solar-distribution method (#37).
 
-- Added independent `simulation_options` for terrain, solar distribution and
+- Added `destep_opts()` settings for terrain, solar distribution and
   periodic shadow updates. Explicit choices apply before weather/solar prepasses,
   enter cache identities and remain visible in conversion metadata and IDF comments (#37).
 
-- Added `mode = "objects"` and `mode = "dest"` conversion presets, with
-  explicit per-feature overrides and an audit of effective options and EMS
-  purposes. Basic conversion retains EMS required for source equipment moisture.
+- Unified conversion configuration in `to_eplus(options = )`: accept
+  `"objects"`, `"dest"`, or a reusable `destep_opts()` object with explicit
+  per-feature settings. Previous top-level feature, HVAC and simulation
+  arguments move into `destep_opts()`; weather and boundary settings have a
+  single location. Effective options and EMS purposes remain auditable.
+  Basic conversion retains EMS required for source equipment moisture.
   Surface convection can be selected independently, and DeST sky boundaries
   no longer require DeST heat-source allocation (#37).
 

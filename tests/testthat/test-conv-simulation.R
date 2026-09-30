@@ -2,7 +2,7 @@ test_that("simulation settings reject malformed or ambiguous input early", {
     expect_identical(simulation__options(NULL), list())
     expect_identical(simulation__options(list()), list())
     expect_error(
-        to_eplus(NULL, simulation_options = list(terrain = "Forest")),
+        to_eplus(NULL, options = destep_opts(terrain = "Forest")),
         "terrain"
     )
     expect_error(simulation__options(list(unused = TRUE)), "Unknown")

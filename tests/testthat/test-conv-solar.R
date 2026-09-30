@@ -254,11 +254,9 @@ test_that("solar tables and glass resistance form valid EnergyPlus objects", {
     )
 })
 
-test_that("legacy window optics remains the default public API", {
-    expect_identical(
-        formals(to_eplus)$window_optics,
-        quote(c("simple_glazing", "dest_solar"))
-    )
+test_that("window optics follows the selected conversion preset", {
+    expect_identical(destep_opts("objects")$window_optics, "simple_glazing")
+    expect_identical(destep_opts("dest")$window_optics, "dest_solar")
 })
 
 test_that("single panes retain resistance and independent face emissivities", {

@@ -829,7 +829,7 @@ source__options <- function(
                 )
         )
     ) {
-        stop("Unknown source_options field.", call. = FALSE)
+        stop("Unknown source conversion setting.", call. = FALSE)
     }
     if (
         as.numeric_version(ep$version()) != as.numeric_version("26.1.0") ||
@@ -886,12 +886,12 @@ source__options <- function(
     if ((has_windows && source_distribution == "dest") || sky) {
         checkmate::assert_file_exists(
             options$weather,
-            .var.name = "source_options$weather"
+            .var.name = "weather"
         )
         checkmate::assert_string(
             options$directory,
             min.chars = 1L,
-            .var.name = "source_options$directory"
+            .var.name = "directory"
         )
         options$weather <- normalizePath(
             options$weather,

@@ -7,7 +7,7 @@ simulation__options <- function(options) {
     checkmate::assert_list(
         options,
         names = "unique",
-        .var.name = "simulation_options"
+        .var.name = "simulation settings"
     )
     allowed <- c("terrain", "solar_distribution", "shadow_update_days")
     if (
@@ -17,7 +17,7 @@ simulation__options <- function(options) {
                 any(!names(options) %in% allowed))
     ) {
         stop(
-            "Unknown or unnamed simulation_options field. Use terrain, solar_distribution or shadow_update_days.",
+            "Unknown or unnamed simulation setting. Use terrain, solar_distribution or shadow_update_days.",
             call. = FALSE
         )
     }
@@ -25,7 +25,7 @@ simulation__options <- function(options) {
         checkmate::assert_choice(
             options$terrain,
             c("Country", "Suburbs", "City", "Ocean", "Urban"),
-            .var.name = "simulation_options$terrain"
+            .var.name = "terrain"
         )
     }
     if ("solar_distribution" %in% names(options)) {
@@ -38,14 +38,14 @@ simulation__options <- function(options) {
                 "FullExteriorWithReflections",
                 "FullInteriorAndExteriorWithReflections"
             ),
-            .var.name = "simulation_options$solar_distribution"
+            .var.name = "solar_distribution"
         )
     }
     if ("shadow_update_days" %in% names(options)) {
         checkmate::assert_int(
             options$shadow_update_days,
             lower = 1L,
-            .var.name = "simulation_options$shadow_update_days"
+            .var.name = "shadow_update_days"
         )
     }
     options
