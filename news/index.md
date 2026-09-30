@@ -2,6 +2,36 @@
 
 ## destep 0.0.0.9000
 
+- Fixed exposed-floor outside absorptance conversion to preserve literal
+  zero values. The converter no longer substitutes unrelated
+  exterior-wall or default material properties, which could introduce
+  ground-reflected solar gains absent from the DeST input (#36).
+
+- Added explicit `source_options$exterior_boundary = "dest_sky"` for the
+  verified vertical/horizontal DeST sky boundary. It preserves per-face
+  coefficients and the saved sky switch, records explicit run overrides,
+  and uses target-weather time tables without surface-temperature
+  feedback. Window boundaries use EMS to copy the current time-table
+  value through the supported surface weather inputs. Check and coverage
+  workflows now install EnergyPlus 26.1 alongside 23.1 (#36).
+
+- Fixed `window_optics = "dest_solar"` to preserve each window’s inside
+  and outside surface blackness instead of using a fixed emissivity of
+  0.84. Windows sharing one optical type retain separate thermal
+  properties when needed (#36).
+
+- Added opt-in `source_distribution = "dest"` to
+  [`to_eplus()`](../reference/to_eplus.md) for EnergyPlus 26.1
+  ideal-loads models. Source converters supply their own heat metadata;
+  net receiving areas and window distribution modes are extracted
+  automatically. Weather-specific solar prepasses are reused only after
+  checking model, file, engine and output identities. Generated time
+  tables retain literal source fractions and deduplicate identical
+  columns. Coupled interzone surfaces remain the default; the
+  installed-DeST neighbor-air representation requires explicit
+  selection. Whole-school equivalence and updated ASHRAE 140 acceptance
+  remain separate validation tasks (#36).
+
 - Fixed CI initialization by replacing the removed Homebrew Actions
   `master` reference with the upstream recommended pinned release (#34).
 
@@ -16,10 +46,7 @@
 - Kept source metadata with the owning people, lighting, and equipment
   converters in `conv-people.R`, and furniture validation in
   `conv-furniture.R`. The internal `conv-source.R` module now handles
-  generic source allocation and inventory checks. This
-  source-distribution workflow is not yet integrated into
-  [`to_eplus()`](../reference/to_eplus.md) and does not establish
-  whole-school numerical equivalence.
+  generic source allocation and inventory checks.
 
 - Added opt-in `window_optics = "dest_solar"` for exterior
   two/three-pane aggregate windows in EnergyPlus 23.1 or newer. It
