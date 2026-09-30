@@ -128,4 +128,19 @@ test_that("window sky schedules use supported current-step weather actuators", {
     actuator <- c("EnergyManagementSystem:Actuator", "Existing", "Window", "Surface",
         "Outdoor Air Drybulb Temperature")
     expect_error(sky__project(c(objects, list(actuator)), faces), "weather actuators conflict")
+
+    # One optical-table pane has independent infrared fields on its two faces;
+    # suppressing external longwave must leave indoor exchange and R untouched.
+    single <- objects
+    ci <- source__index(single, "Construction", "Glazing")
+    gi <- source__index(single, "WindowMaterial:Glazing", "Glass")
+    single[[ci]] <- single[[ci]][1:3]
+    single[[gi]][[3L]] <- "SpectralAndAngle"
+    single[[gi]][[14L]] <- "0.73"
+    projected <- sky__project(single, faces)
+    pane <- Filter(function(o) o[[1L]] == "WindowMaterial:Glazing" &&
+        o[[2L]] == "DeST Sky 2 Outside Material", projected$objects)[[1L]]
+    expect_equal(pane[-c(2L, 13L)], single[[gi]][-c(2L, 13L)])
+    expect_equal(as.double(pane[[13L]]), 1e-8)
+    expect_equal(as.double(pane[[14L]]), .73)
 })

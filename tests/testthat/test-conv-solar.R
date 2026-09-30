@@ -15,7 +15,8 @@ test_that("solar optical port retains independent two/three-pane reference value
 test_that("solar construction validates inputs before adding any objects", {
     ep <- eplusr::empty_idf("23.1")
     count <- ep$object_num()
-    expect_error(solar__construction(ep, "Bad", 0.4, 2, 1), "two or three")
+    expect_error(solar__construction(ep, "Bad", 0.4, 2, 4), "one to three")
+    expect_error(solar__construction(ep, "Bad", 0.4, 2, 1.5), "one to three")
     expect_error(solar__construction(ep, "Bad", 0.4, 7, 2), "positive glass resistance")
     expect_error(solar__construction(ep, "Bad", 1.2, 2, 2), "SC in")
     expect_error(solar__construction(ep, "Bad", 0.4, 2, 2,
@@ -122,4 +123,21 @@ test_that("solar tables and glass resistance form valid EnergyPlus objects", {
 test_that("legacy window optics remains the default public API", {
     expect_identical(formals(to_eplus)$window_optics,
         quote(c("simple_glazing", "dest_solar")))
+})
+
+test_that("single panes retain resistance and independent face emissivities", {
+    ep <- eplusr::empty_idf("23.1")
+    audit <- solar__construction(ep, "Single", .57, 3.7, 1L, .72, .83)
+    stack <- ep$object(audit$CONSTRUCTION)$to_table(wide = TRUE)
+    pane <- ep$object(stack$`Outside Layer`)$to_table(wide = TRUE)
+    expect_equal(ep$object_num("WindowMaterial:Glazing"), 1L)
+    expect_equal(ep$object_num("WindowMaterial:Gas"), 0L)
+    expect_equal(ep$object_num("Table:Lookup"), 3L)
+    expect_equal(as.double(pane$Thickness) / as.double(pane$Conductivity),
+        1 / 3.7 - 1 / 8.7 - 1 / 23.3, tolerance = 1e-12)
+    expect_equal(as.double(pane$`Front Side Infrared Hemispherical Emissivity`), .72)
+    expect_equal(as.double(pane$`Back Side Infrared Hemispherical Emissivity`), .83)
+    # Independent one-pane native holdout, frozen before this implementation.
+    expect_equal(audit$SOURCE_DIFFUSE_T, .4750445388132898, tolerance = 1e-12)
+    expect_equal(audit$SOURCE_DIFFUSE_A, .09256660524552242, tolerance = 1e-12)
 })

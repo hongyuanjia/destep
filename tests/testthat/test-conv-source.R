@@ -106,7 +106,7 @@ test_that("shared optical tables are blocked exactly once", {
     objects <- list(c("FenestrationSurface:Detailed", "One", "Window", "C1"),
         c("FenestrationSurface:Detailed", "Two", "Window", "C2"),
         c("Construction", "C1", "Outer", "Gap", "Inner"),
-        c("Construction", "C2", "Outer", "Gap", "Inner"),
+        c("Construction", "C2", "Outer"),
         glazing, table("T", .4), table("R", .2))
     blocked <- source__block_solar(objects)
     expect_equal(as.numeric(blocked$objects[[6L]][-(1:11)]), rep(0, 182L))

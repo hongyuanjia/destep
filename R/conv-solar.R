@@ -104,9 +104,10 @@ solar__add_fields <- function(ep, class, fields) {
     invisible(NULL)
 }
 
-# Represent a whole simplified window as an optical outer sheet, a constant-R
-# gap, and a transparent inner sheet. This preserves the source glass resistance
-# and its exposed emissivities while leaving EnergyPlus in charge of heat flow.
+# Represent single-pane absorption at mid-glass using one resistive optical
+# layer. Multiple panes retain absorption at the outside of the aggregate
+# resistance through an optical outer sheet, constant-R gap and clear inner
+# sheet. Both forms preserve source resistance and exposed emissivities.
 # It does not add the native solver's internal glass capacity or numerical lag.
 solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
     inside_emissivity = emissivity
@@ -114,12 +115,12 @@ solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
     if (length(sc) != 1L || !is.finite(sc) || sc <= 0 || sc > 1 ||
         length(k) != 1L || !is.finite(k) || k <= 0 ||
         length(layers) != 1L || !is.finite(layers) ||
-        !layers %in% c(2L, 3L) ||
+        !layers %in% c(1L, 2L, 3L) ||
         length(emissivity) != 1L || !is.finite(emissivity) ||
         emissivity <= 0 || emissivity >= 1 ||
         length(inside_emissivity) != 1L || !is.finite(inside_emissivity) ||
         inside_emissivity <= 0 || inside_emissivity >= 1) {
-        stop("DeST solar optics requires SC in (0,1], positive K, two or three panes, and emissivity in (0,1).",
+        stop("DeST solar optics requires SC in (0,1], positive K, one to three panes, and emissivity in (0,1).",
             call. = FALSE)
     }
     resistance <- 1 / k - 1 / 8.7 - 1 / 23.3
@@ -138,8 +139,10 @@ solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
     independent <- paste(prefix, "Coordinates")
     solar__add_fields(ep, "Table:IndependentVariableList", c(independent,
         paste(prefix, "Angles"), paste(prefix, "Wavelengths")))
-    tables <- list(T = front[1L, ], RF = 1 - colSums(front),
-        RB = 1 - colSums(back), ClearT = rep(1, 91), ClearR = rep(0, 91))
+    tables <- list(T = front[1L, ], RF = 1 - colSums(front), RB = 1 - colSums(back))
+    if (layers > 1L) {
+        tables <- c(tables, list(ClearT = rep(1, 91), ClearR = rep(0, 91)))
+    }
     for (key in names(tables)) {
         # The last coordinate, wavelength, varies fastest in Table:Lookup.
         # The wavelength-independent values are solar-only; visible optics
@@ -148,20 +151,32 @@ solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
             "DivisorOnly", 1, 0, 1, "Dimensionless", "", "", "",
             rep(tables[[key]], each = 2L)))
     }
-    solar__add_fields(ep, "WindowMaterial:Glazing", c(paste(prefix, "Outer"),
-        "SpectralAndAngle", "", 1e-6, rep("", 6L), 0,
-        emissivity, 1e-6, 1, 1, "No", "", "", paste(prefix, "T"),
-        paste(prefix, "RF"), paste(prefix, "RB")))
-    solar__add_fields(ep, "WindowMaterial:Glazing", c(paste(prefix, "Inner"),
-        "SpectralAndAngle", "", 1e-6, rep("", 6L), 0,
-        1e-6, inside_emissivity, 1, 1, "No", "", "", paste(prefix, "ClearT"),
-        paste(prefix, "ClearR"), paste(prefix, "ClearR")))
-    solar__add_fields(ep, "WindowMaterial:Gas", c(paste(prefix, "Gap"), "Custom",
-        0.001, 0.001 / (resistance - 2e-6), 0, 0, 0.000018, 0, 0,
-        1006, 0, 0, 28.97, 1.4))
     new_name <- paste(prefix, "Construction")
-    solar__add_fields(ep, "Construction", c(new_name, paste(prefix, "Outer"),
-        paste(prefix, "Gap"), paste(prefix, "Inner")))
+    if (layers == 1L) {
+        # EnergyPlus divides glass absorption equally between its two faces,
+        # giving the source's mid-glass inward share (Ro + Rg/2)/(Ri + Rg + Ro).
+        # Thickness is a numerical reference, not an inferred physical pane:
+        # the thermal input is its ratio to conductivity, exactly equal to Rg.
+        solar__add_fields(ep, "WindowMaterial:Glazing", c(paste(prefix, "Pane"),
+            "SpectralAndAngle", "", 0.001, rep("", 6L), 0,
+            emissivity, inside_emissivity, 0.001 / resistance, 1, "No", "", "",
+            paste(prefix, "T"), paste(prefix, "RF"), paste(prefix, "RB")))
+        solar__add_fields(ep, "Construction", c(new_name, paste(prefix, "Pane")))
+    } else {
+        solar__add_fields(ep, "WindowMaterial:Glazing", c(paste(prefix, "Outer"),
+            "SpectralAndAngle", "", 1e-6, rep("", 6L), 0,
+            emissivity, 1e-6, 1, 1, "No", "", "", paste(prefix, "T"),
+            paste(prefix, "RF"), paste(prefix, "RB")))
+        solar__add_fields(ep, "WindowMaterial:Glazing", c(paste(prefix, "Inner"),
+            "SpectralAndAngle", "", 1e-6, rep("", 6L), 0,
+            1e-6, inside_emissivity, 1, 1, "No", "", "", paste(prefix, "ClearT"),
+            paste(prefix, "ClearR"), paste(prefix, "ClearR")))
+        solar__add_fields(ep, "WindowMaterial:Gas", c(paste(prefix, "Gap"), "Custom",
+            0.001, 0.001 / (resistance - 2e-6), 0, 0, 0.000018, 0, 0,
+            1006, 0, 0, 28.97, 1.4))
+        solar__add_fields(ep, "Construction", c(new_name, paste(prefix, "Outer"),
+            paste(prefix, "Gap"), paste(prefix, "Inner")))
+    }
     data.frame(CONSTRUCTION = new_name, SC = sc, K = k, LAYERS = layers,
         GLASS_RESISTANCE = resistance, NORMAL_T = front[1L, 1L],
         NORMAL_A = front[2L, 1L], SOURCE_DIFFUSE_T = front[1L, 61L],
@@ -169,7 +184,7 @@ solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
         INSIDE_EMISSIVITY = inside_emissivity)
 }
 
-# Replace only verified aggregate two/three-pane exterior-window constructions.
+# Replace only verified aggregate one-to-three-pane exterior constructions.
 # Retain the legacy conversion as the default until whole-model regression is
 # complete. This opt-in path never silently claims daylight or distribution
 # equivalence; those are separate semantics and retain their existing warnings.
@@ -191,8 +206,8 @@ solar__apply <- function(dest, ep, source_distribution = "energyplus", windows =
     # fields as text. Normalize before the same strict pane-count validation.
     source[, LAYER_NUM := suppressWarnings(as.double(LAYER_NUM))]
     if (any(!source$TYPE_DATA_VALID) || anyNA(source$LAYER_NUM) ||
-        any(!source$LAYER_NUM %in% c(2L, 3L))) {
-        stop("DeST solar optics supports valid aggregate two/three-pane windows only.", call. = FALSE)
+        any(!source$LAYER_NUM %in% c(1L, 2L, 3L))) {
+        stop("DeST solar optics supports valid aggregate one-to-three-pane windows only.", call. = FALSE)
     }
     emissivity <- window__emissivity_table(dest, windows)
     source <- merge(source, emissivity, by.x = "WINDOW_ID", by.y = "ID", all.x = TRUE)

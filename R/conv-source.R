@@ -130,8 +130,8 @@ source__block_solar <- function(objects) {
     for (name in unique(vapply(windows, `[[`, character(1L), 4L))) {
         construction <- objects[[source__index(objects, "Construction", name)]]
         outer <- objects[[source__index(objects, "WindowMaterial:Glazing", construction[[3L]])]]
-        if (length(construction) != 5L || outer[[3L]] != "SpectralAndAngle") {
-            stop("Prescribed solar requires ordinary three-layer optical-table windows.", call. = FALSE)
+        if (!length(construction) %in% c(3L, 5L) || outer[[3L]] != "SpectralAndAngle") {
+            stop("Prescribed solar requires ordinary one- or three-layer optical-table windows.", call. = FALSE)
         }
         tname <- outer[[20L]]
         rname <- outer[[21L]]

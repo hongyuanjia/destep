@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Added single-pane aggregate windows to `window_optics = "dest_solar"`,
+  preserving glass resistance, solar absorption location and face blackness,
+  including use with DeST source distribution and sky-boundary options.
+
 - Fixed exposed-floor outside absorptance conversion to preserve literal zero
   values. The converter no longer substitutes unrelated exterior-wall or
   default material properties, which could introduce ground-reflected solar

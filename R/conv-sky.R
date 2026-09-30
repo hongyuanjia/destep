@@ -160,8 +160,9 @@ sky__weather <- function(ep, faces, weather, directory, verbose) {
     list(values = values, record = record, directory = root, reused = FALSE)
 }
 
-# Clone only each exposed layer and its construction. Keeping at least two
-# layers protects the room-side emissivity from an outdoor-only modification.
+# Clone only each exposed layer and its construction. Opaque constructions
+# need two layers to protect the room-side emissivity; glazing stores its
+# front and back emissivities separately even with a single layer.
 sky__project <- function(objects, faces, temperatures = NULL) {
     exposed <- Filter(function(o) (o[[1L]] == "BuildingSurface:Detailed" && o[[7L]] == "Outdoors") ||
         (o[[1L]] == "FenestrationSurface:Detailed" && o[[3L]] == "Window"), objects)
@@ -187,11 +188,14 @@ sky__project <- function(objects, faces, temperatures = NULL) {
         if (length(surface_index) != 1L) stop("Ambiguous exterior face.", call. = FALSE)
         surface <- objects[[surface_index]]
         construction <- objects[[source__index(objects, "Construction", surface[[4L]])]]
-        if (length(construction) < 4L) stop("Single-layer sky constructions are not yet supported.", call. = FALSE)
         material <- Filter(function(o) o[[1L]] %in% c("Material", "Material:NoMass", "WindowMaterial:Glazing") &&
             o[[2L]] == construction[[3L]], objects)
         if (length(material) != 1L) stop("Unsupported exterior sky material.", call. = FALSE)
         material <- material[[1L]]
+        if (length(construction) < 4L && !(surface[[1L]] == "FenestrationSurface:Detailed" &&
+            material[[1L]] == "WindowMaterial:Glazing" && material[[3L]] == "SpectralAndAngle")) {
+            stop("Single-layer sky constructions require an optical-table window.", call. = FALSE)
+        }
         epsilon_index <- switch(material[[1L]], Material = 8L, "Material:NoMass" = 5L,
             "WindowMaterial:Glazing" = 13L)
         old_epsilon <- as.double(material[[epsilon_index]])
