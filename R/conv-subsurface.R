@@ -950,3 +950,14 @@ door__convert <- function(
         geometry_profile
     )
 }
+# Resolve window exterior sky fields independently of the host wall's fields.
+# SIDE1 and SIDE2 are storage directions and must not imply outdoor exposure.
+window__sky_faces <- function(dest, windows) {
+    if (is.null(windows) || !nrow(windows)) return(NULL)
+    pieces <- unique(as.data.frame(windows)[, c("ID", "NAME")])
+    pieces$TYPE <- "Window"
+    source <- DBI::dbGetQuery(dest, "SELECT W.ID, S.SURFACE_ID AS OUTSIDE_ID,
+        S.TILT, S.VENTILATION_COEF, S.SKY_RADIA_COEF FROM WINDOW W JOIN SURFACE S
+        ON S.SURFACE_ID IN (W.SIDE1,W.SIDE2) WHERE S.TYPE = 1")
+    merge(pieces, source, by = "ID", all.x = TRUE)
+}

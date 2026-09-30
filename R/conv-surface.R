@@ -1999,3 +1999,20 @@ surface__source_faces <- function(objects) {
     source__check_faces(faces)
     faces
 }
+# Carry each emitted exterior piece back to its physical source outdoor face.
+# This keeps per-face coefficients when a roof is split into several polygons.
+surface__sky_faces <- function(dest, surface) {
+    if (is.null(surface) || !nrow(surface)) return(NULL)
+    pieces <- unique(as.data.frame(surface)[, c("ID", "NAME", "TYPE", "BOUNDARY", "BOUNDARY_MODE")])
+    pieces <- pieces[pieces$BOUNDARY == "Outdoors", ]
+    if (!nrow(pieces)) return(NULL)
+    if (any(pieces$BOUNDARY_MODE != "source")) {
+        stop("DeST sky boundary requires explicit source exterior faces.", call. = FALSE)
+    }
+    source <- DBI::dbGetQuery(dest, "SELECT S.SURFACE_ID AS ID,
+        O.SURFACE_ID AS OUTSIDE_ID, O.TILT, O.VENTILATION_COEF, O.SKY_RADIA_COEF
+        FROM MAIN_ENCLOSURE E JOIN SURFACE S ON S.SURFACE_ID IN (E.SIDE1,E.SIDE2)
+        JOIN SURFACE O ON O.SURFACE_ID = CASE WHEN E.SIDE1 = S.SURFACE_ID
+            THEN E.SIDE2 ELSE E.SIDE1 END WHERE O.TYPE = 1 AND S.TYPE <> 1")
+    merge(pieces[, c("ID", "NAME", "TYPE")], source, by = "ID", all.x = TRUE)
+}

@@ -277,8 +277,8 @@ MAP_ID_NAME <- list(
 #'       With windows it also requires `window_optics = "dest_solar"` and runs
 #'       a weather-specific solar prepass. Unsupported moisture combinations,
 #'       doors, daylighting and dynamic shading fail explicitly. Exterior
-#'       radiation retains EnergyPlus defaults; native time-integration
-#'       algorithms are not reproduced.
+#'       radiation retains EnergyPlus defaults unless selected separately in
+#'       `source_options`; native time-integration algorithms are not reproduced.
 #'
 #' @param source_options \[list or NULL\] Options for `source_distribution =
 #'       "dest"`. Models with windows require `weather`, an existing EPW path,
@@ -293,6 +293,23 @@ MAP_ID_NAME <- list(
 #'       resolution. Reconvert after changing weather, geometry, optics,
 #'       schedules or timestep; running or editing the returned `Idf` does not
 #'       refresh them. Keep the directory or copy external files when saving.
+#'       `exterior_boundary` defaults to `"energyplus"`; `"dest_sky"` selects
+#'       the linear sky-only boundary verified with DeST 0.2.230705 for vertical
+#'       walls/windows and horizontal roofs/exposed floors. Single-layer
+#'       constructions and existing local environments are unsupported.
+#'       This reads `OPTION.CAL_SKY_RADIATION`; the optional logical
+#'       `sky_radiation` explicitly overrides that saved switch for a particular
+#'       run. Missing switches require an explicit override. This boundary mode
+#'       needs `weather` and `directory`, even with sky exchange disabled, to
+#'       preserve dry-bulb convection when the weather indicates rain. An additional
+#'       weather prepass preserves the target's height corrections and time grid;
+#'       Windows receive the current time-table value through surface EMS
+#'       actuators because the local-environment object excludes windows in
+#'       the official input schema. No surface-temperature feedback is used.
+#'       The target's default longwave exchange is suppressed with an outdoor
+#'       emissivity of `1e-8`, leaving a small numerical residual. The returned
+#'       `exterior_boundary` attribute records source coefficients, switch
+#'       overrides and generated time tables. Reconvert when inputs change.
 #'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model. The opt-in source
 #'       mode attaches a `source_distribution` attribute containing its input
@@ -526,9 +543,17 @@ to_eplus <- function(
 
     # Collect powers from their owning converters; only geometry is read back
     # from the completed IDF, so clipped receiving areas match the target.
+    sky_audit <- NULL
+    if (source_distribution == "dest" && source_options$exterior_boundary == "dest_sky") {
+        sky <- sky__apply(tmpdb, ep, attr(surface, "table"), attr(window, "table"),
+            source_options, verbose)
+        ep <- sky$model
+        sky_audit <- sky$audit
+    }
     if (source_distribution == "dest") {
         ep <- source__apply(tmpdb, ep, conv, source_options, verbose)
     }
+    if (!is.null(sky_audit)) attr(ep, "exterior_boundary") <- sky_audit
 
     if (hvac == "physical") {
         ep <- hvac__convert(tmpdb, ep, hvac_options)

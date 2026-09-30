@@ -371,7 +371,8 @@ source__check_existing <- function(objects, faces, sources) {
 source__options <- function(options, ep, hvac, window_optics, has_windows) {
     if (is.null(options)) options <- list()
     checkmate::assert_list(options, names = "unique")
-    if (any(!names(options) %in% c("weather", "directory", "partition_boundary"))) {
+    if (any(!names(options) %in% c("weather", "directory", "partition_boundary",
+        "exterior_boundary", "sky_radiation"))) {
         stop("Unknown source_options field.", call. = FALSE)
     }
     if (as.numeric_version(ep$version()) != as.numeric_version("26.1.0") || hvac != "ideal_loads") {
@@ -379,6 +380,14 @@ source__options <- function(options, ep, hvac, window_optics, has_windows) {
     }
     if (is.null(options$partition_boundary)) options$partition_boundary <- "energyplus"
     checkmate::assert_choice(options$partition_boundary, c("energyplus", "dest_air"))
+    if (is.null(options$exterior_boundary)) options$exterior_boundary <- "energyplus"
+    checkmate::assert_choice(options$exterior_boundary, c("energyplus", "dest_sky"))
+    if (!is.null(options$sky_radiation)) {
+        checkmate::assert_flag(options$sky_radiation)
+        if (options$exterior_boundary != "dest_sky") {
+            stop("sky_radiation requires exterior_boundary = 'dest_sky'.", call. = FALSE)
+        }
+    }
     if (has_windows) {
         if (window_optics != "dest_solar") {
             stop("DeST source distribution with windows requires window_optics = 'dest_solar'.", call. = FALSE)

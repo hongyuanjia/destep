@@ -53,7 +53,7 @@ test_that("public mode preserves defaults and rejects unsupported options early"
     expect_identical(formals(to_eplus)$source_distribution, quote(c("energyplus", "dest")))
     ep <- list(version = function() "26.1.0")
     expect_identical(source__options(NULL, ep, "ideal_loads", "simple_glazing", FALSE),
-        list(partition_boundary = "energyplus"))
+        list(partition_boundary = "energyplus", exterior_boundary = "energyplus"))
     expect_error(source__options(list(unused = TRUE), ep, "ideal_loads", "dest_solar", FALSE), "Unknown")
     expect_error(source__options(NULL, ep, "physical", "dest_solar", FALSE), "ideal_loads")
     expect_error(source__options(NULL, ep, "ideal_loads", "simple_glazing", TRUE), "window_optics")
