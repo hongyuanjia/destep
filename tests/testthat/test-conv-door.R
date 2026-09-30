@@ -100,9 +100,15 @@ test_that("converts exterior and interzone DeST doors", {
 
     converted <- door__convert(dest, ep)
     automatic <- door__convert(dest, ep, surface_convection = "energyplus")
-    expect_false("SurfaceProperty:ConvectionCoefficients" %in% automatic$object$class_name)
+    expect_false(
+        "SurfaceProperty:ConvectionCoefficients" %in%
+            automatic$object$class_name
+    )
     expect_equal(attr(automatic, "table"), attr(converted, "table"))
-    expect_equal(automatic$value, converted$value[class_name == "FenestrationSurface:Detailed"])
+    expect_equal(
+        automatic$value,
+        converted$value[class_name == "FenestrationSurface:Detailed"]
+    )
     table <- attr(converted, "table")
 
     expect_setequal(

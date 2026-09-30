@@ -403,11 +403,15 @@ to_eplus <- function(
     simulation_options <- simulation__options(simulation_options)
     # Presets fill only omitted arguments; existing explicit option calls keep
     # their original meaning, including the nested sky-boundary selection.
-    conversion <- conv__mode_options(match.arg(mode),
+    conversion <- conv__mode_options(
+        match.arg(mode),
         if (missing(people_heat)) NULL else people_heat,
         if (missing(window_optics)) NULL else window_optics,
         if (missing(source_distribution)) NULL else source_distribution,
-        match.arg(surface_convection), exterior_boundary, source_options)
+        match.arg(surface_convection),
+        exterior_boundary,
+        source_options
+    )
     people_heat <- conversion$people_heat
     window_optics <- conversion$window_optics
     source_distribution <- conversion$source_distribution
@@ -471,8 +475,14 @@ to_eplus <- function(
         ep <- eplusr::empty_idf(ver)
     }
     if (source_distribution == "dest" || exterior_boundary == "dest_sky") {
-        source_options <- source__options(source_options, ep, hvac, window_optics,
-            db_has_rows(tmpdb, "WINDOW"), source_distribution)
+        source_options <- source__options(
+            source_options,
+            ep,
+            hvac,
+            window_optics,
+            db_has_rows(tmpdb, "WINDOW"),
+            source_distribution
+        )
     }
     conversion$source_options <- source_options
 
@@ -630,15 +640,23 @@ to_eplus <- function(
     # from the completed IDF, so clipped receiving areas match the target.
     sky_audit <- NULL
     if (exterior_boundary == "dest_sky") {
-        sky <- sky__apply(tmpdb, ep, attr(surface, "table"), attr(window, "table"),
-            source_options, verbose)
+        sky <- sky__apply(
+            tmpdb,
+            ep,
+            attr(surface, "table"),
+            attr(window, "table"),
+            source_options,
+            verbose
+        )
         ep <- sky$model
         sky_audit <- sky$audit
     }
     if (source_distribution == "dest") {
         ep <- source__apply(tmpdb, ep, conv, source_options, verbose)
     }
-    if (!is.null(sky_audit)) attr(ep, "exterior_boundary") <- sky_audit
+    if (!is.null(sky_audit)) {
+        attr(ep, "exterior_boundary") <- sky_audit
+    }
 
     if (hvac == "physical") {
         ep <- hvac__convert(tmpdb, ep, hvac_options)
@@ -659,8 +677,14 @@ to_eplus <- function(
     audit <- conv__mode_audit(ep, conversion)
     audit$simulation <- simulation__audit(ep, simulation_options)
     attr(ep, "conversion") <- audit
-    ep$Version$comment(c(un_list(ver$object$comment), conv__mode_comments(audit),
-        simulation__comments(audit$simulation)), append = NULL)
+    ep$Version$comment(
+        c(
+            un_list(ver$object$comment),
+            conv__mode_comments(audit),
+            simulation__comments(audit$simulation)
+        ),
+        append = NULL
+    )
     ep
 }
 

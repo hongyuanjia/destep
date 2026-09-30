@@ -6,7 +6,9 @@
 # maximum ACH. The documented rule is represented by a base minimum object and
 # a max-minus-min supplement gated by outdoor-temperature setpoint schedules.
 ventilation__convert <- function(dest, ep) {
-    if (!db_has_rows(dest, "ROOM_RELATION")) return(NULL)
+    if (!db_has_rows(dest, "ROOM_RELATION")) {
+        return(NULL)
+    }
 
     relation <- DBI::dbGetQuery(
         dest,
@@ -40,7 +42,12 @@ ventilation__convert <- function(dest, ep) {
         "
     )
     data.table::setDT(relation)
-    data.table::set(relation, NULL, "IS_OUTDOOR_RELATION", !is.na(relation$OUTSIDE_NAME))
+    data.table::set(
+        relation,
+        NULL,
+        "IS_OUTDOOR_RELATION",
+        !is.na(relation$OUTSIDE_NAME)
+    )
 
     # Resolve and validate every documented range-control dependency before
     # building objects, so malformed ranges cannot silently fall back to their
@@ -49,8 +56,10 @@ ventilation__convert <- function(dest, ep) {
     range <- ventilation__range_controls(dest)
     range_index <- match(relation$ID, range$RELATION_ID)
     range_fields <- c(
-        "INCREMENT_SCHEDULE_NAME", "INCREMENT_AIR_CHANGES_PER_HOUR",
-        "HEATING_SCHEDULE_NAME", "COOLING_SCHEDULE_NAME"
+        "INCREMENT_SCHEDULE_NAME",
+        "INCREMENT_AIR_CHANGES_PER_HOUR",
+        "HEATING_SCHEDULE_NAME",
+        "COOLING_SCHEDULE_NAME"
     )
     for (field in range_fields) {
         value <- if (field %in% names(range)) {
@@ -66,31 +75,48 @@ ventilation__convert <- function(dest, ep) {
     # Only OUTSIDE-linked records have an unambiguous ZoneVentilation mapping.
     # Inter-room records need a separate ZoneMixing interpretation.
     skip_reason <- rep(NA_character_, nrow(relation))
-    skip_reason[!relation$IS_OUTDOOR_RELATION] <- "RELA_ROOM_ID does not reference OUTSIDE"
+    skip_reason[
+        !relation$IS_OUTDOOR_RELATION
+    ] <- "RELA_ROOM_ID does not reference OUTSIDE"
     skip_reason[is.na(relation$ROOM_NAME)] <- "ROOM_ID does not reference ROOM"
-    skip_reason[is.na(relation$SCHEDULE_NAME)] <- "VENT_SCHEDULE_ID does not reference SCHEDULE_YEAR"
+    skip_reason[is.na(
+        relation$SCHEDULE_NAME
+    )] <- "VENT_SCHEDULE_ID does not reference SCHEDULE_YEAR"
     data.table::set(relation, NULL, "SKIP_REASON", skip_reason)
     data.table::set(relation, NULL, "CAN_CONVERT", is.na(skip_reason))
     data.table::set(
-        relation, NULL, "RANGE_CONTROL_CONVERTED",
-        relation$VENT_TYPE != 1L | !selection$enabled |
+        relation,
+        NULL,
+        "RANGE_CONTROL_CONVERTED",
+        relation$VENT_TYPE != 1L |
+            !selection$enabled |
             !is.na(relation$INCREMENT_AIR_CHANGES_PER_HOUR)
     )
     data.table::set(
-        relation, NULL, "RANGE_CONTROL_METHOD",
+        relation,
+        NULL,
+        "RANGE_CONTROL_METHOD",
         ifelse(
             relation$VENT_TYPE == 1L,
-            if (selection$enabled) "documented_outdoor_temperature_band" else
-                "saved_switch_minimum_only",
+            if (selection$enabled) {
+                "documented_outdoor_temperature_band"
+            } else {
+                "saved_switch_minimum_only"
+            },
             "fixed_schedule"
         )
     )
     data.table::set(
-        relation, NULL, "RANGE_CONTROL_FIDELITY",
+        relation,
+        NULL,
+        "RANGE_CONTROL_FIDELITY",
         ifelse(
             relation$VENT_TYPE == 1L,
-            if (selection$enabled) "documented_rule_not_solver_equivalent" else
-                "source_disabled_range",
+            if (selection$enabled) {
+                "documented_rule_not_solver_equivalent"
+            } else {
+                "source_disabled_range"
+            },
             "source_schedule"
         )
     )
@@ -101,15 +127,24 @@ ventilation__convert <- function(dest, ep) {
     # use a unit ACH design level so the referenced DeST schedule DATA values
     # pass through as the actual hourly ACH sequence.
     data.table::set(relation, NULL, "AIR_CHANGES_PER_HOUR", 1)
-    data.table::set(relation, NULL, "ENERGYPLUS_NAME", ventilation__names(relation))
+    data.table::set(
+        relation,
+        NULL,
+        "ENERGYPLUS_NAME",
+        ventilation__names(relation)
+    )
 
     supplement_candidates <- paste(
-        relation$ENERGYPLUS_NAME, "Documented Range Supplement"
+        relation$ENERGYPLUS_NAME,
+        "Documented Range Supplement"
     )
     data.table::set(
-        relation, NULL, "RANGE_ENERGYPLUS_NAME",
+        relation,
+        NULL,
+        "RANGE_ENERGYPLUS_NAME",
         ventilation__reserve_names(
-            supplement_candidates, relation$ENERGYPLUS_NAME
+            supplement_candidates,
+            relation$ENERGYPLUS_NAME
         )
     )
 
@@ -119,7 +154,8 @@ ventilation__convert <- function(dest, ep) {
             sum(!relation$CAN_CONVERT)
         ))
     }
-    unresolved_range <- relation$CAN_CONVERT & relation$VENT_TYPE == 1L &
+    unresolved_range <- relation$CAN_CONVERT &
+        relation$VENT_TYPE == 1L &
         !relation$RANGE_CONTROL_CONVERTED
     if (any(unresolved_range)) {
         abort(sprintf(
@@ -130,7 +166,9 @@ ventilation__convert <- function(dest, ep) {
             fmt_integer_sample(relation$ID[unresolved_range])
         ))
     }
-    range_converted <- selection$enabled & relation$CAN_CONVERT & relation$VENT_TYPE == 1L &
+    range_converted <- selection$enabled &
+        relation$CAN_CONVERT &
+        relation$VENT_TYPE == 1L &
         relation$RANGE_CONTROL_CONVERTED
     if (any(range_converted)) {
         warn(sprintf(
@@ -140,23 +178,30 @@ ventilation__convert <- function(dest, ep) {
                 "the declared minimum/maximum ACH schedules but does not claim ",
                 "equivalence to DeST's undocumented solver-state coupling.",
                 if (selection$source == "legacy_missing_option") {
-                    paste0(" No saved VARIANT_VENT switch was found; ",
-                        "the legacy enabled setting is assumed.")
-                } else ""
+                    paste0(
+                        " No saved VARIANT_VENT switch was found; ",
+                        "the legacy enabled setting is assumed."
+                    )
+                } else {
+                    ""
+                }
             ),
             sum(range_converted)
         ))
     }
 
     ventilation <- relation[relation$CAN_CONVERT]
-    if (nrow(ventilation) == 0L) return(NULL)
+    if (nrow(ventilation) == 0L) {
+        return(NULL)
+    }
     zone_field_name <- ventilation__zone_field_name(ep)
 
     base_values <- lapply(seq_len(nrow(ventilation)), function(i) {
         ventilation__value(ventilation, i, zone_field_name)
     })
     supplement <- ventilation[
-        selection$enabled & ventilation$VENT_TYPE == 1L &
+        selection$enabled &
+            ventilation$VENT_TYPE == 1L &
             ventilation$INCREMENT_AIR_CHANGES_PER_HOUR > 0
     ]
     supplement_values <- lapply(seq_len(nrow(supplement)), function(i) {
@@ -165,10 +210,16 @@ ventilation__convert <- function(dest, ep) {
     out <- conv__combine_outputs(
         list(
             base = conv__add_objects(
-                dest, ep, "ZoneVentilation:DesignFlowRate", base_values
+                dest,
+                ep,
+                "ZoneVentilation:DesignFlowRate",
+                base_values
             ),
             range = conv__add_objects(
-                dest, ep, "ZoneVentilation:DesignFlowRate", supplement_values
+                dest,
+                ep,
+                "ZoneVentilation:DesignFlowRate",
+                supplement_values
             )
         ),
         table = relation
@@ -183,13 +234,20 @@ ventilation__convert <- function(dest, ep) {
 # the enabled state was assumed rather than read from the source.
 ventilation__variant_selection <- function(dest) {
     fallback <- list(enabled = TRUE, source = "legacy_missing_option")
-    if (!"OPTION" %in% DBI::dbListTables(dest) ||
-        !db_has_fields(dest, "OPTION", c("KEYWORD", "OPTION_STRING"))) {
+    if (
+        !"OPTION" %in% DBI::dbListTables(dest) ||
+            !db_has_fields(dest, "OPTION", c("KEYWORD", "OPTION_STRING"))
+    ) {
         return(fallback)
     }
-    values <- DBI::dbGetQuery(dest, "SELECT OPTION_STRING FROM OPTION
-        WHERE KEYWORD = 'VARIANT_VENT'")$OPTION_STRING
-    if (!length(values)) return(fallback)
+    values <- DBI::dbGetQuery(
+        dest,
+        "SELECT OPTION_STRING FROM OPTION
+        WHERE KEYWORD = 'VARIANT_VENT'"
+    )$OPTION_STRING
+    if (!length(values)) {
+        return(fallback)
+    }
     if (length(values) != 1L || is.na(values) || !values %in% c("0", "1")) {
         abort("Invalid or ambiguous VARIANT_VENT option.")
     }
@@ -227,14 +285,18 @@ ventilation__schedule_values <- function(blob, schedule_id, role) {
     if (length(value) != 8760L) {
         abort(sprintf(
             "%s schedule %s contains %i values; expected 8760.",
-            role, schedule_id, length(value)
+            role,
+            schedule_id,
+            length(value)
         ))
     }
     invalid <- which(!is.finite(value))
     if (length(invalid) > 0L) {
         abort(sprintf(
             "%s schedule %s is non-finite at DeST hour index %i.",
-            role, schedule_id, invalid[[1L]] - 1L
+            role,
+            schedule_id,
+            invalid[[1L]] - 1L
         ))
     }
     value
@@ -250,14 +312,22 @@ ventilation__range_controls <- function(dest) {
         return(data.table::data.table())
     }
     required_tables <- c(
-        "ROOM_RELATION", "ROOM", "OUTSIDE", "ROOM_TYPE_DATA", "SCHEDULE_YEAR"
+        "ROOM_RELATION",
+        "ROOM",
+        "OUTSIDE",
+        "ROOM_TYPE_DATA",
+        "SCHEDULE_YEAR"
     )
-    if (!all(required_tables %in% DBI::dbListTables(dest)) ||
-        !db_has_rows(dest, "ROOM_RELATION")) {
+    if (
+        !all(required_tables %in% DBI::dbListTables(dest)) ||
+            !db_has_rows(dest, "ROOM_RELATION")
+    ) {
         return(data.table::data.table())
     }
 
-    control <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+    control <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        "
         SELECT
             RR.ID AS RELATION_ID,
             RR.NAME AS RELATION_NAME,
@@ -293,12 +363,18 @@ ventilation__range_controls <- function(dest) {
         ON T.SET_T_MAX_SCHEDULE = TMAX.SCHEDULE_ID
         WHERE RR.VENT_TYPE = 1
         ORDER BY RR.ID
-    "))
-    if (nrow(control) == 0L) return(control)
+    "
+    ))
+    if (nrow(control) == 0L) {
+        return(control)
+    }
 
     required <- c(
-        "MIN_SCHEDULE_NAME", "MAX_SCHEDULE_NAME", "ROOM_TYPE_DATA_ID",
-        "HEATING_SCHEDULE_NAME", "COOLING_SCHEDULE_NAME"
+        "MIN_SCHEDULE_NAME",
+        "MAX_SCHEDULE_NAME",
+        "ROOM_TYPE_DATA_ID",
+        "HEATING_SCHEDULE_NAME",
+        "COOLING_SCHEDULE_NAME"
     )
     unresolved <- apply(is.na(control[, ..required]), 1L, any)
     if (any(unresolved)) {
@@ -313,21 +389,31 @@ ventilation__range_controls <- function(dest) {
     }
 
     pair_columns <- c(
-        "MIN_SCHEDULE_ID", "MIN_SCHEDULE_NAME", "MIN_SCHEDULE_DATA",
-        "MAX_SCHEDULE_ID", "MAX_SCHEDULE_NAME", "MAX_SCHEDULE_DATA"
+        "MIN_SCHEDULE_ID",
+        "MIN_SCHEDULE_NAME",
+        "MIN_SCHEDULE_DATA",
+        "MAX_SCHEDULE_ID",
+        "MAX_SCHEDULE_NAME",
+        "MAX_SCHEDULE_DATA"
     )
-    pairs <- unique(control[, ..pair_columns], by = c(
-        "MIN_SCHEDULE_ID", "MAX_SCHEDULE_ID"
-    ))
+    pairs <- unique(
+        control[, ..pair_columns],
+        by = c(
+            "MIN_SCHEDULE_ID",
+            "MAX_SCHEDULE_ID"
+        )
+    )
     increment_fraction <- vector("list", nrow(pairs))
     increment_ach <- numeric(nrow(pairs))
     for (i in seq_len(nrow(pairs))) {
         minimum <- ventilation__schedule_values(
-            pairs$MIN_SCHEDULE_DATA[[i]], pairs$MIN_SCHEDULE_ID[[i]],
+            pairs$MIN_SCHEDULE_DATA[[i]],
+            pairs$MIN_SCHEDULE_ID[[i]],
             "Minimum ventilation"
         )
         maximum <- ventilation__schedule_values(
-            pairs$MAX_SCHEDULE_DATA[[i]], pairs$MAX_SCHEDULE_ID[[i]],
+            pairs$MAX_SCHEDULE_DATA[[i]],
+            pairs$MAX_SCHEDULE_ID[[i]],
             "Maximum ventilation"
         )
         negative <- which(minimum < 0 | maximum < 0)
@@ -337,7 +423,8 @@ ventilation__range_controls <- function(dest) {
                     "Ventilation schedules %s/%s contain a negative ACH at ",
                     "DeST hour index %i."
                 ),
-                pairs$MIN_SCHEDULE_ID[[i]], pairs$MAX_SCHEDULE_ID[[i]],
+                pairs$MIN_SCHEDULE_ID[[i]],
+                pairs$MAX_SCHEDULE_ID[[i]],
                 negative[[1L]] - 1L
             ))
         }
@@ -348,7 +435,8 @@ ventilation__range_controls <- function(dest) {
                     "Maximum ventilation schedule %s is below minimum ",
                     "schedule %s at DeST hour index %i."
                 ),
-                pairs$MAX_SCHEDULE_ID[[i]], pairs$MIN_SCHEDULE_ID[[i]],
+                pairs$MAX_SCHEDULE_ID[[i]],
+                pairs$MIN_SCHEDULE_ID[[i]],
                 inverted[[1L]] - 1L
             ))
         }
@@ -359,18 +447,25 @@ ventilation__range_controls <- function(dest) {
     }
 
     existing_names <- DBI::dbGetQuery(
-        dest, "SELECT NAME FROM SCHEDULE_YEAR"
+        dest,
+        "SELECT NAME FROM SCHEDULE_YEAR"
     )$NAME
     candidates <- sprintf(
         "DeST Derived Ventilation Range %s Minus %s",
-        pairs$MAX_SCHEDULE_ID, pairs$MIN_SCHEDULE_ID
+        pairs$MAX_SCHEDULE_ID,
+        pairs$MIN_SCHEDULE_ID
     )
     data.table::set(
-        pairs, NULL, "INCREMENT_SCHEDULE_NAME",
+        pairs,
+        NULL,
+        "INCREMENT_SCHEDULE_NAME",
         ventilation__reserve_names(candidates, existing_names)
     )
     data.table::set(
-        pairs, NULL, "INCREMENT_AIR_CHANGES_PER_HOUR", increment_ach
+        pairs,
+        NULL,
+        "INCREMENT_AIR_CHANGES_PER_HOUR",
+        increment_ach
     )
     data.table::set(pairs, NULL, "INCREMENT_FRACTION", increment_fraction)
 
@@ -378,7 +473,8 @@ ventilation__range_controls <- function(dest) {
     control_key <- paste(control$MIN_SCHEDULE_ID, control$MAX_SCHEDULE_ID)
     pair_index <- match(control_key, pair_key)
     for (field in c(
-        "INCREMENT_SCHEDULE_NAME", "INCREMENT_AIR_CHANGES_PER_HOUR",
+        "INCREMENT_SCHEDULE_NAME",
+        "INCREMENT_AIR_CHANGES_PER_HOUR",
         "INCREMENT_FRACTION"
     )) {
         data.table::set(control, NULL, field, pairs[[field]][pair_index])
@@ -389,11 +485,13 @@ ventilation__range_controls <- function(dest) {
     for (i in seq_len(nrow(control))) {
         heating <- ventilation__schedule_values(
             control$HEATING_SCHEDULE_DATA[[i]],
-            control$HEATING_SCHEDULE_ID[[i]], "Heating setpoint"
+            control$HEATING_SCHEDULE_ID[[i]],
+            "Heating setpoint"
         )
         cooling <- ventilation__schedule_values(
             control$COOLING_SCHEDULE_DATA[[i]],
-            control$COOLING_SCHEDULE_ID[[i]], "Cooling setpoint"
+            control$COOLING_SCHEDULE_ID[[i]],
+            "Cooling setpoint"
         )
         inverted <- which(heating > cooling)
         if (length(inverted) > 0L) {
@@ -404,13 +502,16 @@ ventilation__range_controls <- function(dest) {
                 ),
                 control$HEATING_SCHEDULE_ID[[i]],
                 control$COOLING_SCHEDULE_ID[[i]],
-                inverted[[1L]] - 1L, control$RELATION_ID[[i]]
+                inverted[[1L]] - 1L,
+                control$RELATION_ID[[i]]
             ))
         }
     }
 
     raw_fields <- grep("_SCHEDULE_DATA$", names(control), value = TRUE)
-    for (field in raw_fields) data.table::set(control, NULL, field, NULL)
+    for (field in raw_fields) {
+        data.table::set(control, NULL, field, NULL)
+    }
     control
 }
 
@@ -418,16 +519,25 @@ ventilation__range_controls <- function(dest) {
 # pipeline so the returned IDF remains self-contained and needs no sidecar CSV.
 ventilation__range_schedule_rows <- function(dest) {
     control <- ventilation__range_controls(dest)
-    if (nrow(control) == 0L) return(data.table::data.table())
+    if (nrow(control) == 0L) {
+        return(data.table::data.table())
+    }
 
     keep <- control$INCREMENT_AIR_CHANGES_PER_HOUR > 0
-    pairs <- unique(control[keep], by = c(
-        "MIN_SCHEDULE_ID", "MAX_SCHEDULE_ID"
-    ))
-    if (nrow(pairs) == 0L) return(data.table::data.table())
+    pairs <- unique(
+        control[keep],
+        by = c(
+            "MIN_SCHEDULE_ID",
+            "MAX_SCHEDULE_ID"
+        )
+    )
+    if (nrow(pairs) == 0L) {
+        return(data.table::data.table())
+    }
 
     source_ids <- DBI::dbGetQuery(
-        dest, "SELECT SCHEDULE_ID FROM SCHEDULE_YEAR"
+        dest,
+        "SELECT SCHEDULE_ID FROM SCHEDULE_YEAR"
     )$SCHEDULE_ID
     first_id <- min(c(0, source_ids), na.rm = TRUE) - nrow(pairs)
     out <- data.table::data.table(
@@ -444,8 +554,14 @@ ventilation__range_schedule_rows <- function(dest) {
 ventilation__names <- function(relation) {
     raw_name <- relation$NAME
     use_room_name <- is.na(raw_name) | raw_name == "." | !nzchar(raw_name)
-    raw_name[use_room_name] <- paste(relation$ROOM_NAME[use_room_name], "Outdoor Ventilation")
-    raw_name[is.na(raw_name)] <- paste("ROOM_RELATION", relation$ID[is.na(raw_name)])
+    raw_name[use_room_name] <- paste(
+        relation$ROOM_NAME[use_room_name],
+        "Outdoor Ventilation"
+    )
+    raw_name[is.na(raw_name)] <- paste(
+        "ROOM_RELATION",
+        relation$ID[is.na(raw_name)]
+    )
 
     make_unique_name(raw_name)
 }
@@ -471,8 +587,7 @@ ventilation__range_value <- function(ventilation, i, zone_field_name) {
         name = ventilation$RANGE_ENERGYPLUS_NAME[[i]],
         schedule_name = ventilation$INCREMENT_SCHEDULE_NAME[[i]],
         design_flow_rate_calculation_method = "AirChanges/Hour",
-        air_changes_per_hour =
-            ventilation$INCREMENT_AIR_CHANGES_PER_HOUR[[i]],
+        air_changes_per_hour = ventilation$INCREMENT_AIR_CHANGES_PER_HOUR[[i]],
         ventilation_type = "Natural",
         fan_pressure_rise = 0,
         fan_total_efficiency = 1,
@@ -483,10 +598,12 @@ ventilation__range_value <- function(ventilation, i, zone_field_name) {
         minimum_indoor_temperature = -100,
         maximum_indoor_temperature = 100,
         delta_temperature = -100,
-        minimum_outdoor_temperature_schedule_name =
-            ventilation$HEATING_SCHEDULE_NAME[[i]],
-        maximum_outdoor_temperature_schedule_name =
-            ventilation$COOLING_SCHEDULE_NAME[[i]],
+        minimum_outdoor_temperature_schedule_name = ventilation$HEATING_SCHEDULE_NAME[[
+            i
+        ]],
+        maximum_outdoor_temperature_schedule_name = ventilation$COOLING_SCHEDULE_NAME[[
+            i
+        ]],
         maximum_wind_speed = 40
     )
     value[[zone_field_name]] <- ventilation$ROOM_NAME[[i]]
