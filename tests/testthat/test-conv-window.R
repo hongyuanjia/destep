@@ -118,6 +118,12 @@ test_that("can convert 'WINDOW'", {
     )
 
     expect_type(window <- window__convert(dest, ep), "list")
+    # Native convection removes only film overrides, preserving the window
+    # geometry and the source data used by optical and construction conversion.
+    automatic <- window__convert(dest, ep, surface_convection = "energyplus")
+    expect_false("SurfaceProperty:ConvectionCoefficients" %in% automatic$object$class_name)
+    expect_equal(attr(automatic, "table"), attr(window, "table"))
+    expect_equal(automatic$value, window$value[class_name == "FenestrationSurface:Detailed"])
     expect_named(window, c("object", "value"))
     expect_setequal(
         unique(window$object$class_name),

@@ -730,10 +730,12 @@ subsurface__convert <- function(
     ep,
     surface_type,
     surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
+    geometry_profile = eplus_geom__profile(ep$version()),
+    surface_convection = "dest"
 ) {
     checkmate::assert_data_table(source, min.rows = 1L)
     checkmate::assert_choice(surface_type, c("Window", "Door"))
+    surface_convection <- match.arg(surface_convection, c("dest", "energyplus"))
 
     # One middle-plane polygon becomes one room-facing copy for an exterior
     # opening and two reciprocal copies for an interzone opening.
@@ -786,12 +788,12 @@ subsurface__convert <- function(
         "FenestrationSurface:Detailed",
         value
     )
-    convection <- conv__add_objects(
-        dest,
-        ep,
-        "SurfaceProperty:ConvectionCoefficients",
-        subsurface_property__convection_values(subsurface)
-    )
+    # Use the same explicit film policy for windows and opaque doors as for
+    # their hosts; do not remove unrelated furniture exchange definitions.
+    convection <- if (surface_convection == "dest") {
+        conv__add_objects(dest, ep, "SurfaceProperty:ConvectionCoefficients",
+            subsurface_property__convection_values(subsurface))
+    }
     out <- conv__combine_outputs(
         list(opening = opening, convection = convection),
         table = subsurface
@@ -866,7 +868,8 @@ window__convert <- function(
     ep,
     surface = NULL,
     geometry_profile = eplus_geom__profile(ep$version()),
-    source_distribution = "energyplus"
+    source_distribution = "energyplus",
+    surface_convection = "dest"
 ) {
     if (!db_has_rows(dest, "WINDOW")) {
         return(NULL)
@@ -882,7 +885,8 @@ window__convert <- function(
         ep,
         "Window",
         surface,
-        geometry_profile
+        geometry_profile,
+        surface_convection
     )
 }
 
@@ -934,7 +938,8 @@ door__convert <- function(
     dest,
     ep,
     surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
+    geometry_profile = eplus_geom__profile(ep$version()),
+    surface_convection = "dest"
 ) {
     if (!db_has_rows(dest, "DOOR")) {
         return(NULL)
@@ -947,7 +952,8 @@ door__convert <- function(
         ep,
         "Door",
         surface,
-        geometry_profile
+        geometry_profile,
+        surface_convection
     )
 }
 # Resolve window exterior sky fields independently of the host wall's fields.

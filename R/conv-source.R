@@ -368,7 +368,8 @@ source__check_existing <- function(objects, faces, sources) {
 }
 
 # Reject unavailable public combinations before an expensive optical prepass.
-source__options <- function(options, ep, hvac, window_optics, has_windows) {
+source__options <- function(options, ep, hvac, window_optics, has_windows,
+    source_distribution = "dest") {
     if (is.null(options)) options <- list()
     checkmate::assert_list(options, names = "unique")
     if (any(!names(options) %in% c("weather", "directory", "partition_boundary",
@@ -382,16 +383,24 @@ source__options <- function(options, ep, hvac, window_optics, has_windows) {
     checkmate::assert_choice(options$partition_boundary, c("energyplus", "dest_air"))
     if (is.null(options$exterior_boundary)) options$exterior_boundary <- "energyplus"
     checkmate::assert_choice(options$exterior_boundary, c("energyplus", "dest_sky"))
+    # Sky and source allocation can now be selected independently. Preserve
+    # the actual optical and weather dependencies of either active operation.
+    if (source_distribution != "dest" && options$partition_boundary != "energyplus") {
+        stop("partition_boundary requires source_distribution = 'dest'.", call. = FALSE)
+    }
     if (!is.null(options$sky_radiation)) {
         checkmate::assert_flag(options$sky_radiation)
         if (options$exterior_boundary != "dest_sky") {
             stop("sky_radiation requires exterior_boundary = 'dest_sky'.", call. = FALSE)
         }
     }
-    if (has_windows) {
+    sky <- options$exterior_boundary == "dest_sky"
+    if (has_windows && (source_distribution == "dest" || sky)) {
         if (window_optics != "dest_solar") {
             stop("DeST source distribution with windows requires window_optics = 'dest_solar'.", call. = FALSE)
         }
+    }
+    if ((has_windows && source_distribution == "dest") || sky) {
         checkmate::assert_file_exists(options$weather, .var.name = "source_options$weather")
         checkmate::assert_string(options$directory, min.chars = 1L,
             .var.name = "source_options$directory")

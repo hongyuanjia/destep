@@ -14,7 +14,11 @@ to_eplus(
   people_heat = c("constant", "temperature_dependent"),
   window_optics = c("simple_glazing", "dest_solar"),
   source_distribution = c("energyplus", "dest"),
-  source_options = NULL
+  source_options = NULL,
+  mode = c("objects", "dest"),
+  surface_convection = c("dest", "energyplus"),
+  exterior_boundary = NULL,
+  simulation_options = NULL
 )
 }
 \arguments{
@@ -121,10 +125,12 @@ currently requires EnergyPlus 26.1 and \code{hvac = "ideal_loads"}.
 With windows it also requires \code{window_optics = "dest_solar"} and runs
 a weather-specific solar prepass. Unsupported moisture combinations,
 doors, daylighting and dynamic shading fail explicitly. Exterior
-radiation retains EnergyPlus defaults unless selected separately in
-\code{source_options}; native time-integration algorithms are not reproduced.}
+radiation is selected independently through \code{exterior_boundary} or the
+preset; native time-integration algorithms are not reproduced.}
 
-\item{source_options}{[list or NULL] Options for \code{source_distribution = "dest"}. Models with windows require \code{weather}, an existing EPW path,
+\item{source_options}{[list or NULL] Options for DeST source distribution
+or sky-boundary conversion. Source-distribution models with windows
+require \code{weather}, an existing EPW path,
 and \code{directory}, a persistent directory for generated time tables and
 prepass records. Cache reuse checks the converted model, weather,
 external files, engine and generated data. \code{partition_boundary}
@@ -136,7 +142,8 @@ Generated solar time tables use a full non-leap year at five-minute
 resolution. Reconvert after changing weather, geometry, optics,
 schedules or timestep; running or editing the returned \code{Idf} does not
 refresh them. Keep the directory or copy external files when saving.
-\code{exterior_boundary} defaults to \code{"energyplus"}; \code{"dest_sky"} selects
+The legacy nested \code{exterior_boundary} option overrides the preset,
+using \code{"energyplus"} or \code{"dest_sky"}. The latter selects
 the linear sky-only boundary verified with DeST 0.2.230705 for vertical
 walls/windows and horizontal roofs/exposed floors. Single-layer
 constructions and existing local environments are unsupported.
@@ -153,12 +160,75 @@ The target's default longwave exchange is suppressed with an outdoor
 emissivity of \code{1e-8}, leaving a small numerical residual. The returned
 \code{exterior_boundary} attribute records source coefficients, switch
 overrides and generated time tables. Reconvert when inputs change.}
+
+\item{mode}{[string] Conversion preset. \code{"objects"} (default) uses
+constant people heat, simple glazing and EnergyPlus source allocation
+and exterior radiation. Source inputs are still retained through
+ordinary objects or necessary EMS, including nonzero equipment
+moisture; this is not an EMS-free mode. \code{"dest"} selects
+\code{people_heat = "temperature_dependent"}, \code{window_optics = "dest_solar"},
+\code{source_distribution = "dest"}, and \code{exterior_boundary = "dest_sky"}.
+Explicit per-feature arguments override either preset. Each selected
+feature's version, weather and model restrictions still apply;
+unsupported combinations fail instead of silently disabling features.
+Both presets retain source geometry, schedules, powers and supported
+physical inputs. Neither promises full DeST solver equivalence.}
+
+\item{surface_convection}{[string] \code{"dest"} (default in both presets)
+retains fixed source coefficients on walls, floors, roofs, windows and
+doors using ordinary EnergyPlus surface-property objects. \code{"energyplus"}
+omits these overrides so EnergyPlus selects its own coefficients.
+Furniture's internal-mass exchange definition is retained separately.
+DeST sky and neighbor-air boundaries require \code{"dest"}.}
+
+\item{exterior_boundary}{[string or NULL] Independent exterior-boundary
+selection: \code{"energyplus"} or \code{"dest_sky"}. \code{NULL} uses the preset,
+unless the legacy \code{source_options$exterior_boundary} is supplied.
+Conflicting explicit selections are rejected. Sky conversion can be
+enabled without DeST source distribution; it currently requires
+EnergyPlus 26.1, ideal loads, source convection, weather and a persistent
+directory, and \code{window_optics = "dest_solar"} when windows are present.
+The saved sky-radiation switch is respected unless explicitly overridden.}
+
+\item{simulation_options}{[list or NULL] Independent EnergyPlus generation
+settings, available with either conversion preset. Omitted settings
+retain the existing converter/IDD defaults; no values are inferred from
+a reference model. Supported named entries are \code{terrain} (\code{"Country"},
+\code{"Suburbs"}, \code{"City"}, \code{"Ocean"}, or \code{"Urban"}), \code{solar_distribution}
+(\code{"MinimalShadowing"}, \code{"FullExterior"}, \code{"FullInteriorAndExterior"},
+\code{"FullExteriorWithReflections"}, or \code{"FullInteriorAndExteriorWithReflections"}),
+and \code{shadow_update_days} (a positive integer, selecting periodic shading
+updates; EnergyPlus warns for values above 31). These settings are
+applied before weather and solar prepasses and participate in their
+cache identities. The selected solar method must suit the geometry;
+for example, interior beam distribution has enclosure/convexity
+requirements in EnergyPlus. This sets the target's solar calculation
+method; \code{source_distribution} separately controls DeST heat allocation.
+Effective values and explicit choices are recorded under
+\code{attr(model, "conversion")$simulation} and in the saved IDF comments.
+For supported opaque shading panels, \code{SHADING.ROU} is retained as
+diffuse solar reflectance in \code{ShadingProperty:Reflectance} objects.
+A \code{WithReflections} solar method activates exterior reflections.
+No visible reflectance or specular component is inferred from \code{ROU};
+this mapping does not reproduce DeST's reflection algorithm.}
 }
 \value{
 [eplusr::Idf] The converted EnergyPlus model. The opt-in source
 mode attaches a \code{source_distribution} attribute containing its input
-and cache audit. It does not establish whole-building equivalence.
+and cache audit. The \code{conversion} attribute records the preset, effective
+feature options and generated EMS program purposes. The selections are
+also saved in the Version object's comments. It does not establish
+whole-building equivalence.
 }
 \description{
 Convert a DeST model to EnergyPlus model
+}
+\details{
+Outdoor ventilation retains the source minimum ACH time table.
+A saved \code{OPTION.VARIANT_VENT = 0} disables the range supplement.
+When the saved switch is absent, conversion retains its legacy
+documented outdoor-temperature-band rule and warns about the assumed
+enabled setting. The \code{ventilation} attribute records this selection.
+The rule preserves range inputs
+but does not reproduce DeST's internal ventilation control algorithm.
 }

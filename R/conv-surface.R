@@ -409,8 +409,10 @@ surface_property__convection_values <- function(surface) {
 
 # SURFACE|MAIN_ENCLOSURE|PLANE -> BuildingSurface:Detailed
 surface__convert <- function(
-    dest, ep, geometry_profile = eplus_geom__profile(ep$version())
+    dest, ep, geometry_profile = eplus_geom__profile(ep$version()),
+    surface_convection = "dest"
 ) {
+    surface_convection <- match.arg(surface_convection, c("dest", "energyplus"))
     surface <- surface__source_table(dest, geometry_profile)
     window <- surface__window_table(dest)
 
@@ -442,10 +444,12 @@ surface__convert <- function(
     building_surface <- conv__add_objects(
         dest, ep, "BuildingSurface:Detailed", value
     )
-    convection <- conv__add_objects(
-        dest, ep, "SurfaceProperty:ConvectionCoefficients",
-        surface_property__convection_values(surface)
-    )
+    # Omitting these overrides selects EnergyPlus's own surface algorithms;
+    # source geometry and construction properties remain the same.
+    convection <- if (surface_convection == "dest") {
+        conv__add_objects(dest, ep, "SurfaceProperty:ConvectionCoefficients",
+            surface_property__convection_values(surface))
+    }
     out <- conv__combine_outputs(
         list(surface = building_surface, convection = convection),
         table = surface

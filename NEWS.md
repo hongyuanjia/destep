@@ -1,5 +1,23 @@
 # destep 0.0.0.9000
 
+- Preserved opaque shading-panel reflectance in ordinary EnergyPlus shading
+  property objects, including overhang and side-fin pieces. Reflection remains
+  controlled by the selected solar-distribution method.
+
+- Added independent `simulation_options` for terrain, solar distribution and
+  periodic shadow updates. Explicit choices apply before weather/solar prepasses,
+  enter cache identities and remain visible in conversion metadata and IDF comments.
+
+- Added `mode = "objects"` and `mode = "dest"` conversion presets, with
+  explicit per-feature overrides and an audit of effective options and EMS
+  purposes. Basic conversion retains EMS required for source equipment moisture.
+  Surface convection can be selected independently, and DeST sky boundaries
+  no longer require DeST heat-source allocation.
+
+- Fixed ventilation conversion to honor a saved `VARIANT_VENT = 0` switch.
+  Minimum ventilation is retained and the range supplement is omitted. Missing
+  saved switches retain the legacy rule and are identified in conversion metadata.
+
 - Added single-pane aggregate windows to `window_optics = "dest_solar"`,
   preserving glass resistance, solar absorption location and face blackness,
   including use with DeST source distribution and sky-boundary options.

@@ -279,11 +279,12 @@ MAP_ID_NAME <- list(
 #'       With windows it also requires `window_optics = "dest_solar"` and runs
 #'       a weather-specific solar prepass. Unsupported moisture combinations,
 #'       doors, daylighting and dynamic shading fail explicitly. Exterior
-#'       radiation retains EnergyPlus defaults unless selected separately in
-#'       `source_options`; native time-integration algorithms are not reproduced.
+#'       radiation is selected independently through `exterior_boundary` or the
+#'       preset; native time-integration algorithms are not reproduced.
 #'
-#' @param source_options \[list or NULL\] Options for `source_distribution =
-#'       "dest"`. Models with windows require `weather`, an existing EPW path,
+#' @param source_options \[list or NULL\] Options for DeST source distribution
+#'       or sky-boundary conversion. Source-distribution models with windows
+#'       require `weather`, an existing EPW path,
 #'       and `directory`, a persistent directory for generated time tables and
 #'       prepass records. Cache reuse checks the converted model, weather,
 #'       external files, engine and generated data. `partition_boundary`
@@ -295,7 +296,8 @@ MAP_ID_NAME <- list(
 #'       resolution. Reconvert after changing weather, geometry, optics,
 #'       schedules or timestep; running or editing the returned `Idf` does not
 #'       refresh them. Keep the directory or copy external files when saving.
-#'       `exterior_boundary` defaults to `"energyplus"`; `"dest_sky"` selects
+#'       The legacy nested `exterior_boundary` option overrides the preset,
+#'       using `"energyplus"` or `"dest_sky"`. The latter selects
 #'       the linear sky-only boundary verified with DeST 0.2.230705 for vertical
 #'       walls/windows and horizontal roofs/exposed floors. Single-layer
 #'       constructions and existing local environments are unsupported.
@@ -313,9 +315,71 @@ MAP_ID_NAME <- list(
 #'       `exterior_boundary` attribute records source coefficients, switch
 #'       overrides and generated time tables. Reconvert when inputs change.
 #'
+#' @param mode \[string\] Conversion preset. `"objects"` (default) uses
+#'       constant people heat, simple glazing and EnergyPlus source allocation
+#'       and exterior radiation. Source inputs are still retained through
+#'       ordinary objects or necessary EMS, including nonzero equipment
+#'       moisture; this is not an EMS-free mode. `"dest"` selects
+#'       `people_heat = "temperature_dependent"`, `window_optics = "dest_solar"`,
+#'       `source_distribution = "dest"`, and `exterior_boundary = "dest_sky"`.
+#'       Explicit per-feature arguments override either preset. Each selected
+#'       feature's version, weather and model restrictions still apply;
+#'       unsupported combinations fail instead of silently disabling features.
+#'       Both presets retain source geometry, schedules, powers and supported
+#'       physical inputs. Neither promises full DeST solver equivalence.
+#'
+#' @param surface_convection \[string\] `"dest"` (default in both presets)
+#'       retains fixed source coefficients on walls, floors, roofs, windows and
+#'       doors using ordinary EnergyPlus surface-property objects. `"energyplus"`
+#'       omits these overrides so EnergyPlus selects its own coefficients.
+#'       Furniture's internal-mass exchange definition is retained separately.
+#'       DeST sky and neighbor-air boundaries require `"dest"`.
+#'
+#' @param exterior_boundary \[string or NULL\] Independent exterior-boundary
+#'       selection: `"energyplus"` or `"dest_sky"`. `NULL` uses the preset,
+#'       unless the legacy `source_options$exterior_boundary` is supplied.
+#'       Conflicting explicit selections are rejected. Sky conversion can be
+#'       enabled without DeST source distribution; it currently requires
+#'       EnergyPlus 26.1, ideal loads, source convection, weather and a persistent
+#'       directory, and `window_optics = "dest_solar"` when windows are present.
+#'       The saved sky-radiation switch is respected unless explicitly overridden.
+#'
+#' @param simulation_options \[list or NULL\] Independent EnergyPlus generation
+#'       settings, available with either conversion preset. Omitted settings
+#'       retain the existing converter/IDD defaults; no values are inferred from
+#'       a reference model. Supported named entries are `terrain` (`"Country"`,
+#'       `"Suburbs"`, `"City"`, `"Ocean"`, or `"Urban"`), `solar_distribution`
+#'       (`"MinimalShadowing"`, `"FullExterior"`, `"FullInteriorAndExterior"`,
+#'       `"FullExteriorWithReflections"`, or `"FullInteriorAndExteriorWithReflections"`),
+#'       and `shadow_update_days` (a positive integer, selecting periodic shading
+#'       updates; EnergyPlus warns for values above 31). These settings are
+#'       applied before weather and solar prepasses and participate in their
+#'       cache identities. The selected solar method must suit the geometry;
+#'       for example, interior beam distribution has enclosure/convexity
+#'       requirements in EnergyPlus. This sets the target's solar calculation
+#'       method; `source_distribution` separately controls DeST heat allocation.
+#'       Effective values and explicit choices are recorded under
+#'       `attr(model, "conversion")$simulation` and in the saved IDF comments.
+#'       For supported opaque shading panels, `SHADING.ROU` is retained as
+#'       diffuse solar reflectance in `ShadingProperty:Reflectance` objects.
+#'       A `WithReflections` solar method activates exterior reflections.
+#'       No visible reflectance or specular component is inferred from `ROU`;
+#'       this mapping does not reproduce DeST's reflection algorithm.
+#'
+#' @details Outdoor ventilation retains the source minimum ACH time table.
+#'       A saved `OPTION.VARIANT_VENT = 0` disables the range supplement.
+#'       When the saved switch is absent, conversion retains its legacy
+#'       documented outdoor-temperature-band rule and warns about the assumed
+#'       enabled setting. The `ventilation` attribute records this selection.
+#'       The rule preserves range inputs
+#'       but does not reproduce DeST's internal ventilation control algorithm.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model. The opt-in source
 #'       mode attaches a `source_distribution` attribute containing its input
-#'       and cache audit. It does not establish whole-building equivalence.
+#'       and cache audit. The `conversion` attribute records the preset, effective
+#'       feature options and generated EMS program purposes. The selections are
+#'       also saved in the Version object's comments. It does not establish
+#'       whole-building equivalence.
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
@@ -329,15 +393,27 @@ to_eplus <- function(
     people_heat = c("constant", "temperature_dependent"),
     window_optics = c("simple_glazing", "dest_solar"),
     source_distribution = c("energyplus", "dest"),
-    source_options = NULL
+    source_options = NULL,
+    mode = c("objects", "dest"),
+    surface_convection = c("dest", "energyplus"),
+    exterior_boundary = NULL,
+    simulation_options = NULL
 ) {
     hvac <- match.arg(hvac)
-    people_heat <- match.arg(people_heat)
-    window_optics <- match.arg(window_optics)
-    source_distribution <- match.arg(source_distribution)
-    if (source_distribution == "energyplus" && !is.null(source_options)) {
-        stop("'source_options' requires source_distribution = 'dest'.", call. = FALSE)
-    }
+    simulation_options <- simulation__options(simulation_options)
+    # Presets fill only omitted arguments; existing explicit option calls keep
+    # their original meaning, including the nested sky-boundary selection.
+    conversion <- conv__mode_options(match.arg(mode),
+        if (missing(people_heat)) NULL else people_heat,
+        if (missing(window_optics)) NULL else window_optics,
+        if (missing(source_distribution)) NULL else source_distribution,
+        match.arg(surface_convection), exterior_boundary, source_options)
+    people_heat <- conversion$people_heat
+    window_optics <- conversion$window_optics
+    source_distribution <- conversion$source_distribution
+    surface_convection <- conversion$surface_convection
+    exterior_boundary <- conversion$exterior_boundary
+    source_options <- conversion$source_options
     if (hvac == "physical") {
         checkmate::assert_list(
             hvac_options,
@@ -394,10 +470,11 @@ to_eplus <- function(
     } else {
         ep <- eplusr::empty_idf(ver)
     }
-    if (source_distribution == "dest") {
+    if (source_distribution == "dest" || exterior_boundary == "dest_sky") {
         source_options <- source__options(source_options, ep, hvac, window_optics,
-            db_has_rows(tmpdb, "WINDOW"))
+            db_has_rows(tmpdb, "WINDOW"), source_distribution)
     }
+    conversion$source_options <- source_options
 
     # add GlobalGeometryRules
     ep$add(
@@ -452,19 +529,21 @@ to_eplus <- function(
     # Surface part geometry must be available when an opening crosses a topology
     # split, because each clipped piece references exactly one host part.
     geometry_profile <- eplus_geom__profile(ep$version())
-    surface <- surface__convert(tmpdb, ep, geometry_profile)
+    surface <- surface__convert(tmpdb, ep, geometry_profile, surface_convection)
     window <- window__convert(
         tmpdb,
         ep,
         attr(surface, "table"),
         geometry_profile,
-        source_distribution = source_distribution
+        source_distribution = source_distribution,
+        surface_convection = surface_convection
     )
     door <- door__convert(
         tmpdb,
         ep,
         attr(surface, "table"),
-        geometry_profile
+        geometry_profile,
+        surface_convection = surface_convection
     )
     shading <- shading__convert(
         tmpdb,
@@ -537,6 +616,10 @@ to_eplus <- function(
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
+    # Target-engine settings must precede both weather and solar preparation.
+    # Applying them only to the final IDF would leave cached inputs inconsistent.
+    simulation__apply(ep, simulation_options)
+
     # Apply opt-in solar semantics after all geometry and constructions exist,
     # before legacy-version object-name normalization changes their references.
     if (window_optics == "dest_solar") {
@@ -546,7 +629,7 @@ to_eplus <- function(
     # Collect powers from their owning converters; only geometry is read back
     # from the completed IDF, so clipped receiving areas match the target.
     sky_audit <- NULL
-    if (source_distribution == "dest" && source_options$exterior_boundary == "dest_sky") {
+    if (exterior_boundary == "dest_sky") {
         sky <- sky__apply(tmpdb, ep, attr(surface, "table"), attr(window, "table"),
             source_options, verbose)
         ep <- sky$model
@@ -566,6 +649,18 @@ to_eplus <- function(
         conv__normalize_object_names(ep)
     }
 
+    # Keep the selected saved/fallback ventilation state visible after optional
+    # source and HVAC builders have replaced the intermediate Idf object.
+    if (!is.null(conv$ventilation)) {
+        attr(ep, "ventilation") <- attr(conv$ventilation, "table")
+    }
+    # Required source translation EMS is retained in both presets. Record the
+    # emitted programs instead of assuming that the basic mode has no EMS.
+    audit <- conv__mode_audit(ep, conversion)
+    audit$simulation <- simulation__audit(ep, simulation_options)
+    attr(ep, "conversion") <- audit
+    ep$Version$comment(c(un_list(ver$object$comment), conv__mode_comments(audit),
+        simulation__comments(audit$simulation)), append = NULL)
     ep
 }
 
