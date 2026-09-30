@@ -64,6 +64,14 @@ shading__source_table <- function(dest) {
 # invent them.
 shading__validate_parameters <- function(shading, tolerance = 1e-7) {
     if (nrow(shading) == 0L) return(invisible(shading))
+    # The opaque-panel reflectance is a bounded fraction. Reject invalid source
+    # values instead of silently replacing them with EnergyPlus's default.
+    invalid_reflectance <- !is.finite(shading$ROU) | shading$ROU < 0 | shading$ROU > 1
+    if (any(invalid_reflectance)) {
+        stop(sprintf("Invalid DeST shading reflectance ROU for window(s): %s. Expected a finite value from 0 to 1.",
+            paste(shading$WINDOW_NAME[invalid_reflectance], collapse = ", ")),
+            call. = FALSE)
+    }
     unsupported_angle <- apply(
         abs(as.matrix(shading[, .(DEG, DEGL, DEGR)])) > tolerance,
         1L,
@@ -200,6 +208,19 @@ shading__window_objects <- function(window, parameter, profile) {
     list(objects = objects, provenance = provenance)
 }
 
+# Preserve the scalar reflectance of validated opaque panels as diffuse solar
+# reflectance. No glazed/specular fraction or visible reflectance is inferred;
+# reflection calculations are still selected by the Building solar method.
+shading__reflectance_objects <- function(dest, ep, provenance, shading) {
+    reflectance <- shading$ROU[match(provenance$WINDOW_ID, shading$WINDOW_ID)]
+    values <- lapply(seq_len(nrow(provenance)), function(i) {
+        list(shading_surface_name = provenance$SHADING_NAME[[i]],
+            diffuse_solar_reflectance_of_unglazed_part_of_shading_surface = reflectance[[i]],
+            fraction_of_shading_surface_that_is_glazed = 0.0)
+    })
+    conv__add_objects(dest, ep, "ShadingProperty:Reflectance", values)
+}
+
 # Convert the validated active WINDOW -> SHADING -> LIB_SHADING chain into
 # opaque zone-attached EnergyPlus polygons after final window clipping.
 shading__convert <- function(
@@ -248,7 +269,12 @@ shading__convert <- function(
         fill = TRUE
     )
     assert_unique_name(provenance$SHADING_NAME, "window shading")
-    out <- conv__add_objects(dest, ep, "Shading:Zone:Detailed", values)
-    attr(out, "table") <- provenance
-    out
+    # Emit the property on every generated piece, including both side fins.
+    # It remains an ordinary input object in either conversion preset.
+    data.table::set(provenance, NULL, "SOLAR_REFLECTANCE",
+        shading$ROU[match(provenance$WINDOW_ID, shading$WINDOW_ID)])
+    conv__combine_outputs(list(
+        geometry = conv__add_objects(dest, ep, "Shading:Zone:Detailed", values),
+        reflectance = shading__reflectance_objects(dest, ep, provenance, shading)
+    ), table = provenance)
 }

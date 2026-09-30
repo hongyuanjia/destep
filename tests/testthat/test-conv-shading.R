@@ -60,7 +60,7 @@ test_that("converts validated DeST overhang and side-fin geometry", {
     expect_named(converted, c("object", "value"))
     expect_equal(
         converted$object$class_name,
-        rep("Shading:Zone:Detailed", 3L)
+        rep(c("Shading:Zone:Detailed", "ShadingProperty:Reflectance"), each = 3L)
     )
     expect_setequal(
         attr(converted, "table")$KIND,
@@ -100,7 +100,7 @@ test_that("supports EnergyPlus 9.0.1 shading fields", {
 
     expect_equal(
         converted$object$class_name,
-        rep("Shading:Zone:Detailed", 3L)
+        rep(c("Shading:Zone:Detailed", "ShadingProperty:Reflectance"), each = 3L)
     )
     expect_setequal(
         attr(converted, "table")$KIND,
@@ -121,4 +121,26 @@ test_that("skips inactive shading and rejects unvalidated rotation", {
         shading__convert(rotated, eplusr::empty_idf(23.1), shading__test_window()),
         "Only opaque, symmetric, zero-rotation"
     )
+})
+
+test_that("opaque shading preserves reflectance for every generated piece", {
+    dest <- shading__test_database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    converted <- shading__convert(dest, eplusr::empty_idf("23.1"), shading__test_window())
+    fields <- converted$value
+    expect_setequal(fields[field_name == "Shading Surface Name", value_chr],
+        attr(converted, "table")$SHADING_NAME)
+    expect_equal(fields[field_name ==
+        "Diffuse Solar Reflectance of Unglazed Part of Shading Surface", value_num], rep(0.5, 3L))
+    expect_equal(fields[field_name == "Fraction of Shading Surface That Is Glazed", value_num], rep(0, 3L))
+    expect_equal(attr(converted, "table")$SOLAR_REFLECTANCE, rep(0.5, 3L))
+    # The source does not identify visible reflectance; leave that field at
+    # the target default instead of copying the solar value into it.
+    visible <- fields[field_name == "Diffuse Visible Reflectance of Unglazed Part of Shading Surface", value_num]
+    expect_equal(visible, rep(0.2, 3L))
+    for (value in c(-0.1, 1.1, Inf)) {
+        DBI::dbExecute(dest, "UPDATE SHADING SET ROU = ?", params = list(value))
+        expect_error(shading__convert(dest, eplusr::empty_idf("23.1"), shading__test_window()),
+            "Invalid DeST shading reflectance ROU")
+    }
 })
