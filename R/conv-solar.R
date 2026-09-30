@@ -173,7 +173,7 @@ solar__construction <- function(ep, name, sc, k, layers, emissivity = 0.84,
 # Retain the legacy conversion as the default until whole-model regression is
 # complete. This opt-in path never silently claims daylight or distribution
 # equivalence; those are separate semantics and retain their existing warnings.
-solar__apply <- function(dest, ep, windows = NULL) {
+solar__apply <- function(dest, ep, source_distribution = "energyplus", windows = NULL) {
     if (!db_has_rows(dest, "WINDOW")) return(invisible(data.frame()))
     if (as.numeric_version(ep$version()) < as.numeric_version("23.1")) {
         stop("window_optics = 'dest_solar' currently requires EnergyPlus 23.1 or later.", call. = FALSE)
@@ -232,6 +232,49 @@ solar__apply <- function(dest, ep, windows = NULL) {
     })
     warning(paste("DeST solar optical tables preserve the simplified solar inputs;",
         "visible/daylighting optics are not represented. EnergyPlus retains its",
-        "own angular fit, diffuse integration, heat balance and solar distribution."), call. = FALSE)
+        if (source_distribution == "dest") "own diffuse integration and heat-balance solver."
+        else "own angular fit, diffuse integration, heat balance and solar distribution."), call. = FALSE)
     invisible(data.table::rbindlist(audits))
+}
+
+# Retain the source distribution of each emitted window piece. Grouping is by
+# zone and exact source values, so different window modes are never averaged.
+solar__source_specs <- function(dest, windows, faces) {
+    if (is.null(windows) || !nrow(windows)) return(list())
+    required <- c("DIST_MODE_ID", "DIST_AIR", "DIST_AROUND", "DIST_FLOOR", "DIST_ROOF")
+    if (!db_has_fields(dest, "WINDOW", c("ID", "SUN_TRANS_DIST_MODE")) ||
+        !db_has_fields(dest, "DIST_MODE", required)) {
+        stop("Missing window solar-distribution fields.", call. = FALSE)
+    }
+    modes <- DBI::dbGetQuery(dest, "SELECT W.ID, D.DIST_AIR, D.DIST_AROUND,
+        D.DIST_FLOOR, D.DIST_ROOF FROM WINDOW W LEFT JOIN DIST_MODE D
+        ON W.SUN_TRANS_DIST_MODE = D.DIST_MODE_ID")
+    pieces <- unique(as.data.frame(windows)[, c("ID", "NAME")])
+    streams <- list()
+    keys <- character()
+    for (i in seq_len(nrow(pieces))) {
+        row <- modes[modes$ID == pieces$ID[[i]], ]
+        face <- faces[faces$name == pieces$NAME[[i]] & faces$is_window, ]
+        if (nrow(row) != 1L || anyNA(row) || nrow(face) != 1L) {
+            stop("Cannot resolve a converted window's source solar distribution.", call. = FALSE)
+        }
+        mode <- stats::setNames(as.list(as.double(row[1L, -1L])), c("air", "wall", "floor", "roof"))
+        # Validate literal fractions even when this window receives no sunlight.
+        source__fractions(faces[faces$zone == face$zone, ], mode)
+        key <- source__fingerprint(list(zone = face$zone, mode = mode))
+        index <- match(key, keys)
+        if (is.na(index)) {
+            index <- length(streams) + 1L
+            keys <- c(keys, key)
+            name <- paste("Input Solar", index)
+            streams[[index]] <- list(name = name, zone = face$zone, kind = "solar",
+                design_power = 1, schedule = name, mode = mode, existing_radiant = 0,
+                existing_air = 0, windows = character())
+        }
+        streams[[index]]$windows <- c(streams[[index]]$windows, face$name)
+    }
+    if (!setequal(unlist(lapply(streams, `[[`, "windows")), faces$name[faces$is_window])) {
+        stop("Incomplete source-window inventory.", call. = FALSE)
+    }
+    streams
 }

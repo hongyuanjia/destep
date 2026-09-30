@@ -9,6 +9,16 @@
   outside surface blackness instead of using a fixed emissivity of 0.84.
   Windows sharing one optical type retain separate thermal properties when needed.
 
+- Added opt-in `source_distribution = "dest"` to `to_eplus()` for EnergyPlus
+  26.1 ideal-loads models. Source converters supply their own heat metadata;
+  net receiving areas and window distribution modes are extracted automatically.
+  Weather-specific solar prepasses are reused only after checking model, file,
+  engine and output identities. Generated time tables retain literal source
+  fractions and deduplicate identical columns. Coupled interzone surfaces remain
+  the default; the installed-DeST neighbor-air representation requires explicit
+  selection. Whole-school equivalence and updated ASHRAE 140 acceptance remain
+  separate validation tasks.
+
 - Fixed CI initialization by replacing the removed Homebrew Actions `master`
   reference with the upstream recommended pinned release (#34).
 
@@ -22,9 +32,7 @@
 - Kept source metadata with the owning people, lighting, and equipment
   converters in `conv-people.R`, and furniture validation in
   `conv-furniture.R`. The internal `conv-source.R` module now handles generic
-  source allocation and inventory checks. This source-distribution workflow
-  is not yet integrated into `to_eplus()` and does not establish whole-school
-  numerical equivalence.
+  source allocation and inventory checks.
 
 - Added opt-in `window_optics = "dest_solar"` for exterior two/three-pane
   aggregate windows in EnergyPlus 23.1 or newer. It derives solar angle tables

@@ -12,7 +12,9 @@ to_eplus(
   hvac = c("ideal_loads", "physical"),
   hvac_options = NULL,
   people_heat = c("constant", "temperature_dependent"),
-  window_optics = c("simple_glazing", "dest_solar")
+  window_optics = c("simple_glazing", "dest_solar"),
+  source_distribution = c("energyplus", "dest"),
+  source_options = NULL
 )
 }
 \arguments{
@@ -109,9 +111,34 @@ EnergyPlus retains its own diffuse integration and heat-balance solver;
 native glass storage, sky exchange and room solar distribution are not
 added by this option. The tables are solar-only: visible/daylighting
 optics are not represented, and existing daylighting objects are rejected.}
+
+\item{source_distribution}{[string] \code{"energyplus"} retains the default
+surface allocation. \code{"dest"} preserves the literal DeST air, wall,
+floor and roof fractions, including sums below one. This opt-in mode
+currently requires EnergyPlus 26.1 and \code{hvac = "ideal_loads"}.
+With windows it also requires \code{window_optics = "dest_solar"} and runs
+a weather-specific solar prepass. Unsupported moisture combinations,
+doors, daylighting and dynamic shading fail explicitly. Exterior
+radiation retains EnergyPlus defaults; native time-integration
+algorithms are not reproduced.}
+
+\item{source_options}{[list or NULL] Options for \code{source_distribution = "dest"}. Models with windows require \code{weather}, an existing EPW path,
+and \code{directory}, a persistent directory for generated time tables and
+prepass records. Cache reuse checks the converted model, weather,
+external files, engine and generated data. \code{partition_boundary}
+defaults to \code{"energyplus"}, retaining coupled interzone surfaces;
+\code{"dest_air"} explicitly selects the neighbor-air plus prescribed
+radiation boundary verified with DeST 0.2.230705. The latter is a
+version-specific approximation, not a general interzone equivalence.
+Generated solar time tables use a full non-leap year at five-minute
+resolution. Reconvert after changing weather, geometry, optics,
+schedules or timestep; running or editing the returned \code{Idf} does not
+refresh them. Keep the directory or copy external files when saving.}
 }
 \value{
-[eplusr::Idf] The converted EnergyPlus model.
+[eplusr::Idf] The converted EnergyPlus model. The opt-in source
+mode attaches a \code{source_distribution} attribute containing its input
+and cache audit. It does not establish whole-building equivalence.
 }
 \description{
 Convert a DeST model to EnergyPlus model

@@ -865,13 +865,14 @@ window__convert <- function(
     dest,
     ep,
     surface = NULL,
-    geometry_profile = eplus_geom__profile(ep$version())
+    geometry_profile = eplus_geom__profile(ep$version()),
+    source_distribution = "energyplus"
 ) {
     if (!db_has_rows(dest, "WINDOW")) {
         return(NULL)
     }
 
-    window__warn_transmitted_solar_distribution(dest)
+    if (source_distribution == "energyplus") window__warn_transmitted_solar_distribution(dest)
 
     # Detailed and aggregate window constructions share the same geometry path.
     source <- window__source_table(dest)

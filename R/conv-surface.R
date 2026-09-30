@@ -1957,3 +1957,45 @@ surface__simplify_polygon <- function(
     data.table::set(surface, NULL, "POINT_NO", seq_len(nrow(surface)) - 1L)
     surface
 }
+
+# Build the radiant receiving inventory from the emitted polygons. Net host
+# areas subtract every opening exactly once, including topology-split pieces.
+surface__source_faces <- function(objects) {
+    enclosure <- Filter(function(o) o[[1L]] == "BuildingSurface:Detailed", objects)
+    openings <- Filter(function(o) o[[1L]] == "FenestrationSurface:Detailed", objects)
+    if (any(vapply(openings, function(o) o[[3L]] != "Window", logical(1L)))) {
+        stop("DeST source distribution currently supports windows, not door receiving faces.", call. = FALSE)
+    }
+    faces <- lapply(c(enclosure, openings), function(o) {
+        window <- o[[1L]] == "FenestrationSurface:Detailed"
+        start <- if (window) 11L else 13L
+        count <- suppressWarnings(as.integer(o[[start - 1L]]))
+        if (is.na(count) || count < 3L || length(o) < start + count * 3L - 1L) {
+            stop("Incomplete receiving polygon.", call. = FALSE)
+        }
+        xyz <- matrix(as.double(o[seq.int(start, length.out = count * 3L)]), ncol = 3L, byrow = TRUE)
+        if (any(!is.finite(xyz))) stop("Invalid receiving coordinates.", call. = FALSE)
+        host <- if (window) objects[[source__index(objects, "BuildingSurface:Detailed", o[[5L]])]] else o
+        construction <- objects[[source__index(objects, "Construction", o[[4L]])]]
+        inner <- utils::tail(construction, 1L)
+        candidates <- Filter(function(m) m[[1L]] %in% c("Material", "Material:NoMass", "WindowMaterial:Glazing") &&
+            m[[2L]] == inner, objects)
+        if (length(candidates) != 1L) stop("Unsupported receiving construction.", call. = FALSE)
+        material <- candidates[[1L]]
+        index <- switch(material[[1L]], Material = 8L, "Material:NoMass" = 5L, "WindowMaterial:Glazing" = 14L)
+        category <- if (window) "wall" else switch(o[[3L]], Wall = "wall", Floor = "floor",
+            Roof = "roof", Ceiling = "roof", stop("Unsupported receiving surface type.", call. = FALSE))
+        data.frame(name = o[[2L]], zone = host[[5L]], area = geom__polygon_area(xyz),
+            category = category, is_window = window, epsilon = as.double(material[[index]]),
+            construction = o[[4L]], host = if (window) host[[2L]] else "")
+    })
+    faces <- as.data.frame(data.table::rbindlist(faces))
+    for (host in unique(faces$host[faces$is_window])) {
+        i <- match(host, faces$name)
+        if (is.na(i)) stop("Missing receiving-window host.", call. = FALSE)
+        faces$area[[i]] <- faces$area[[i]] - sum(faces$area[faces$host == host])
+    }
+    faces <- furniture__source_faces(objects, faces)
+    source__check_faces(faces)
+    faces
+}

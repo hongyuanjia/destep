@@ -18,7 +18,7 @@ furniture__slab_area <- function(area, coefficient) {
 
 # Resolve the effective room-type coefficient, rather than the unused drawing
 # ROOM.FURNITURE_COEF field, and generate a purely convective storage slab.
-furniture__convert <- function(dest, ep) {
+furniture__convert <- function(dest, ep, source_distribution = "energyplus") {
     if (!db_has_fields(dest, "ROOM", c("ID", "NAME", "AREA", "TYPE")) ||
         !db_has_fields(dest, "ROOM_TYPE_DATA", c("ID", "FURNITURE_COEF"))) {
         return(NULL)
@@ -42,12 +42,14 @@ furniture__convert <- function(dest, ep) {
     # EnergyPlus assigns equal temperatures to both faces of InternalMass and
     # reports one face's exchange. Full thickness with twice the one-face area
     # therefore preserves the native two-sided slab capacity and conductance.
-    # The positive 1e-6 absorptance is required by the IDD; it suppresses direct
-    # radiation to this convective-only native component without an EMS model.
+    # The IDD requires strictly positive absorptance. The prescribed-source
+    # carrier uses the independently checked 1e-12 limit so numerical radiant
+    # pickup stays negligible; ordinary conversion retains its existing value.
+    absorptance <- if (source_distribution == "dest") 1e-12 else 1e-6
     out <- conv__add(dest, ep,
         "Material" := list(name = "DeST Furniture Material",
             roughness = "MediumSmooth", thickness = 0.05, conductivity = 0.11,
-            density = 377, specific_heat = 1930, thermal_absorptance = 1e-6,
+            density = 377, specific_heat = 1930, thermal_absorptance = absorptance,
             solar_absorptance = 0, visible_absorptance = 0),
         "Construction" := list(name = "DeST Furniture Construction",
             outside_layer = "DeST Furniture Material"),
@@ -82,4 +84,18 @@ furniture__check_source <- function(objects, faces) {
         }
     }
     invisible(NULL)
+}
+
+# Describe converted InternalMass objects without assigning them a prescribed
+# radiant share. Their small numerical absorption remains in the carrier pool.
+furniture__source_faces <- function(objects, faces) {
+    for (item in Filter(function(o) o[[1L]] == "InternalMass", objects)) {
+        construction <- objects[[source__index(objects, "Construction", item[[3L]])]]
+        material <- objects[[source__index(objects, "Material", construction[[3L]])]]
+        face <- data.frame(name = item[[2L]], zone = item[[4L]],
+            area = as.double(utils::tail(item, 1L)), category = "furniture", is_window = FALSE,
+            epsilon = as.double(material[[8L]]), construction = item[[3L]], host = "")
+        faces <- as.data.frame(data.table::rbindlist(list(faces, face), fill = TRUE))
+    }
+    faces
 }

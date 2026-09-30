@@ -24,6 +24,12 @@ test_that("furniture uses the effective room type and full two-face slab", {
         values$field_name == "Thickness"], 0.05)
     expect_equal(values$value_num[values$class_name == "SurfaceProperty:ConvectionCoefficients" &
         values$field_name == "Convection Coefficient 1"], rep(8.7, 3))
+    # The prescribed-source mode changes only numerical radiant pickup, while
+    # retaining the independently verified slab capacity and surface areas.
+    prescribed <- furniture__convert(dest, ep, "dest")
+    expect_equal(prescribed$value$value_num[prescribed$value$class_name == "Material" &
+        prescribed$value$field_name == "Thermal Absorptance"], 1e-12)
+    expect_equal(attr(prescribed, "table"), room)
     DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET FURNITURE_COEF=1")
     expect_null(furniture__convert(dest, ep))
 })

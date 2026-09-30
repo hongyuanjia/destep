@@ -270,7 +270,33 @@ MAP_ID_NAME <- list(
 #'       added by this option. The tables are solar-only: visible/daylighting
 #'       optics are not represented, and existing daylighting objects are rejected.
 #'
-#' @return \[eplusr::Idf\] The converted EnergyPlus model.
+#' @param source_distribution \[string\] `"energyplus"` retains the default
+#'       surface allocation. `"dest"` preserves the literal DeST air, wall,
+#'       floor and roof fractions, including sums below one. This opt-in mode
+#'       currently requires EnergyPlus 26.1 and `hvac = "ideal_loads"`.
+#'       With windows it also requires `window_optics = "dest_solar"` and runs
+#'       a weather-specific solar prepass. Unsupported moisture combinations,
+#'       doors, daylighting and dynamic shading fail explicitly. Exterior
+#'       radiation retains EnergyPlus defaults; native time-integration
+#'       algorithms are not reproduced.
+#'
+#' @param source_options \[list or NULL\] Options for `source_distribution =
+#'       "dest"`. Models with windows require `weather`, an existing EPW path,
+#'       and `directory`, a persistent directory for generated time tables and
+#'       prepass records. Cache reuse checks the converted model, weather,
+#'       external files, engine and generated data. `partition_boundary`
+#'       defaults to `"energyplus"`, retaining coupled interzone surfaces;
+#'       `"dest_air"` explicitly selects the neighbor-air plus prescribed
+#'       radiation boundary verified with DeST 0.2.230705. The latter is a
+#'       version-specific approximation, not a general interzone equivalence.
+#'       Generated solar time tables use a full non-leap year at five-minute
+#'       resolution. Reconvert after changing weather, geometry, optics,
+#'       schedules or timestep; running or editing the returned `Idf` does not
+#'       refresh them. Keep the directory or copy external files when saving.
+#'
+#' @return \[eplusr::Idf\] The converted EnergyPlus model. The opt-in source
+#'       mode attaches a `source_distribution` attribute containing its input
+#'       and cache audit. It does not establish whole-building equivalence.
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
@@ -282,11 +308,17 @@ to_eplus <- function(
     hvac = c("ideal_loads", "physical"),
     hvac_options = NULL,
     people_heat = c("constant", "temperature_dependent"),
-    window_optics = c("simple_glazing", "dest_solar")
+    window_optics = c("simple_glazing", "dest_solar"),
+    source_distribution = c("energyplus", "dest"),
+    source_options = NULL
 ) {
     hvac <- match.arg(hvac)
     people_heat <- match.arg(people_heat)
     window_optics <- match.arg(window_optics)
+    source_distribution <- match.arg(source_distribution)
+    if (source_distribution == "energyplus" && !is.null(source_options)) {
+        stop("'source_options' requires source_distribution = 'dest'.", call. = FALSE)
+    }
     if (hvac == "physical") {
         checkmate::assert_list(
             hvac_options,
@@ -342,6 +374,10 @@ to_eplus <- function(
         ep <- eplusr::with_verbose(eplusr::empty_idf(ver))
     } else {
         ep <- eplusr::empty_idf(ver)
+    }
+    if (source_distribution == "dest") {
+        source_options <- source__options(source_options, ep, hvac, window_optics,
+            db_has_rows(tmpdb, "WINDOW"))
     }
 
     # add GlobalGeometryRules
@@ -402,7 +438,8 @@ to_eplus <- function(
         tmpdb,
         ep,
         attr(surface, "table"),
-        geometry_profile
+        geometry_profile,
+        source_distribution = source_distribution
     )
     door <- door__convert(
         tmpdb,
@@ -424,7 +461,7 @@ to_eplus <- function(
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
         zone = zone__convert(tmpdb, ep),
-        furniture = furniture__convert(tmpdb, ep),
+        furniture = furniture__convert(tmpdb, ep, source_distribution),
         surface = surface,
         window = window,
         door = door,
@@ -484,7 +521,13 @@ to_eplus <- function(
     # Apply opt-in solar semantics after all geometry and constructions exist,
     # before legacy-version object-name normalization changes their references.
     if (window_optics == "dest_solar") {
-        solar__apply(tmpdb, ep, windows = attr(window, "table"))
+        solar__apply(tmpdb, ep, source_distribution, attr(window, "table"))
+    }
+
+    # Collect powers from their owning converters; only geometry is read back
+    # from the completed IDF, so clipped receiving areas match the target.
+    if (source_distribution == "dest") {
+        ep <- source__apply(tmpdb, ep, conv, source_options, verbose)
     }
 
     if (hvac == "physical") {

@@ -203,8 +203,10 @@ source__receivers <- function(objects, faces, zones) {
 
 # Generate the verified source mapping without mutating an Idf or writing files.
 # The caller supplies an audited optical prepass and owns its weather/file
-# binding. This internal builder is intentionally not a public conversion mode.
-source__project <- function(objects, faces, sources, solar_columns = list()) {
+# binding. The public wrapper owns automatic extraction and prepass validation.
+source__project <- function(objects, faces, sources, solar_columns = list(),
+    partition_boundary = c("dest_air", "energyplus")) {
+    partition_boundary <- match.arg(partition_boundary)
     faces <- as.data.frame(faces)
     plan <- source__plan(faces, sources)
     classes <- vapply(objects, `[[`, character(1L), 1L)
@@ -301,7 +303,7 @@ source__project <- function(objects, faces, sources, solar_columns = list()) {
     # source to its air boundary: Teq = Tair + Qprescribed / (A * h).
     shared <- Filter(function(o) o[[1L]] == "BuildingSurface:Detailed" && o[[7L]] == "Surface", objects)
     mapping <- list()
-    for (i in seq_along(shared)) {
+    for (i in if (partition_boundary == "dest_air") seq_along(shared) else integer()) {
         wall <- shared[[i]]
         peer <- objects[[source__index(objects, "BuildingSurface:Detailed", wall[[8L]])]]
         face <- faces[faces$name == peer[[2L]], ]
@@ -363,4 +365,122 @@ source__check_existing <- function(objects, faces, sources) {
     if (!setequal(others, allowed)) stop("Unsupported existing sensible-source companions.", call. = FALSE)
     furniture__check_source(objects, faces)
     invisible(NULL)
+}
+
+# Reject unavailable public combinations before an expensive optical prepass.
+source__options <- function(options, ep, hvac, window_optics, has_windows) {
+    if (is.null(options)) options <- list()
+    checkmate::assert_list(options, names = "unique")
+    if (any(!names(options) %in% c("weather", "directory", "partition_boundary"))) {
+        stop("Unknown source_options field.", call. = FALSE)
+    }
+    if (as.numeric_version(ep$version()) != as.numeric_version("26.1.0") || hvac != "ideal_loads") {
+        stop("DeST source distribution currently requires EnergyPlus 26.1 and ideal_loads.", call. = FALSE)
+    }
+    if (is.null(options$partition_boundary)) options$partition_boundary <- "energyplus"
+    checkmate::assert_choice(options$partition_boundary, c("energyplus", "dest_air"))
+    if (has_windows) {
+        if (window_optics != "dest_solar") {
+            stop("DeST source distribution with windows requires window_optics = 'dest_solar'.", call. = FALSE)
+        }
+        checkmate::assert_file_exists(options$weather, .var.name = "source_options$weather")
+        checkmate::assert_string(options$directory, min.chars = 1L,
+            .var.name = "source_options$directory")
+        options$weather <- normalizePath(options$weather, winslash = "/", mustWork = TRUE)
+    }
+    options
+}
+
+# Preserve positional gaps and exact field strings when passing a completed IDF
+# to the pure source builder. Powers remain in the owning converter metadata.
+source__objects <- function(ep) {
+    table <- as.data.frame(ep$to_table())
+    lapply(split(table, factor(table$id, levels = unique(table$id))), function(row) {
+        values <- rep("", max(row$index))
+        values[row$index] <- ifelse(is.na(row$value), "", row$value)
+        c(row$class[[1L]], values)
+    })
+}
+
+# Reload all generated fields together so cross-object references are checked
+# in one transaction, without changing the caller's original Idf.
+source__model <- function(objects, version) {
+    ep <- eplusr::empty_idf(version)
+    # empty_idf() already supplies Version; the tabular loader rejects adding
+    # a second one even though the text loader silently handled that case.
+    objects <- Filter(function(object) object[[1L]] != "Version", objects)
+    table <- lapply(seq_along(objects), function(i) {
+        object <- objects[[i]]
+        data.frame(id = i, class = object[[1L]], index = seq_len(length(object) - 1L),
+            value = as.character(object[-1L]))
+    })
+    ep$load(data.table::rbindlist(table), .default = FALSE)
+    ep
+}
+
+# Fingerprint complete typed inputs, rather than filenames or modification times.
+# MD5 here is a local cache identity check, not an authentication mechanism.
+source__fingerprint <- function(value) {
+    path <- tempfile("destep-fingerprint-")
+    on.exit(unlink(path), add = TRUE)
+    saveRDS(value, path, version = 2, compress = FALSE)
+    unname(tools::md5sum(path))
+}
+
+# Assemble a public conversion from database-owned gains and target geometry.
+# Unsupported inputs are checked with zero solar before launching the prepass.
+source__apply <- function(dest, ep, converted, options, verbose = FALSE) {
+    objects <- source__objects(ep)
+    faces <- surface__source_faces(objects)
+    gains <- attr(converted$internal_gains, "sources")
+    solar <- solar__source_specs(dest, attr(converted$window, "table"), faces)
+    sources <- c(gains, solar)
+    source__check_existing(objects, faces, sources)
+    if (!length(sources)) return(ep)
+    zero <- stats::setNames(rep(list(0), length(solar)),
+        vapply(solar, `[[`, character(1L), "schedule"))
+    source__project(objects, faces, sources, zero, options$partition_boundary)
+
+    cache <- NULL
+    columns <- list()
+    if (length(solar)) {
+        cache <- solar__precompute(ep, solar, options$weather, options$directory, verbose)
+        columns <- cache$columns
+    }
+    generated <- source__project(objects, faces, sources, columns, options$partition_boundary)
+    # The research builder requests detailed diagnostics. Public conversion
+    # keeps its EMS inputs but leaves reporting choices to the user.
+    added <- seq_along(generated$objects) > length(objects)
+    reporting <- vapply(generated$objects, function(o) o[[1L]] == "Output:Variable", logical(1L))
+    generated$objects <- generated$objects[!(added & reporting)]
+    if (length(generated$columns)) {
+        # Each conversion owns its final schedules. An old returned Idf must
+        # never be silently retargeted by a later conversion sharing the cache.
+        folder <- tempfile("sources-", tmpdir = cache$directory)
+        dir.create(folder)
+        hashes <- vapply(generated$columns, source__fingerprint, character(1L))
+        unique_columns <- !duplicated(hashes)
+        indices <- match(hashes, hashes[unique_columns])
+        path <- file.path(folder, paste0("source-power-", source__fingerprint(hashes), ".csv"))
+        data.table::fwrite(data.table::as.data.table(generated$columns[unique_columns]), path)
+        for (i in seq_along(generated$columns)) {
+            generated$objects[[length(generated$objects) + 1L]] <- c("Schedule:File",
+                names(generated$columns)[[i]], "", normalizePath(path, winslash = "/"),
+                indices[[i]], 1, 8760, "Comma", "No", 5, "No")
+        }
+    }
+    result <- source__model(generated$objects, ep$version())
+    if (!result$is_valid(level = "final")) {
+        stop("Generated source distribution failed final IDF validation.", call. = FALSE)
+    }
+    audit <- generated$audit
+    audit$partition_boundary <- options$partition_boundary
+    audit$cache <- if (is.null(cache)) NULL else cache[setdiff(names(cache), "columns")]
+    if (length(generated$columns)) {
+        audit$schedule_file <- normalizePath(path, winslash = "/")
+        audit$schedule_md5 <- unname(tools::md5sum(path))
+        saveRDS(audit, file.path(folder, "source-audit.rds"))
+    }
+    attr(result, "source_distribution") <- audit
+    result
 }
