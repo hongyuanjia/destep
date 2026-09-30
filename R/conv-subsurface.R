@@ -885,6 +885,49 @@ window__convert <- function(
     )
 }
 
+# Read the physical outside/inside window faces independently of SIDE1/SIDE2.
+# Aggregate optical types contain no emissivity; the window's SURFACE records
+# supply these properties, including when several windows share one type.
+window__emissivity_table <- function(dest, windows = NULL) {
+    if (!db_has_fields(dest, "SURFACE", c("SURFACE_ID", "TYPE", "BLACKNESS"))) {
+        stop("DeST solar windows require SURFACE.TYPE and BLACKNESS.", call. = FALSE)
+    }
+    source <- data.table::as.data.table(DBI::dbGetQuery(dest, "
+        SELECT W.ID, W.NAME, S1.TYPE AS SIDE1_TYPE, S2.TYPE AS SIDE2_TYPE,
+            S1.BLACKNESS AS SIDE1_EMISSIVITY, S2.BLACKNESS AS SIDE2_EMISSIVITY
+        FROM WINDOW W
+        LEFT JOIN SURFACE S1 ON W.SIDE1 = S1.SURFACE_ID
+        LEFT JOIN SURFACE S2 ON W.SIDE2 = S2.SURFACE_ID
+    "))
+    for (field in c("SIDE1_TYPE", "SIDE2_TYPE", "SIDE1_EMISSIVITY", "SIDE2_EMISSIVITY")) {
+        data.table::set(source, NULL, field, suppressWarnings(as.double(source[[field]])))
+    }
+    exterior <- (source$SIDE1_TYPE == 1 & source$SIDE2_TYPE == 0) |
+        (source$SIDE2_TYPE == 1 & source$SIDE1_TYPE == 0)
+    if (anyNA(exterior) || !all(exterior)) {
+        stop("DeST solar emissivity requires one outside and one room window face.", call. = FALSE)
+    }
+    values <- c(source$SIDE1_EMISSIVITY, source$SIDE2_EMISSIVITY)
+    if (any(!is.finite(values)) || any(values < 0 | values > 1)) {
+        stop("Invalid DeST window SURFACE.BLACKNESS; expected values in [0, 1].", call. = FALSE)
+    }
+    source[, `:=`(
+        OUTSIDE_EMISSIVITY = ifelse(SIDE1_TYPE == 1, SIDE1_EMISSIVITY, SIDE2_EMISSIVITY),
+        INSIDE_EMISSIVITY = ifelse(SIDE1_TYPE == 0, SIDE1_EMISSIVITY, SIDE2_EMISSIVITY)
+    )]
+    # Use the same representable limiting values as opaque surface conversion.
+    for (field in c("OUTSIDE_EMISSIVITY", "INSIDE_EMISSIVITY")) {
+        data.table::set(source, NULL, field, pmin(pmax(source[[field]], 1e-6), 0.99999))
+    }
+    if (is.null(windows)) {
+        pieces <- source[, .(ID, NAME)]
+    } else {
+        pieces <- unique(data.table::as.data.table(windows)[, .(ID, NAME)])
+    }
+    source <- source[, .(ID, OUTSIDE_EMISSIVITY, INSIDE_EMISSIVITY)]
+    merge(pieces, source, by = "ID", all.x = TRUE)
+}
+
 # DOOR -> FenestrationSurface:Detailed.
 door__convert <- function(
     dest,

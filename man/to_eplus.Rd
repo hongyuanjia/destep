@@ -104,7 +104,7 @@ fractions and full-building numerical equivalence remain limitations.}
 for the simplified model verified with DeST 0.2.230705. It supports
 exterior two/three-pane aggregate windows and EnergyPlus 23.1 or newer.
 SC specifies a normal-transmittance objective of \code{0.87 * SC}, not SHGC.
-Glass resistance and the existing exposed emissivity are preserved.
+Glass resistance and each window face's source blackness are preserved.
 EnergyPlus retains its own diffuse integration and heat-balance solver;
 native glass storage, sky exchange and room solar distribution are not
 added by this option. The tables are solar-only: visible/daylighting

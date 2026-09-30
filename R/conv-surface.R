@@ -254,28 +254,10 @@ surface_property__assign_constructions <- function(surface) {
     outside_fields <- c(
         "OUTSIDE_SOLAR_ABSORPTANCE", "OUTSIDE_THERMAL_ABSORPTANCE"
     )
-    # Some DeST exposed floors serialize 0/0 on the outdoor pseudo-surface as
-    # an absent-property sentinel. Reuse the value shared by the model's other
-    # exterior faces when it is unambiguous; otherwise retain the base
-    # construction's exterior material properties.
-    outdoor_sentinel <- object$KIND_ENCLOSURE == 6L &
-        object$BOUNDARY == "Outdoors" &
-        object$OUTSIDE_SOLAR_ABSORPTANCE == 0.0 &
-        object$OUTSIDE_THERMAL_ABSORPTANCE == 0.0
-    exterior_reference <- unique(object[
-        BOUNDARY == "Outdoors" & !outdoor_sentinel,
-        .(OUTSIDE_SOLAR_ABSORPTANCE, OUTSIDE_THERMAL_ABSORPTANCE)
-    ])
-    unresolved_outdoor_sentinel <- outdoor_sentinel
-    if (any(outdoor_sentinel)) {
-        if (nrow(exterior_reference) == 1L) {
-            object[outdoor_sentinel, (outside_fields) := exterior_reference]
-            unresolved_outdoor_sentinel[] <- FALSE
-        } else {
-            object[outdoor_sentinel, (outside_fields) := NA_real_]
-        }
-    }
-
+    # Zero on an exposed-floor outside face is a literal source coefficient.
+    # Native ground-reflection checks distinguish alpha=0 from alpha=0.6;
+    # borrowing a wall's properties would introduce an absent solar gain.
+    # Apply only the EnergyPlus thermal-absorptance limit below.
     invalid_inside <- object[
         !is.finite(INSIDE_SOLAR_ABSORPTANCE) |
             INSIDE_SOLAR_ABSORPTANCE < 0.0 |
@@ -286,7 +268,7 @@ surface_property__assign_constructions <- function(surface) {
         OUTPUT_ID
     ]
     invalid_outside <- object[
-        BOUNDARY == "Outdoors" & !unresolved_outdoor_sentinel & (
+        BOUNDARY == "Outdoors" & (
             !is.finite(OUTSIDE_SOLAR_ABSORPTANCE) |
                 OUTSIDE_SOLAR_ABSORPTANCE < 0.0 |
                 OUTSIDE_SOLAR_ABSORPTANCE > 1.0 |

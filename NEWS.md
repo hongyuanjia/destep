@@ -1,5 +1,14 @@
 # destep 0.0.0.9000
 
+- Fixed exposed-floor outside absorptance conversion to preserve literal zero
+  values. The converter no longer substitutes unrelated exterior-wall or
+  default material properties, which could introduce ground-reflected solar
+  gains absent from the DeST input.
+
+- Fixed `window_optics = "dest_solar"` to preserve each window's inside and
+  outside surface blackness instead of using a fixed emissivity of 0.84.
+  Windows sharing one optical type retain separate thermal properties when needed.
+
 - Fixed CI initialization by replacing the removed Homebrew Actions `master`
   reference with the upstream recommended pinned release (#34).
 
