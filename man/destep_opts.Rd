@@ -7,6 +7,9 @@
 destep_opts(
   preset = "objects",
   ...,
+  schedule_format = "compact",
+  schedule_directory = NULL,
+  run_period = c(1L, 365L),
   hvac = "ideal_loads",
   hvac_options = NULL,
   people_heat = NULL,
@@ -32,6 +35,26 @@ surface convection and physical inputs. Necessary EMS, including that
 for equipment moisture, remains available in both presets.}
 
 \item{...}{Must be empty. Supply custom settings by their full names.}
+
+\item{schedule_format}{[string] \code{"compact"} (default) writes date-based
+Schedule:Compact objects, losslessly merging consecutive identical
+days and equal hourly values. \code{"file"} writes all 8760 hourly values
+to a CSV referenced by Schedule:File objects. Neither uses weekdays
+to select source values. Both preserve the required unit conversions.}
+
+\item{schedule_directory}{[string or NULL] Persistent output directory,
+required with \code{schedule_format = "file"}. Each conversion writes a
+unique CSV and returns absolute references; keep this file with the IDF.
+This directory is independent of weather-dependent prepass files.}
+
+\item{run_period}{[integer vector] Inclusive, one-based simulation start
+and end days, from 1 to 365. Defaults to \code{c(1L, 365L)} because a saved
+DeST simulation range has not been established in the supported schema.
+Supply the days used for the source simulation when known. Dates are
+mapped to a non-leap calendar with daylight saving disabled. Schedules
+always cover the full year, including for a partial run period.
+Conversion guarantees the initial correspondence only; later user
+edits to the IDF, files or calendar are not monitored.}
 
 \item{hvac}{[string] HVAC representation. \code{"ideal_loads"}, the default,
 preserves the established load-only conversion. \code{"physical"} groups
@@ -197,6 +220,9 @@ version requirements. Neither preset promises full DeST solver equivalence.
 \examples{
 destep_opts()
 destep_opts("dest", exterior_boundary = "energyplus")
+# File schedules remain annual even when simulating days 59 through 61.
+destep_opts(schedule_format = "file", schedule_directory = "schedules",
+    run_period = c(59L, 61L))
 opts <- destep_opts(
     "objects",
     window_optics = "dest_solar",

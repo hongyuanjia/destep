@@ -3,44 +3,63 @@
 destep_test_thermostat_db <- function() {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
 
-    DBI::dbWriteTable(dest, "ROOM", data.frame(
-        ID = c(1L, 2L, 3L),
-        NAME = c("Room 1", "Room 2", "Room 3"),
-        OF_ROOM_GROUP = c(10L, 20L, 30L),
-        TYPE = c(1L, 2L, 3L)
-    ))
-    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
-        ROOM_GROUP_ID = c(10L, 20L, 30L),
-        NAME = c("Group 1", "Group 2", "Group 3"),
-        IS_AC_ROOM = c(1L, 0L, 1L),
-        OF_AC_SYS = c(0L, 0L, 0L),
-        AC_SCHEDULE_ID = c(900L, 900L, 901L),
-        SET_T_MIN_SCHEDULE = c(910L, 910L, 911L),
-        SET_T_MAX_SCHEDULE = c(920L, 920L, 921L),
-        SET_RH_MIN_SCHEDULE = c(930L, 930L, 931L),
-        SET_RH_MAX_SCHEDULE = c(940L, 940L, 941L),
-        AC_T_MIN_SCHEDULE = c(950L, 950L, 951L),
-        AC_T_MAX_SCHEDULE = c(960L, 960L, 961L)
-    ))
-    DBI::dbWriteTable(dest, "ROOM_TYPE_DATA", data.frame(
-        ID = c(1L, 2L, 3L),
-        NAME = c("Office", "Store", "Meeting"),
-        AC_SCHEDULE_ID = c(500L, 500L, 501L),
-        SET_T_MIN_SCHEDULE = c(100L, 100L, 101L),
-        SET_T_MAX_SCHEDULE = c(200L, 200L, 201L),
-        SET_RH_MIN_SCHEDULE = c(300L, 300L, 301L),
-        SET_RH_MAX_SCHEDULE = c(400L, 400L, 401L),
-        AC_T_MIN_SCHEDULE = c(600L, 600L, 601L),
-        AC_T_MAX_SCHEDULE = c(700L, 700L, 701L)
-    ))
-    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = c(100L, 101L, 200L, 201L, 500L, 501L),
-        NAME = c(
-            "Heating 18C", "Heating 20C",
-            "Cooling 26C", "Cooling 24C",
-            "AC On A", "AC On B"
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(
+            ID = c(1L, 2L, 3L),
+            NAME = c("Room 1", "Room 2", "Room 3"),
+            OF_ROOM_GROUP = c(10L, 20L, 30L),
+            TYPE = c(1L, 2L, 3L)
         )
-    ))
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(
+            ROOM_GROUP_ID = c(10L, 20L, 30L),
+            NAME = c("Group 1", "Group 2", "Group 3"),
+            IS_AC_ROOM = c(1L, 0L, 1L),
+            OF_AC_SYS = c(0L, 0L, 0L),
+            AC_SCHEDULE_ID = c(900L, 900L, 901L),
+            SET_T_MIN_SCHEDULE = c(910L, 910L, 911L),
+            SET_T_MAX_SCHEDULE = c(920L, 920L, 921L),
+            SET_RH_MIN_SCHEDULE = c(930L, 930L, 931L),
+            SET_RH_MAX_SCHEDULE = c(940L, 940L, 941L),
+            AC_T_MIN_SCHEDULE = c(950L, 950L, 951L),
+            AC_T_MAX_SCHEDULE = c(960L, 960L, 961L)
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_TYPE_DATA",
+        data.frame(
+            ID = c(1L, 2L, 3L),
+            NAME = c("Office", "Store", "Meeting"),
+            AC_SCHEDULE_ID = c(500L, 500L, 501L),
+            SET_T_MIN_SCHEDULE = c(100L, 100L, 101L),
+            SET_T_MAX_SCHEDULE = c(200L, 200L, 201L),
+            SET_RH_MIN_SCHEDULE = c(300L, 300L, 301L),
+            SET_RH_MAX_SCHEDULE = c(400L, 400L, 401L),
+            AC_T_MIN_SCHEDULE = c(600L, 600L, 601L),
+            AC_T_MAX_SCHEDULE = c(700L, 700L, 701L)
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SCHEDULE_YEAR",
+        data.frame(
+            SCHEDULE_ID = c(100L, 101L, 200L, 201L, 500L, 501L),
+            NAME = c(
+                "Heating 18C",
+                "Heating 20C",
+                "Cooling 26C",
+                "Cooling 24C",
+                "AC On A",
+                "AC On B"
+            )
+        )
+    )
 
     dest
 }
@@ -55,8 +74,14 @@ test_that("can convert ROOM_TYPE_DATA setpoints with shared dual setpoints", {
     value <- thermostat$value
 
     expect_equal(sum(thermostat$object$class_name == "Schedule:Constant"), 1L)
-    expect_equal(sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"), 2L)
-    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 2L)
+    expect_equal(
+        sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"),
+        2L
+    )
+    expect_equal(
+        sum(thermostat$object$class_name == "ZoneControl:Thermostat"),
+        2L
+    )
 
     expect_equal(tab$CAN_CONVERT, c(TRUE, FALSE, TRUE))
     expect_equal(
@@ -96,7 +121,8 @@ test_that("can convert ROOM_TYPE_DATA setpoints with shared dual setpoints", {
         value$value_chr[
             value$class_name == "ZoneControl:Thermostat" &
                 value$field_name == "Control Type Schedule Name"
-        ] == "DeST Dual Setpoint Control Type"
+        ] ==
+            "DeST Dual Setpoint Control Type"
     ))
 })
 
@@ -105,40 +131,56 @@ test_that("stops when ROOM_TYPE_DATA setpoint schedules cannot be resolved", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbWriteTable(dest, "ROOM", data.frame(
-        ID = 1L,
-        NAME = "Room 1",
-        OF_ROOM_GROUP = 10L,
-        TYPE = 1L
-    ))
-    DBI::dbWriteTable(dest, "ROOM_GROUP", data.frame(
-        ROOM_GROUP_ID = 10L,
-        NAME = "Group 1",
-        OF_AC_SYS = 0L,
-        IS_AC_ROOM = 1L,
-        AC_SCHEDULE_ID = 900L,
-        SET_T_MIN_SCHEDULE = 910L,
-        SET_T_MAX_SCHEDULE = 920L,
-        SET_RH_MIN_SCHEDULE = 930L,
-        SET_RH_MAX_SCHEDULE = 940L,
-        AC_T_MIN_SCHEDULE = 950L,
-        AC_T_MAX_SCHEDULE = 960L
-    ))
-    DBI::dbWriteTable(dest, "ROOM_TYPE_DATA", data.frame(
-        ID = 1L,
-        NAME = "Office",
-        AC_SCHEDULE_ID = 500L,
-        SET_T_MIN_SCHEDULE = 999L,
-        SET_T_MAX_SCHEDULE = 200L,
-        SET_RH_MIN_SCHEDULE = 0L,
-        SET_RH_MAX_SCHEDULE = 0L,
-        AC_T_MIN_SCHEDULE = 0L,
-        AC_T_MAX_SCHEDULE = 0L
-    ))
-    DBI::dbWriteTable(dest, "SCHEDULE_YEAR", data.frame(
-        SCHEDULE_ID = 200L,
-        NAME = "Cooling 26C"
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(
+            ID = 1L,
+            NAME = "Room 1",
+            OF_ROOM_GROUP = 10L,
+            TYPE = 1L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(
+            ROOM_GROUP_ID = 10L,
+            NAME = "Group 1",
+            OF_AC_SYS = 0L,
+            IS_AC_ROOM = 1L,
+            AC_SCHEDULE_ID = 900L,
+            SET_T_MIN_SCHEDULE = 910L,
+            SET_T_MAX_SCHEDULE = 920L,
+            SET_RH_MIN_SCHEDULE = 930L,
+            SET_RH_MAX_SCHEDULE = 940L,
+            AC_T_MIN_SCHEDULE = 950L,
+            AC_T_MAX_SCHEDULE = 960L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_TYPE_DATA",
+        data.frame(
+            ID = 1L,
+            NAME = "Office",
+            AC_SCHEDULE_ID = 500L,
+            SET_T_MIN_SCHEDULE = 999L,
+            SET_T_MAX_SCHEDULE = 200L,
+            SET_RH_MIN_SCHEDULE = 0L,
+            SET_RH_MAX_SCHEDULE = 0L,
+            AC_T_MIN_SCHEDULE = 0L,
+            AC_T_MAX_SCHEDULE = 0L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SCHEDULE_YEAR",
+        data.frame(
+            SCHEDULE_ID = 200L,
+            NAME = "Cooling 26C"
+        )
+    )
 
     expect_error(
         thermostat__convert(dest, ep),
@@ -151,11 +193,14 @@ test_that("skips rooms without complete ROOM_TYPE_DATA setpoints", {
     dest <- destep_test_thermostat_db()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbExecute(dest, "
+    DBI::dbExecute(
+        dest,
+        "
         UPDATE ROOM_TYPE_DATA
         SET SET_T_MIN_SCHEDULE = 0
         WHERE ID = 2
-    ")
+    "
+    )
 
     expect_warning(
         thermostat <- thermostat__convert(dest, ep),
@@ -164,7 +209,10 @@ test_that("skips rooms without complete ROOM_TYPE_DATA setpoints", {
 
     tab <- attr(thermostat, "table")
     expect_equal(sum(tab$CAN_CONVERT), 2L)
-    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 2L)
+    expect_equal(
+        sum(thermostat$object$class_name == "ZoneControl:Thermostat"),
+        2L
+    )
 })
 
 test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST model", {
@@ -176,10 +224,13 @@ test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST mode
 
     path_tmp <- tempfile(fileext = ".sql")
     dest <- DBI::dbConnect(RSQLite::SQLite(), path_tmp)
-    on.exit({
-        DBI::dbDisconnect(dest)
-        unlink(path_tmp)
-    }, add = TRUE)
+    on.exit(
+        {
+            DBI::dbDisconnect(dest)
+            unlink(path_tmp)
+        },
+        add = TRUE
+    )
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
@@ -192,8 +243,14 @@ test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST mode
         unique(tab$ENERGYPLUS_SETPOINT_NAME[tab$CAN_CONVERT]),
         "DeST Dual Setpoint H4630 C4628"
     )
-    expect_equal(sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"), 1L)
-    expect_equal(sum(thermostat$object$class_name == "ZoneControl:Thermostat"), 27L)
+    expect_equal(
+        sum(thermostat$object$class_name == "ThermostatSetpoint:DualSetpoint"),
+        1L
+    )
+    expect_equal(
+        sum(thermostat$object$class_name == "ZoneControl:Thermostat"),
+        27L
+    )
 })
 
 test_that("to_eplus() includes resolvable thermostat references", {
@@ -204,9 +261,12 @@ test_that("to_eplus() includes resolvable thermostat references", {
 
     idf <- to_eplus(src, 23.1)
     control <- idf$to_table(class = "ZoneControl:Thermostat", all = TRUE)
-    setpoint <- idf$to_table(class = "ThermostatSetpoint:DualSetpoint", all = TRUE)
+    setpoint <- idf$to_table(
+        class = "ThermostatSetpoint:DualSetpoint",
+        all = TRUE
+    )
     constant <- idf$to_table(class = "Schedule:Constant", all = TRUE)
-    year <- idf$to_table(class = "Schedule:Year", all = TRUE)
+    year <- idf$to_table(class = "Schedule:Compact", all = TRUE)
 
     control_names <- control$value[control$field == "Name"]
     setpoint_names <- setpoint$value[setpoint$field == "Name"]
@@ -226,11 +286,13 @@ test_that("to_eplus() includes resolvable thermostat references", {
     ))
     expect_true(all(
         setpoint$value[
-            setpoint$field %in% c(
-                "Heating Setpoint Temperature Schedule Name",
-                "Cooling Setpoint Temperature Schedule Name"
-            )
-        ] %in% year_names
+            setpoint$field %in%
+                c(
+                    "Heating Setpoint Temperature Schedule Name",
+                    "Cooling Setpoint Temperature Schedule Name"
+                )
+        ] %in%
+            year_names
     ))
     expect_true(idf$is_valid())
 })

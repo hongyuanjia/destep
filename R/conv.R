@@ -328,27 +328,8 @@ to_eplus <- function(
             number_of_timesteps_per_hour = 12L
         )
     )
-
-    # DeST stores model inputs but no EnergyPlus simulation period.  Add a
-    # calendar-year period so each converted model can run against an EPW file.
-    ep$add(
-        "RunPeriod" := list(
-            name = "Annual",
-            begin_month = 1L,
-            begin_day_of_month = 1L,
-            end_month = 12L,
-            end_day_of_month = 31L,
-            # DeST SCHEDULE_YEAR stores the first seven profiles as Monday through
-            # Sunday. Fix the simulation calendar to that same convention instead
-            # of inheriting a weather-file weekday that can shift every schedule.
-            day_of_week_for_start_day = "Monday",
-            use_weather_file_holidays_and_special_days = "Yes",
-            use_weather_file_daylight_saving_period = "Yes",
-            apply_weekend_holiday_rule = "No",
-            use_weather_file_rain_indicators = "Yes",
-            use_weather_file_snow_indicators = "Yes"
-        )
-    )
+    # Use calendar dates so both schedule formats retain source hour positions.
+    schedule__run_period(ep, options$run_period)
 
     # update object names and make sure all names are unique
     conv__update_names(tmpdb)
@@ -401,7 +382,12 @@ to_eplus <- function(
             attr(surface, "table"),
             attr(door, "table")
         ),
-        schedule = schedule__convert(tmpdb, ep),
+        schedule = schedule__convert(
+            tmpdb,
+            ep,
+            options$schedule_format,
+            options$schedule_directory
+        ),
         thermostat = if (hvac == "ideal_loads") {
             thermostat__convert(tmpdb, ep)
         },
@@ -497,6 +483,12 @@ to_eplus <- function(
     # emitted programs instead of assuming that the basic mode has no EMS.
     audit <- conv__mode_audit(ep, conversion)
     audit$options <- options
+    audit$schedules <- list(
+        format = options$schedule_format,
+        files = attr(conv$schedule, "files"),
+        run_period = options$run_period,
+        calendar = "365 days; no daylight saving; date-based values"
+    )
     audit$simulation <- simulation__audit(ep, simulation_options)
     attr(ep, "conversion") <- audit
     ep$Version$comment(

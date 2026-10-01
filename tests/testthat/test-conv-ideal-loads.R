@@ -473,7 +473,7 @@ test_that("to_eplus() includes resolvable ideal loads references", {
         class = "ZoneHVAC:EquipmentConnections",
         all = TRUE
     )
-    year <- idf$to_table(class = "Schedule:Year", all = TRUE)
+    year <- idf$to_table(class = "Schedule:Compact", all = TRUE)
 
     ideal_names <- ideal$value[ideal$field == "Name"]
     outdoor_air_names <- outdoor_air$value[outdoor_air$field == "Name"]

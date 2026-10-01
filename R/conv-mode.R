@@ -12,6 +12,23 @@
 #'       surface convection and physical inputs. Necessary EMS, including that
 #'       for equipment moisture, remains available in both presets.
 #' @param ... Must be empty. Supply custom settings by their full names.
+#' @param schedule_format \[string\] `"compact"` (default) writes date-based
+#'       Schedule:Compact objects, losslessly merging consecutive identical
+#'       days and equal hourly values. `"file"` writes all 8760 hourly values
+#'       to a CSV referenced by Schedule:File objects. Neither uses weekdays
+#'       to select source values. Both preserve the required unit conversions.
+#' @param schedule_directory \[string or NULL\] Persistent output directory,
+#'       required with `schedule_format = "file"`. Each conversion writes a
+#'       unique CSV and returns absolute references; keep this file with the IDF.
+#'       This directory is independent of weather-dependent prepass files.
+#' @param run_period \[integer vector\] Inclusive, one-based simulation start
+#'       and end days, from 1 to 365. Defaults to `c(1L, 365L)` because a saved
+#'       DeST simulation range has not been established in the supported schema.
+#'       Supply the days used for the source simulation when known. Dates are
+#'       mapped to a non-leap calendar with daylight saving disabled. Schedules
+#'       always cover the full year, including for a partial run period.
+#'       Conversion guarantees the initial correspondence only; later user
+#'       edits to the IDF, files or calendar are not monitored.
 #' @param hvac \[string\] HVAC representation. `"ideal_loads"`, the default,
 #'       preserves the established load-only conversion. `"physical"` groups
 #'       conditioned rooms by their referenced `AC_SYS` and generates each
@@ -164,6 +181,9 @@
 #' @examples
 #' destep_opts()
 #' destep_opts("dest", exterior_boundary = "energyplus")
+#' # File schedules remain annual even when simulating days 59 through 61.
+#' destep_opts(schedule_format = "file", schedule_directory = "schedules",
+#'     run_period = c(59L, 61L))
 #' opts <- destep_opts(
 #'     "objects",
 #'     window_optics = "dest_solar",
@@ -175,6 +195,9 @@
 destep_opts <- function(
     preset = "objects",
     ...,
+    schedule_format = "compact",
+    schedule_directory = NULL,
+    run_period = c(1L, 365L),
     hvac = "ideal_loads",
     hvac_options = NULL,
     people_heat = NULL,
@@ -197,6 +220,29 @@ destep_opts <- function(
         )
     }
     checkmate::assert_choice(preset, c("objects", "dest"))
+    checkmate::assert_choice(schedule_format, c("compact", "file"))
+    checkmate::assert_string(
+        schedule_directory,
+        min.chars = 1L,
+        null.ok = schedule_format == "compact"
+    )
+    if (schedule_format == "compact" && !is.null(schedule_directory)) {
+        stop(
+            "schedule_directory requires schedule_format = 'file'.",
+            call. = FALSE
+        )
+    }
+    checkmate::assert_integerish(
+        run_period,
+        len = 2L,
+        lower = 1L,
+        upper = 365L,
+        any.missing = FALSE
+    )
+    if (run_period[[1L]] > run_period[[2L]]) {
+        stop("run_period start day must not exceed its end day.", call. = FALSE)
+    }
+    run_period <- as.integer(run_period)
     defaults <- if (preset == "dest") {
         list(
             people_heat = "temperature_dependent",
@@ -299,6 +345,9 @@ destep_opts <- function(
     structure(
         list(
             preset = preset,
+            schedule_format = schedule_format,
+            schedule_directory = schedule_directory,
+            run_period = run_period,
             hvac = hvac,
             hvac_options = hvac_options,
             people_heat = people_heat,

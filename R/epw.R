@@ -61,15 +61,27 @@ epw__climate_data <- function(dest) {
         stop("No CLIMATE_DATA rows found in the DeST model.", call. = FALSE)
     }
     required <- c(
-        "ID", "HOUR", "DRY_BULB_T", "DAMP", "HORI_TOTAL_RAD",
-        "HORI_SCATTER_RAD", "T_GROUND", "T_SKY", "WS", "WD", "B"
+        "ID",
+        "HOUR",
+        "DRY_BULB_T",
+        "DAMP",
+        "HORI_TOTAL_RAD",
+        "HORI_SCATTER_RAD",
+        "T_GROUND",
+        "T_SKY",
+        "WS",
+        "WD",
+        "B"
     )
     missing <- setdiff(required, DBI::dbListFields(dest, "CLIMATE_DATA"))
     if (length(missing)) {
-        stop(sprintf(
-            "CLIMATE_DATA is missing required field(s): %s",
-            paste(missing, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "CLIMATE_DATA is missing required field(s): %s",
+                paste(missing, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
 
     climate_id <- epw__select_climate_id(dest)
@@ -94,9 +106,13 @@ epw__climate_data <- function(dest) {
 # Expand the six-hourly wind observations stored by DeST Access models using
 # the same zero-initialized last-observation rule found in DeST's solver input.
 epw__expand_sparse_wind <- function(climate) {
-    missing <- vapply(c("WS", "WD"), function(field) {
-        sum(is.na(climate[[field]]))
-    }, integer(1L))
+    missing <- vapply(
+        c("WS", "WD"),
+        function(field) {
+            sum(is.na(climate[[field]]))
+        },
+        integer(1L)
+    )
     for (field in names(missing)) {
         value <- climate[[field]]
         previous <- 0
@@ -124,12 +140,17 @@ epw__expand_sparse_wind <- function(climate) {
 # fall back only when CLIMATE_DATA itself contains one unambiguous ID.
 epw__select_climate_id <- function(dest) {
     resolved <- epw__resolved_city_climate_ids(dest)
-    if (length(resolved) == 1L) return(resolved[[1L]])
+    if (length(resolved) == 1L) {
+        return(resolved[[1L]])
+    }
     if (length(resolved) > 1L) {
-        stop(sprintf(
-            "Multiple CLIMATE_DATA IDs are referenced by ENVIRONMENT/SYS_CITY: %s",
-            paste(resolved, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Multiple CLIMATE_DATA IDs are referenced by ENVIRONMENT/SYS_CITY: %s",
+                paste(resolved, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
 
     ids <- DBI::dbGetQuery(
@@ -137,14 +158,19 @@ epw__select_climate_id <- function(dest) {
         "SELECT DISTINCT ID FROM CLIMATE_DATA ORDER BY ID"
     )$ID
     ids <- ids[!is.na(ids)]
-    if (length(ids) == 1L) return(ids[[1L]])
-    stop(sprintf(
-        paste(
-            "Cannot choose CLIMATE_DATA ID; multiple IDs are present and",
-            "ENVIRONMENT/SYS_CITY did not select one: %s"
+    if (length(ids) == 1L) {
+        return(ids[[1L]])
+    }
+    stop(
+        sprintf(
+            paste(
+                "Cannot choose CLIMATE_DATA ID; multiple IDs are present and",
+                "ENVIRONMENT/SYS_CITY did not select one: %s"
+            ),
+            paste(ids, collapse = ", ")
         ),
-        paste(ids, collapse = ", ")
-    ), call. = FALSE)
+        call. = FALSE
+    )
 }
 
 # Return city-linked climate IDs without guessing when library rows are absent.
@@ -153,8 +179,10 @@ epw__resolved_city_climate_ids <- function(dest) {
     if (!all(c("ENVIRONMENT", "SYS_CITY", "CLIMATE_DATA") %in% tables)) {
         return(numeric())
     }
-    if (!db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "CLIMATE_ID"))) {
+    if (
+        !db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+            !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "CLIMATE_ID"))
+    ) {
         return(numeric())
     }
 
@@ -175,7 +203,10 @@ epw__validate_climate <- function(climate, climate_id) {
     issues <- character()
     hour <- climate$HOUR
     if (nrow(climate) != 8760L) {
-        issues <- c(issues, sprintf("expected 8760 rows but found %i", nrow(climate)))
+        issues <- c(
+            issues,
+            sprintf("expected 8760 rows but found %i", nrow(climate))
+        )
     }
     if (anyNA(hour)) {
         issues <- c(issues, "HOUR contains missing values")
@@ -184,35 +215,52 @@ epw__validate_climate <- function(climate, climate_id) {
         duplicate_hour <- unique(hour[duplicated(hour)])
         unexpected_hour <- setdiff(hour, 0:8759)
         if (length(missing_hour)) {
-            issues <- c(issues, sprintf(
-                "missing HOUR value(s): %s",
-                fmt_integer_sample(missing_hour)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "missing HOUR value(s): %s",
+                    fmt_integer_sample(missing_hour)
+                )
+            )
         }
         if (length(duplicate_hour)) {
-            issues <- c(issues, sprintf(
-                "duplicate HOUR value(s): %s",
-                fmt_integer_sample(duplicate_hour)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "duplicate HOUR value(s): %s",
+                    fmt_integer_sample(duplicate_hour)
+                )
+            )
         }
         if (length(unexpected_hour)) {
-            issues <- c(issues, sprintf(
-                "unexpected HOUR value(s): %s",
-                fmt_integer_sample(unexpected_hour)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "unexpected HOUR value(s): %s",
+                    fmt_integer_sample(unexpected_hour)
+                )
+            )
         }
     }
 
     core <- c(
-        "DRY_BULB_T", "DAMP", "HORI_TOTAL_RAD", "HORI_SCATTER_RAD",
-        "T_SKY", "WS", "WD", "B"
+        "DRY_BULB_T",
+        "DAMP",
+        "HORI_TOTAL_RAD",
+        "HORI_SCATTER_RAD",
+        "T_SKY",
+        "WS",
+        "WD",
+        "B"
     )
     for (field in core) {
         if (anyNA(climate[[field]])) {
             issues <- c(issues, sprintf("%s contains missing values", field))
         }
     }
-    if (any(climate$DRY_BULB_T <= -70 | climate$DRY_BULB_T >= 70, na.rm = TRUE)) {
+    if (
+        any(climate$DRY_BULB_T <= -70 | climate$DRY_BULB_T >= 70, na.rm = TRUE)
+    ) {
         issues <- c(issues, "DRY_BULB_T contains value(s) outside (-70, 70) C")
     }
     if (any(climate$DAMP < 0 | climate$DAMP > 100, na.rm = TRUE)) {
@@ -237,11 +285,14 @@ epw__validate_climate <- function(climate, climate_id) {
         issues <- c(issues, "B contains value(s) outside (31000, 120000) Pa")
     }
     if (length(issues)) {
-        stop(sprintf(
-            "Invalid CLIMATE_DATA series for ID %s: %s",
-            climate_id,
-            paste(issues, collapse = "; ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Invalid CLIMATE_DATA series for ID %s: %s",
+                climate_id,
+                paste(issues, collapse = "; ")
+            ),
+            call. = FALSE
+        )
     }
     invisible(climate)
 }
@@ -252,15 +303,24 @@ epw__environment <- function(dest) {
         stop("No ENVIRONMENT rows found in the DeST model.", call. = FALSE)
     }
     required <- c(
-        "CITY_ID", "CITY_NAME", "PROVINCE", "COUNTRY", "LATITUDE",
-        "LONGITUDE", "ELEVATION", "PROPERTY"
+        "CITY_ID",
+        "CITY_NAME",
+        "PROVINCE",
+        "COUNTRY",
+        "LATITUDE",
+        "LONGITUDE",
+        "ELEVATION",
+        "PROPERTY"
     )
     missing <- setdiff(required, DBI::dbListFields(dest, "ENVIRONMENT"))
     if (length(missing)) {
-        stop(sprintf(
-            "ENVIRONMENT is missing required field(s): %s",
-            paste(missing, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "ENVIRONMENT is missing required field(s): %s",
+                paste(missing, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
     environment <- data.table::as.data.table(DBI::dbGetQuery(
         dest,
@@ -270,17 +330,34 @@ epw__environment <- function(dest) {
         )
     ))
     if (nrow(environment) != 1L) {
-        stop(sprintf(
-            "Expected one ENVIRONMENT row but found %i.",
-            nrow(environment)
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Expected one ENVIRONMENT row but found %i.",
+                nrow(environment)
+            ),
+            call. = FALSE
+        )
     }
-    dt_force_numeric(environment, c(
-        "CITY_ID", "LATITUDE", "LONGITUDE", "ELEVATION", "PROPERTY"
-    ))
-    if (is.na(environment$LATITUDE) || abs(environment$LATITUDE) > 90 ||
-        is.na(environment$LONGITUDE) || abs(environment$LONGITUDE) > 180) {
-        stop("ENVIRONMENT contains an invalid latitude or longitude.", call. = FALSE)
+    dt_force_numeric(
+        environment,
+        c(
+            "CITY_ID",
+            "LATITUDE",
+            "LONGITUDE",
+            "ELEVATION",
+            "PROPERTY"
+        )
+    )
+    if (
+        is.na(environment$LATITUDE) ||
+            abs(environment$LATITUDE) > 90 ||
+            is.na(environment$LONGITUDE) ||
+            abs(environment$LONGITUDE) > 180
+    ) {
+        stop(
+            "ENVIRONMENT contains an invalid latitude or longitude.",
+            call. = FALSE
+        )
     }
     environment
 }
@@ -308,28 +385,33 @@ epw__time_zone <- function(environment) {
 epw__humidity <- function(dry_bulb, humidity_ratio_g_kg, pressure) {
     humidity_ratio <- humidity_ratio_g_kg / 1000
     vapor_pressure <- pressure * humidity_ratio / (0.621945 + humidity_ratio)
-    saturation_pressure <- 611.2 * exp(
-        17.67 * dry_bulb / (dry_bulb + 243.5)
-    )
+    saturation_pressure <- 611.2 *
+        exp(
+            17.67 * dry_bulb / (dry_bulb + 243.5)
+        )
     raw_rh <- 100 * vapor_pressure / saturation_pressure
     gamma <- log(pmax(vapor_pressure, 1e-6) / 611.2)
     raw_dew_point <- 243.5 * gamma / (17.67 - gamma)
     supersaturated <- raw_rh > 100 | raw_dew_point > dry_bulb
     excessive <- raw_rh > 101.5 | raw_dew_point - dry_bulb > 0.25
     if (any(excessive)) {
-        stop(sprintf(
-            paste(
-                "CLIMATE_DATA supersaturation exceeds supported rounding bounds at",
-                "%i hour(s); max RH=%.6f%% and max dew-point excess=%.6f C."
+        stop(
+            sprintf(
+                paste(
+                    "CLIMATE_DATA supersaturation exceeds supported rounding bounds at",
+                    "%i hour(s); max RH=%.6f%% and max dew-point excess=%.6f C."
+                ),
+                sum(excessive),
+                max(raw_rh),
+                max(raw_dew_point - dry_bulb)
             ),
-            sum(excessive),
-            max(raw_rh),
-            max(raw_dew_point - dry_bulb)
-        ), call. = FALSE)
+            call. = FALSE
+        )
     }
 
     capped_vapor_pressure <- pmin(vapor_pressure, saturation_pressure)
-    capped_ratio <- 0.621945 * capped_vapor_pressure /
+    capped_ratio <- 0.621945 *
+        capped_vapor_pressure /
         (pressure - capped_vapor_pressure)
     list(
         dew_point_temperature = pmin(raw_dew_point, dry_bulb),
@@ -338,8 +420,9 @@ epw__humidity <- function(dry_bulb, humidity_ratio_g_kg, pressure) {
             supersaturation_hours = sum(supersaturated),
             maximum_raw_relative_humidity_percent = max(raw_rh),
             maximum_dew_point_excess_c = max(raw_dew_point - dry_bulb),
-            maximum_humidity_ratio_adjustment_g_kg =
-                max((humidity_ratio - capped_ratio) * 1000)
+            maximum_humidity_ratio_adjustment_g_kg = max(
+                (humidity_ratio - capped_ratio) * 1000
+            )
         )
     )
 }
@@ -350,20 +433,29 @@ epw__solar_sine_altitude <- function(hour, latitude, longitude, time_zone) {
     day <- hour %/% 24L + 1L
     local_hour <- hour %% 24L
     gamma <- 2 * pi / 365 * (day - 1 + (local_hour - 12) / 24)
-    equation_of_time <- 229.18 * (
-        0.000075 + 0.001868 * cos(gamma) - 0.032077 * sin(gamma) -
-            0.014615 * cos(2 * gamma) - 0.040849 * sin(2 * gamma)
-    )
-    declination <- 0.006918 - 0.399912 * cos(gamma) +
-        0.070257 * sin(gamma) - 0.006758 * cos(2 * gamma) +
-        0.000907 * sin(2 * gamma) - 0.002697 * cos(3 * gamma) +
+    equation_of_time <- 229.18 *
+        (0.000075 +
+            0.001868 * cos(gamma) -
+            0.032077 * sin(gamma) -
+            0.014615 * cos(2 * gamma) -
+            0.040849 * sin(2 * gamma))
+    declination <- 0.006918 -
+        0.399912 * cos(gamma) +
+        0.070257 * sin(gamma) -
+        0.006758 * cos(2 * gamma) +
+        0.000907 * sin(2 * gamma) -
+        0.002697 * cos(3 * gamma) +
         0.00148 * sin(3 * gamma)
-    true_solar_minutes <- (
-        local_hour * 60 + equation_of_time + 4 * longitude - 60 * time_zone
-    ) %% 1440
+    true_solar_minutes <- (local_hour *
+        60 +
+        equation_of_time +
+        4 * longitude -
+        60 * time_zone) %%
+        1440
     hour_angle <- (true_solar_minutes / 4 - 180) * pi / 180
     latitude <- latitude * pi / 180
-    sin(latitude) * sin(declination) +
+    sin(latitude) *
+        sin(declination) +
         cos(latitude) * cos(declination) * cos(hour_angle)
 }
 
@@ -371,19 +463,34 @@ epw__solar_sine_altitude <- function(hour, latitude, longitude, time_zone) {
 # whole-hour weather timestamp. Sampling minute midpoints avoids the sunrise and
 # sunset singularity produced by dividing hourly radiation by one instant.
 epw__solar_interval_sine <- function(
-    hour, latitude, longitude, time_zone, samples = 60L
+    hour,
+    latitude,
+    longitude,
+    time_zone,
+    samples = 60L
 ) {
-    if (length(samples) != 1L || is.na(samples) || samples < 1L ||
-        samples != as.integer(samples)) {
+    if (
+        length(samples) != 1L ||
+            is.na(samples) ||
+            samples < 1L ||
+            samples != as.integer(samples)
+    ) {
         stop("`samples` must be one positive integer.", call. = FALSE)
     }
     samples <- as.integer(samples)
     offsets <- (seq_len(samples) - 0.5) / samples - 0.5
-    sine_altitude <- vapply(offsets, function(offset) {
-        epw__solar_sine_altitude(
-            hour + offset, latitude, longitude, time_zone
-        )
-    }, numeric(length(hour)))
+    sine_altitude <- vapply(
+        offsets,
+        function(offset) {
+            epw__solar_sine_altitude(
+                hour + offset,
+                latitude,
+                longitude,
+                time_zone
+            )
+        },
+        numeric(length(hour))
+    )
     dim(sine_altitude) <- c(length(hour), samples)
     sunlit_samples <- rowSums(sine_altitude > 0)
     mean_sunlit_sine <- rowSums(pmax(sine_altitude, 0)) /
@@ -402,14 +509,17 @@ epw__solar_interval_sine <- function(
 epw__radiation <- function(climate, environment) {
     discrepancy <- climate$HORI_SCATTER_RAD - climate$HORI_TOTAL_RAD
     if (any(discrepancy > 1)) {
-        stop(sprintf(
-            paste(
-                "HORI_SCATTER_RAD exceeds HORI_TOTAL_RAD by more than 1 W/m2",
-                "at %i hour(s); maximum excess is %.6f W/m2."
+        stop(
+            sprintf(
+                paste(
+                    "HORI_SCATTER_RAD exceeds HORI_TOTAL_RAD by more than 1 W/m2",
+                    "at %i hour(s); maximum excess is %.6f W/m2."
+                ),
+                sum(discrepancy > 1),
+                max(discrepancy)
             ),
-            sum(discrepancy > 1),
-            max(discrepancy)
-        ), call. = FALSE)
+            call. = FALSE
+        )
     }
     global <- pmax(climate$HORI_TOTAL_RAD, climate$HORI_SCATTER_RAD)
     beam_horizontal <- pmax(global - climate$HORI_SCATTER_RAD, 0)
@@ -425,10 +535,13 @@ epw__radiation <- function(climate, environment) {
     direct_normal[daylight] <- beam_horizontal[daylight] /
         solar_interval$mean_sunlit_sine[daylight]
     if (any(direct_normal > 1500)) {
-        stop(sprintf(
-            "Derived direct normal radiation exceeds 1500 W/m2; maximum is %.6f W/m2.",
-            max(direct_normal)
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Derived direct normal radiation exceeds 1500 W/m2; maximum is %.6f W/m2.",
+                max(direct_normal)
+            ),
+            call. = FALSE
+        )
     }
 
     list(
@@ -439,13 +552,15 @@ epw__radiation <- function(climate, environment) {
         audit = list(
             dhi_above_ghi_rounding_hours = sum(discrepancy > 0),
             maximum_dhi_above_ghi_w_m2 = max(discrepancy, 0),
-            positive_beam_horizontal_at_nonpositive_solar_altitude_hours =
-                sum(beam_horizontal > 0 & !daylight),
-            maximum_discarded_beam_horizontal_w_m2 =
-                max(beam_horizontal[!daylight], 0),
+            positive_beam_horizontal_at_nonpositive_solar_altitude_hours = sum(
+                beam_horizontal > 0 & !daylight
+            ),
+            maximum_discarded_beam_horizontal_w_m2 = max(
+                beam_horizontal[!daylight],
+                0
+            ),
             maximum_derived_dni_w_m2 = max(direct_normal),
-            solar_representative_time =
-                "hourly interval centered on DeST HOUR timestamp",
+            solar_representative_time = "hourly interval centered on DeST HOUR timestamp",
             solar_interval_samples = solar_interval$samples,
             partial_sunlight_hours = sum(
                 solar_interval$sunlit_fraction > 0 &
@@ -458,15 +573,24 @@ epw__radiation <- function(climate, environment) {
 # Mark derived meteorological quantities with E and derived DNI with D, using
 # uncertainty 9 because the source database does not provide uncertainty data.
 epw__source_flags <- function(daylight) {
-    vapply(daylight, function(is_daylight) {
-        paste0(
-            "?9", "E9", "E9", "?9", "?9", "?9",
-            if (is_daylight) "D9" else "?0",
-            # EPW defines 22 positional source/uncertainty pairs. DNI is pair
-            # seven; the remaining 15 cover DHI through days since snowfall.
-            paste(rep("?9", 15L), collapse = "")
-        )
-    }, character(1L))
+    vapply(
+        daylight,
+        function(is_daylight) {
+            paste0(
+                "?9",
+                "E9",
+                "E9",
+                "?9",
+                "?9",
+                "?9",
+                if (is_daylight) "D9" else "?0",
+                # EPW defines 22 positional source/uncertainty pairs. DNI is pair
+                # seven; the remaining 15 cover DHI through days since snowfall.
+                paste(rep("?9", 15L), collapse = "")
+            )
+        },
+        character(1L)
+    )
 }
 
 # Construct the 35 EPW data fields and attach machine-readable diagnostics.
@@ -487,12 +611,10 @@ epw__data <- function(climate, environment, missing) {
         dew_point_temperature = humidity$dew_point_temperature,
         relative_humidity = humidity$relative_humidity,
         atmospheric_pressure = climate$B,
-        extraterrestrial_horizontal_radiation =
-            missing$extraterrestrial_horizontal_radiation,
-        extraterrestrial_direct_normal_radiation =
-            missing$extraterrestrial_direct_normal_radiation,
-        horizontal_infrared_radiation_intensity_from_sky =
-            5.6697e-8 * climate$T_SKY^4,
+        extraterrestrial_horizontal_radiation = missing$extraterrestrial_horizontal_radiation,
+        extraterrestrial_direct_normal_radiation = missing$extraterrestrial_direct_normal_radiation,
+        horizontal_infrared_radiation_intensity_from_sky = 5.6697e-8 *
+            climate$T_SKY^4,
         global_horizontal_radiation = radiation$global_horizontal,
         direct_normal_radiation = radiation$direct_normal,
         diffuse_horizontal_radiation = radiation$diffuse_horizontal,
@@ -577,8 +699,8 @@ epw__write_missing_template <- function(path) {
     writeLines(c(header, data), path, useBytes = TRUE)
 }
 
-# Serialize a complete EPW file with hour-ending timestamps and a Monday start
-# that matches destep's Schedule:Week mapping of the first seven source days.
+# Serialize a complete EPW file with hour-ending timestamps on the non-leap
+# 2001 calendar. Converted schedules select dates independently of weekdays.
 epw__write <- function(path, weather, environment) {
     header <- c(
         sprintf(
@@ -657,6 +779,8 @@ epw__write <- function(path, weather, environment) {
 # Normalize required LOCATION values and prevent comma-delimited header damage.
 epw__header_value <- function(value, default) {
     value <- as.character(value[[1L]])
-    if (is.na(value) || !nzchar(value)) value <- as.character(default)
+    if (is.na(value) || !nzchar(value)) {
+        value <- as.character(default)
+    }
     gsub(",", " ", value, fixed = TRUE)
 }
