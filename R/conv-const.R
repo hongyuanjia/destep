@@ -355,7 +355,7 @@ const__window_layers <- function(dest) {
 # ground-floor construction for Calload. Source ACCDB construction tables omit
 # this layer, so it must be restored before normal/reverse stacks are derived.
 const__append_dest_ground_soil <- function(layer) {
-    data.table::setDT(layer)
+    layer <- data.table::as.data.table(data.table::copy(layer))
     ground <- layer[KIND == 4L]
     if (nrow(ground) == 0L) {
         return(layer)
@@ -366,8 +366,35 @@ const__append_dest_ground_soil <- function(layer) {
     already_added <- ground[
         MATERIAL_ID == material_id & MATERIAL_NAME == material_name
     ]
-    if (nrow(already_added) > 0L) {
+    # Idempotence belongs to each construction, not the whole input table.
+    # A physical soil layer in the source is not this synthetic serialization
+    # layer: identical names/properties do not establish that it replaces it.
+    ground <- ground[!already_added, on = c("ID", "KIND")]
+    if (nrow(ground) == 0L) {
         return(layer)
+    }
+
+    # Properties alone cannot identify whether an exported physical soil layer
+    # already includes the implicit soil. Preserve explicit inputs and diagnose
+    # possible duplication instead of silently deleting a real material layer.
+    matching_soil <- which(
+        abs(ground$LENGTH - 1200) < 1e-8 &
+            abs(ground$MATERIAL_CONDUCTIVITY - 0.93) < 1e-8 &
+            abs(ground$MATERIAL_DENSITY - 1800) < 1e-8 &
+            abs(ground$MATERIAL_SPECIFIC_HEAT - 1010) < 1e-8
+    )
+    if (length(matching_soil)) {
+        warning(
+            sprintf(
+                paste(
+                    "Construction(s) %s contain an explicit layer matching DeST automatic soil.",
+                    "The explicit layer is retained and implicit soil added; verify whether",
+                    "the source export already includes that implicit layer."
+                ),
+                paste(unique(ground$ID[matching_soil]), collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
 
     # DeST stores ground-floor source layers from the room side towards the
@@ -395,6 +422,7 @@ const__append_dest_ground_soil <- function(layer) {
 # Normalize the referenced DeST layers and select detailed-window fallbacks
 # before EnergyPlus object tables are derived from them.
 const__prepare_layers <- function(dest) {
+    const__assert_ground_scope(dest)
     const <- const__opaque_layers(dest)
     const <- const__append_dest_ground_soil(const)
 
@@ -446,7 +474,8 @@ const__prepare_layers <- function(dest) {
         warning(sprintf(
             paste0(
                 "Using detailed SYS_WINDOW fallback properties for DeST ",
-                "window(s): %s."
+                "window(s): %s. These fallback properties are not independently ",
+                "established as the active native solver inputs; verify the source window algorithm."
             ),
             paste(
                 sprintf(
@@ -931,6 +960,28 @@ const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
         object$construction
     )
 
+    # Aggregate K/SC does not identify physical panes or their absorptance.
+    # Persist the chosen equivalence in the IDF, not only in an R attribute.
+    simple <- which(
+        out$object$class_name == "WindowMaterial:SimpleGlazingSystem"
+    )
+    if (length(simple)) {
+        data.table::set(
+            out$object,
+            simple,
+            "comment",
+            rep(
+                list(c(
+                    "Equivalent glazing from active WINDOW.TYPE -> WINDOW_TYPE_DATA K/SC.",
+                    "Glass resistance uses nominal films 1/8.7 + 1/23.3 m2 K/W (DeST bshell 0.2.230705 evidence).",
+                    "SHGC = 0.87 * SC is an assumed aggregate mapping; it is not verified native solar transmittance.",
+                    "Physical panes, angular/diffuse response and absorption location are not recovered from K/SC."
+                )),
+                length(simple)
+            )
+        )
+    }
+
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- data.table::rbindlist(
         list(
@@ -943,6 +994,47 @@ const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
     )
 
     out
+}
+
+# Ground contact is a surface boundary, not a construction-library name.
+# A wall construction may also be used above ground; adding soil to that shared
+# stack would damage those surfaces. Reject the unevidenced case explicitly
+# until native wall order and boundary-specific construction splitting are tested.
+const__assert_ground_scope <- function(dest) {
+    if (
+        !db_has_fields(
+            dest,
+            "MAIN_ENCLOSURE",
+            c("ID", "KIND", "SIDE1", "SIDE2")
+        ) ||
+            !db_has_fields(dest, "SURFACE", c("SURFACE_ID", "TYPE"))
+    ) {
+        return(invisible(NULL))
+    }
+    unsupported <- DBI::dbGetQuery(
+        dest,
+        "
+        SELECT DISTINCT E.ID, E.KIND FROM MAIN_ENCLOSURE E
+        JOIN SURFACE S ON S.SURFACE_ID = E.SIDE1 OR S.SURFACE_ID = E.SIDE2
+        WHERE S.TYPE = 2 AND E.KIND != 4 ORDER BY E.ID
+    "
+    )
+    if (nrow(unsupported)) {
+        stop(
+            sprintf(
+                paste(
+                    "Automatic soil is currently verified only for KIND=4 ground floors.",
+                    "Ground-contact enclosure(s) require verified boundary-specific soil stacks: %s."
+                ),
+                paste(
+                    sprintf("%s (KIND=%s)", unsupported$ID, unsupported$KIND),
+                    collapse = "; "
+                )
+            ),
+            call. = FALSE
+        )
+    }
+    invisible(NULL)
 }
 
 # Identify DeST's explicit thermally massless material encodings. Verified DeST
@@ -1056,7 +1148,9 @@ const__simple_glazing_u_factor <- function(k) {
     first_upper <- 5.85 - 1e-10
     second_lower <- 5.85
     second_upper <- 6.4
-    valid <- is.finite(k) & k > 0 & is.finite(target) &
+    valid <- is.finite(k) &
+        k > 0 &
+        is.finite(target) &
         target >= glass_resistance(second_lower) &
         target <= glass_resistance(lower)
     if (any(!valid)) {
@@ -1072,18 +1166,23 @@ const__simple_glazing_u_factor <- function(k) {
             call. = FALSE
         )
     }
-    vapply(target, function(resistance) {
-        interval <- if (resistance >= glass_resistance(first_upper)) {
-            c(lower, first_upper)
-        } else {
-            c(second_lower, second_upper)
-        }
-        stats::uniroot(
-            function(u) glass_resistance(u) - resistance,
-            interval,
-            tol = 1e-12
-        )$root
-    }, numeric(1L), USE.NAMES = FALSE)
+    vapply(
+        target,
+        function(resistance) {
+            interval <- if (resistance >= glass_resistance(first_upper)) {
+                c(lower, first_upper)
+            } else {
+                c(second_lower, second_upper)
+            }
+            stats::uniroot(
+                function(u) glass_resistance(u) - resistance,
+                interval,
+                tol = 1e-12
+            )$root
+        },
+        numeric(1L),
+        USE.NAMES = FALSE
+    )
 }
 
 # Assemble the heterogeneous material and construction classes after the

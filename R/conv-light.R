@@ -41,7 +41,7 @@ light__convert <- function(dest, ep) {
                 WHEN T.L_PER_AREA = 1 THEN T.L_MINPOWER
                 ELSE NULL
             END              AS MIN_WATTS_PER_AREA,
-            ROUND(1.0 - DM.DIST_AIR, 3)
+            1.0 - DM.DIST_AIR
                              AS FRACTION_RADIANT,
             T.L_HEAT_RATE    AS HEAT_TO_ELECTRIC_RATIO
         FROM ROOM R

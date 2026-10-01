@@ -182,6 +182,15 @@ test_that("conversion audits distinguish required input EMS from optional alignm
         "equipment_moisture:source_input",
         fixed = TRUE
     )
+    ep$add(
+        "EnergyManagementSystem:Program" := list(
+            name = "DeST_People_Moisture_1_Control",
+            program_line_1 = "SET MassRate = 0.01"
+        )
+    )
+    audit <- conv__mode_audit(ep, basic)
+    expect_equal(tail(audit$ems$purpose, 1L), "people_moisture")
+    expect_equal(tail(audit$ems$requirement, 1L), "source_input")
 })
 
 # Use a real source database to verify that the public entry point routes both

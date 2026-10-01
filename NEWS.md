@@ -1,5 +1,18 @@
 # destep 0.0.0.9000
 
+- Preserve internal-gain radiant fractions without three-decimal rounding.
+  People sensible heat and nominal prescribed moisture now use separate sources,
+  removing the fixed-enthalpy moisture bias at constant zone temperature.
+  Nonzero people moisture requires EnergyPlus 9.1 or newer; rapid temperature
+  changes can still leave a one-zone-step residual. The current 9.0.1 physical
+  HVAC path cannot be combined with this source. Nominal occupant moisture
+  follows DeST's constant-occupant input behavior; DeST's default
+  temperature-dependent occupant moisture and humidity cap are not reproduced.
+
+- Apply automatic-soil idempotence per construction, diagnose possible explicit
+  soil duplication, and reject unverified non-floor ground-contact stacks.
+  Saved IDF comments identify window, furniture and ground-depth assumptions.
+
 - Preserved opaque shading-panel reflectance in ordinary EnergyPlus shading
   property objects, including overhang and side-fin pieces. Reflection remains
   controlled by the selected solar-distribution method (#37).

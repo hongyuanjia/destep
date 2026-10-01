@@ -10,7 +10,7 @@
 #'       `"dest"` selects temperature-dependent people heat, DeST solar windows,
 #'       DeST source allocation and DeST sky boundaries. Both retain source
 #'       surface convection and physical inputs. Necessary EMS, including that
-#'       for equipment moisture, remains available in both presets.
+#'       for people and equipment moisture, remains available in both presets.
 #' @param ... Must be empty. Supply custom settings by their full names.
 #' @param schedule_format \[string\] `"compact"` (default) writes date-based
 #'       Schedule:Compact objects, losslessly merging consecutive identical
@@ -54,6 +54,9 @@
 #'       `hvac_options` for parameters absent from DeST. All HVAC representations
 #'       reject models containing `AC_SYS_TYPE` values other than 0 and 1 instead
 #'       of silently omitting unsupported systems.
+#'       The current physical path cannot be combined with nonzero people or
+#'       equipment moisture: its 9.0.1 output predates the required EMS calling
+#'       point. Use `"ideal_loads"` on EnergyPlus 9.1 or newer for these sources.
 #'
 #' @param hvac_options \[list or NULL\] Named equipment parameters required by
 #'       the selected `hvac = "physical"` paths. Common fan fields are
@@ -92,8 +95,19 @@
 #'       This mode requires EnergyPlus 9.1 or newer and uses the preceding
 #'       EnergyPlus zone-step air temperature. Record both engines' time steps
 #'       when comparing results. The source database does not store the DeST
-#'       execution option. Moisture input is unchanged; radiant recipient
-#'       fractions and full-building numerical equivalence remain limitations.
+#'       execution option. In either mode, nonzero people moisture requires
+#'       EnergyPlus 9.1 or newer. People carries sensible heat only; its
+#'       unmetered OtherEquipment companion converts g/h/person to latent
+#'       watts using EnergyPlus vapor enthalpy and the latest available zone
+#'       temperature. Rapid temperature changes can leave a one-zone-step
+#'       mass residual. People activity is not a metabolic input for comfort
+#'       calculations, and People latent-gain reports alone exclude the source.
+#'       Both modes preserve the nominal `O_DAMP_PER_PERSON` input, as verified
+#'       for bshell's `--const_occupant` moisture behavior. Default DeST
+#'       occupant moisture also varies with temperature; that algorithm is
+#'       not reproduced, including when `people_heat = "temperature_dependent"`.
+#'       Radiant recipient fractions and full-building numerical equivalence
+#'       remain limitations.
 #'
 #' @param window_optics \[string or NULL\] Aggregate-window optical representation.
 #'       `NULL` uses the preset.
@@ -436,14 +450,16 @@ conv__mode_audit <- function(ep, options) {
     purpose <- rep("unclassified", length(programs))
     requirement <- rep("unclassified", length(programs))
     moisture <- startsWith(programs, "DeST_Moisture_")
+    people_moisture <- startsWith(programs, "DeST_People_Moisture_")
     people <- startsWith(programs, "DeST_People_T_")
     source <- startsWith(programs, "SourceCorrectionUpdate")
     sky <- startsWith(programs, "DeSTSkyWeatherUpdate")
     purpose[moisture] <- "equipment_moisture"
+    purpose[people_moisture] <- "people_moisture"
     purpose[people] <- "temperature_dependent_people"
     purpose[source] <- "prescribed_source_distribution"
     purpose[sky] <- "dest_sky_boundary"
-    requirement[moisture] <- "source_input"
+    requirement[moisture | people_moisture] <- "source_input"
     requirement[people | source | sky] <- "optional_alignment"
     effective <- options[setdiff(names(options), c("mode", "source_options"))]
     effective$partition_boundary <- if (

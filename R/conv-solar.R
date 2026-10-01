@@ -350,6 +350,19 @@ solar__construction <- function(
             )
         )
     }
+    # This opt-in construction encodes one installed solver's aggregate rule.
+    # It must not be mistaken for recovered physical pane or gas properties.
+    ep$object(new_name)$comment(c(
+        "Equivalent optical construction for DeST bshell 0.2.230705 model_algorithm=0.",
+        "Nominal glass resistance = 1/K - 1/8.7 - 1/23.3 m2 K/W.",
+        "SC scales the native transmission curve here; 0.87*SC is not asserted to be SHGC.",
+        if (layers == 1L) {
+            "Absorption is placed at mid-resistance."
+        } else {
+            "Absorption is placed outside aggregate resistance; this is not a resolved multi-pane construction."
+        },
+        "Native angular and diffuse response are algorithm adaptation; room-side solar distribution is separate."
+    ))
     data.frame(
         CONSTRUCTION = new_name,
         SC = sc,

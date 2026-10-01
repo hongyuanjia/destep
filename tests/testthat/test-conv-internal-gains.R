@@ -144,8 +144,13 @@ test_that("can convert internal gains", {
         c(
             "Schedule:Constant",
             "People",
-            "Lights",
             "OtherEquipment",
+            "EnergyManagementSystem:Sensor",
+            "EnergyManagementSystem:InternalVariable",
+            "EnergyManagementSystem:Actuator",
+            "EnergyManagementSystem:Program",
+            "EnergyManagementSystem:ProgramCallingManager",
+            "Lights",
             "ElectricEquipment"
         )
     )
@@ -154,12 +159,12 @@ test_that("can convert internal gains", {
             gains$value$class_name == "People" &
                 gains$value$field_name == "Activity Level Schedule Name"
         ]),
-        "Activity Level 136.69 W"
+        "People Sensible Heat 61 W"
     )
     activity_object <- gains$value[
         class_name == "Schedule:Constant" &
             field_name == "Name" &
-            value_chr == "Activity Level 136.69 W",
+            value_chr == "People Sensible Heat 61 W",
         rleid
     ]
     expect_equal(
@@ -167,14 +172,14 @@ test_that("can convert internal gains", {
             rleid == activity_object & field_name == "Hourly Value",
             value_num
         ],
-        61 + 109 * 2.5 / 3.6
+        61
     )
     expect_equal(
         unique(gains$value$value_num[
             gains$value$class_name == "People" &
                 gains$value$field_name == "Sensible Heat Fraction"
         ]),
-        61 / (61 + 109 * 2.5 / 3.6)
+        1
     )
     expect_equal(sum(gains$object$class_name == "People"), 2L)
     expect_equal(
@@ -236,7 +241,7 @@ test_that("can convert internal gains", {
     )))
     expect_equal(
         unique(unlist(lapply(dynamic_sources, `[[`, "companion_objects"))),
-        "Room 101 People Temperature Correction"
+        c("Room 101 People Temperature Correction", "Room 101 People Moisture")
     )
     original_people <- gains$value[
         class_name == "People",
@@ -253,7 +258,7 @@ test_that("can convert internal gains", {
                 field_name == "EnergyPlus Model Calling Point",
             value_chr
         ],
-        "BeginZoneTimestepBeforeInitHeatBalance"
+        rep("BeginZoneTimestepBeforeInitHeatBalance", 2L)
     )
     expect_equal(
         dynamic$value[
@@ -261,7 +266,7 @@ test_that("can convert internal gains", {
                 field_name == "Fraction Latent",
             value_num
         ],
-        rep(0, 3L)
+        c(1, 0, 0, 0)
     )
     expect_equal(
         dynamic$value[
@@ -269,7 +274,7 @@ test_that("can convert internal gains", {
                 field_name == "Internal Data Type",
             value_chr
         ],
-        "Zone Floor Area"
+        rep("Zone Floor Area", 2L)
     )
     expect_match(
         paste(
@@ -281,7 +286,7 @@ test_that("can convert internal gains", {
         ),
         "SET Count = 0.05"
     )
-    expect_true(all(grepl(
+    expect_true(any(grepl(
         "temperature_dependent",
         unlist(dynamic$object[class_name == "People", comment])
     )))

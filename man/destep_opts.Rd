@@ -32,7 +32,7 @@ simple glazing, EnergyPlus source allocation and exterior radiation.
 \code{"dest"} selects temperature-dependent people heat, DeST solar windows,
 DeST source allocation and DeST sky boundaries. Both retain source
 surface convection and physical inputs. Necessary EMS, including that
-for equipment moisture, remains available in both presets.}
+for people and equipment moisture, remains available in both presets.}
 
 \item{...}{Must be empty. Supply custom settings by their full names.}
 
@@ -80,7 +80,10 @@ trajectories remain unsupported. Physical paths require
 \code{ver = "9.0.1"}, an installed matching EnergyPlus version, and explicit
 \code{hvac_options} for parameters absent from DeST. All HVAC representations
 reject models containing \code{AC_SYS_TYPE} values other than 0 and 1 instead
-of silently omitting unsupported systems.}
+of silently omitting unsupported systems.
+The current physical path cannot be combined with nonzero people or
+equipment moisture: its 9.0.1 output predates the required EMS calling
+point. Use \code{"ideal_loads"} on EnergyPlus 9.1 or newer for these sources.}
 
 \item{hvac_options}{[list or NULL] Named equipment parameters required by
 the selected \code{hvac = "physical"} paths. Common fan fields are
@@ -119,8 +122,19 @@ heat is \verb{max(0, input + 5.536 * (26 - previous temperature))} W.
 This mode requires EnergyPlus 9.1 or newer and uses the preceding
 EnergyPlus zone-step air temperature. Record both engines' time steps
 when comparing results. The source database does not store the DeST
-execution option. Moisture input is unchanged; radiant recipient
-fractions and full-building numerical equivalence remain limitations.}
+execution option. In either mode, nonzero people moisture requires
+EnergyPlus 9.1 or newer. People carries sensible heat only; its
+unmetered OtherEquipment companion converts g/h/person to latent
+watts using EnergyPlus vapor enthalpy and the latest available zone
+temperature. Rapid temperature changes can leave a one-zone-step
+mass residual. People activity is not a metabolic input for comfort
+calculations, and People latent-gain reports alone exclude the source.
+Both modes preserve the nominal \code{O_DAMP_PER_PERSON} input, as verified
+for bshell's \code{--const_occupant} moisture behavior. Default DeST
+occupant moisture also varies with temperature; that algorithm is
+not reproduced, including when \code{people_heat = "temperature_dependent"}.
+Radiant recipient fractions and full-building numerical equivalence
+remain limitations.}
 
 \item{window_optics}{[string or NULL] Aggregate-window optical representation.
 \code{NULL} uses the preset.
