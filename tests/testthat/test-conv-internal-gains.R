@@ -120,9 +120,20 @@ test_that("can convert internal gains", {
     expect_length(sources, 5L)
     people_sources <- Filter(function(s) s$kind == "people", sources)
     light_sources <- Filter(function(s) s$kind == "light", sources)
-    expect_equal(vapply(people_sources, `[[`, numeric(1L), "design_power"), c(1, 0.5), ignore_attr = TRUE)
-    expect_equal(vapply(light_sources, `[[`, numeric(1L), "design_power"), c(90, 18), ignore_attr = TRUE)
-    expect_equal(light_sources[[1L]]$mode, list(air = 0.3, wall = 0.28, floor = 0.35, roof = 0.07))
+    expect_equal(
+        vapply(people_sources, `[[`, numeric(1L), "design_power"),
+        c(1, 0.5),
+        ignore_attr = TRUE
+    )
+    expect_equal(
+        vapply(light_sources, `[[`, numeric(1L), "design_power"),
+        c(90, 18),
+        ignore_attr = TRUE
+    )
+    expect_equal(
+        light_sources[[1L]]$mode,
+        list(air = 0.3, wall = 0.28, floor = 0.35, roof = 0.07)
+    )
     expect_equal(people_sources[[1L]]$sensible_heat, 61)
     expect_false(people_sources[[1L]]$temperature_dependent)
 
@@ -130,7 +141,13 @@ test_that("can convert internal gains", {
     expect_named(gains, c("object", "value"))
     expect_equal(
         unique(gains$object$class_name),
-        c("Schedule:Constant", "People", "Lights", "OtherEquipment", "ElectricEquipment")
+        c(
+            "Schedule:Constant",
+            "People",
+            "Lights",
+            "OtherEquipment",
+            "ElectricEquipment"
+        )
     )
     expect_equal(
         unique(gains$value$value_chr[
@@ -207,68 +224,307 @@ test_that("can convert internal gains", {
     # The new mode must preserve existing People and latent inputs while
     # applying the nonzero minimum count at the correct heat-balance point.
     dynamic <- internal_gains__convert(dest, ep, "temperature_dependent")
-    dynamic_sources <- Filter(function(s) s$kind == "people", attr(dynamic, "sources"))
-    expect_true(all(vapply(dynamic_sources, `[[`, logical(1L), "temperature_dependent")))
-    expect_equal(unique(unlist(lapply(dynamic_sources, `[[`, "companion_objects"))),
-        "Room 101 People Temperature Correction")
-    original_people <- gains$value[class_name == "People", .(field_name, value_chr, value_num)]
-    updated_people <- dynamic$value[class_name == "People", .(field_name, value_chr, value_num)]
+    dynamic_sources <- Filter(
+        function(s) s$kind == "people",
+        attr(dynamic, "sources")
+    )
+    expect_true(all(vapply(
+        dynamic_sources,
+        `[[`,
+        logical(1L),
+        "temperature_dependent"
+    )))
+    expect_equal(
+        unique(unlist(lapply(dynamic_sources, `[[`, "companion_objects"))),
+        "Room 101 People Temperature Correction"
+    )
+    original_people <- gains$value[
+        class_name == "People",
+        .(field_name, value_chr, value_num)
+    ]
+    updated_people <- dynamic$value[
+        class_name == "People",
+        .(field_name, value_chr, value_num)
+    ]
     expect_equal(updated_people, original_people)
-    expect_equal(dynamic$value[class_name == "EnergyManagementSystem:ProgramCallingManager" &
-        field_name == "EnergyPlus Model Calling Point", value_chr],
-        "BeginZoneTimestepBeforeInitHeatBalance")
-    expect_equal(dynamic$value[class_name == "OtherEquipment" &
-        field_name == "Fraction Latent", value_num], rep(0, 3L))
-    expect_equal(dynamic$value[class_name == "EnergyManagementSystem:InternalVariable" &
-        field_name == "Internal Data Type", value_chr], "Zone Floor Area")
-    expect_match(paste(dynamic$value[class_name == "EnergyManagementSystem:Program", value_chr], collapse = "\n"),
-        "SET Count = 0.05")
-    expect_true(all(grepl("temperature_dependent", unlist(dynamic$object[class_name == "People", comment]))))
+    expect_equal(
+        dynamic$value[
+            class_name == "EnergyManagementSystem:ProgramCallingManager" &
+                field_name == "EnergyPlus Model Calling Point",
+            value_chr
+        ],
+        "BeginZoneTimestepBeforeInitHeatBalance"
+    )
+    expect_equal(
+        dynamic$value[
+            class_name == "OtherEquipment" &
+                field_name == "Fraction Latent",
+            value_num
+        ],
+        rep(0, 3L)
+    )
+    expect_equal(
+        dynamic$value[
+            class_name == "EnergyManagementSystem:InternalVariable" &
+                field_name == "Internal Data Type",
+            value_chr
+        ],
+        "Zone Floor Area"
+    )
+    expect_match(
+        paste(
+            dynamic$value[
+                class_name == "EnergyManagementSystem:Program",
+                value_chr
+            ],
+            collapse = "\n"
+        ),
+        "SET Count = 0.05"
+    )
+    expect_true(all(grepl(
+        "temperature_dependent",
+        unlist(dynamic$object[class_name == "People", comment])
+    )))
 
     # Zero reference sensible and latent heat still permits a positive cold-
     # room feedback term; avoid the former 0/0 sensible-fraction input.
-    DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET O_HEAT_PER_PERSON=0, O_DAMP_PER_PERSON=0")
-    zero <- internal_gains__convert_people(dest, ep, "temperature_dependent")
-    expect_equal(zero$value[class_name == "People" & field_name == "Sensible Heat Fraction", value_num], c(1, 1))
-    expect_error(internal_gains__convert_people(dest, ep, "guess"), "arg")
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET O_HEAT_PER_PERSON=0, O_DAMP_PER_PERSON=0"
+    )
+    zero <- people__convert(dest, ep, "temperature_dependent")
+    expect_equal(
+        zero$value[
+            class_name == "People" & field_name == "Sensible Heat Fraction",
+            value_num
+        ],
+        c(1, 1)
+    )
+    expect_error(people__convert(dest, ep, "guess"), "arg")
     # Existing moisture conversion remains available. Its new metadata must
     # explicitly prevent accidental use by the sensible-only projection.
     DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=1")
-    wet <- internal_gains__convert_electric_equipment(dest, ep)
-    expect_match(attr(wet, "sources")[[1L]]$unsupported_reason, "Equipment moisture")
+    wet <- equipment__convert(dest, ep)
+    expect_match(
+        attr(wet, "sources")[[1L]]$unsupported_reason,
+        "Equipment moisture"
+    )
     expect_true(any(grepl("Moisture", wet$value$value_chr), na.rm = TRUE))
 })
 
 test_that("lighting heat ratio preserves electricity and scales minimum and variable heat", {
     ep <- eplusr::empty_idf(23.1)
-    lights <- data.table::data.table(NAME = "Test Lights", ROOM_NAME = "Room", ROOM_AREA = 10,
-        SCHEDULE_NAME = "Occupancy", METHOD = "Watts/Area", WATTS_PER_AREA = 12,
-        MIN_WATTS_PER_AREA = 2, FRACTION_RADIANT = .7, HEAT_TO_ELECTRIC_RATIO = .9)
-    correction <- internal_gains__light_ratio_values(lights, 1L,
-        "watts_per_floor_area", "Minimum", ep)
-    expect_equal(vapply(correction, `[[`, numeric(1L), "design_level"), c(-10, -2))
-    expect_equal(vapply(correction, `[[`, character(1L), "schedule_name"), c("Occupancy", "Minimum"))
-    expect_true(all(vapply(correction, `[[`, character(1L), "fuel_type") == "None"))
+    lights <- data.table::data.table(
+        NAME = "Test Lights",
+        ROOM_NAME = "Room",
+        ROOM_AREA = 10,
+        SCHEDULE_NAME = "Occupancy",
+        METHOD = "Watts/Area",
+        WATTS_PER_AREA = 12,
+        MIN_WATTS_PER_AREA = 2,
+        FRACTION_RADIANT = .7,
+        HEAT_TO_ELECTRIC_RATIO = .9
+    )
+    # Use the same prebuilt Lights values as the owning converter.
+    make_correction <- function(lights) {
+        source <- light__values(lights, 1L, "watts_per_floor_area", "Minimum")
+        light__ratio_values(
+            lights,
+            1L,
+            source,
+            "watts_per_floor_area",
+            conv__idd_field_name(ep, "OtherEquipment", 3L)
+        )
+    }
+    correction <- make_correction(lights)
+    expect_equal(
+        vapply(correction, `[[`, numeric(1L), "design_level"),
+        c(-10, -2)
+    )
+    expect_equal(
+        vapply(correction, `[[`, character(1L), "schedule_name"),
+        c("Occupancy", "Minimum")
+    )
+    expect_true(all(
+        vapply(correction, `[[`, character(1L), "fuel_type") == "None"
+    ))
     for (fraction in c(0, .25, 1)) {
         electric <- 10 * (2 + 10 * fraction)
-        correction_power <- correction[[1L]]$design_level * fraction + correction[[2L]]$design_level
+        correction_power <- correction[[1L]]$design_level *
+            fraction +
+            correction[[2L]]$design_level
         expect_equal(electric + correction_power, .9 * electric)
     }
     lights$HEAT_TO_ELECTRIC_RATIO <- 1
-    expect_length(internal_gains__light_ratio_values(lights, 1L,
-        "watts_per_floor_area", "Minimum", ep), 0L)
+    expect_length(
+        make_correction(lights),
+        0L
+    )
     lights$HEAT_TO_ELECTRIC_RATIO <- 0
     lights$METHOD <- "LightingLevel"
     lights$LIGHTING_LEVEL <- 100
     lights$MIN_LIGHTING_LEVEL <- 20
-    zero <- internal_gains__light_ratio_values(lights, 1L,
-        "watts_per_floor_area", "Minimum", ep)
+    zero <- make_correction(lights)
     expect_equal(vapply(zero, `[[`, numeric(1L), "design_level"), c(-80, -20))
     for (invalid in c(NA_real_, NaN, Inf, -1)) {
         lights$HEAT_TO_ELECTRIC_RATIO <- invalid
-        expect_error(internal_gains__light_ratio_values(lights, 1L,
-            "watts_per_floor_area", "Minimum", ep), "finite and non-negative")
+        expect_error(
+            make_correction(lights),
+            "finite and non-negative"
+        )
     }
+})
+
+test_that("lighting corrections preserve reusable values and area diagnostics", {
+    lights <- data.table::data.table(
+        NAME = "Light",
+        ROOM_NAME = "Room",
+        ROOM_AREA = 10,
+        METHOD = "Watts/Area",
+        HEAT_TO_ELECTRIC_RATIO = 1.2
+    )
+    source <- list(list(
+        name = "Light Minimum",
+        schedule_name = "Minimum",
+        watts_per_floor_area = 2,
+        fraction_radiant = .7
+    ))
+    before <- serialize(list(lights, source), NULL)
+    value <- light__ratio_values(
+        lights,
+        1L,
+        source,
+        "watts_per_floor_area",
+        "Zone Name"
+    )
+    expect_equal(value[[1L]]$design_level, 4)
+    expect_identical(value[[1L]][["Zone Name"]], "Room")
+    expect_identical(serialize(list(lights, source), NULL), before)
+    for (area in c(0, -1, NA_real_, NaN, Inf)) {
+        data.table::set(lights, j = "ROOM_AREA", value = area)
+        expect_error(
+            light__ratio_values(
+                lights,
+                1L,
+                source,
+                "watts_per_floor_area",
+                "Zone Name"
+            ),
+            "requires a positive finite room area"
+        )
+    }
+    expect_identical(
+        light__ratio_values(
+            lights,
+            1L,
+            list(),
+            "watts_per_floor_area",
+            "Zone Name"
+        ),
+        list()
+    )
+    data.table::set(lights, j = "HEAT_TO_ELECTRIC_RATIO", value = 1)
+    expect_identical(
+        light__ratio_values(lights, 1L, source, "watts_per_floor_area", NULL),
+        list()
+    )
+})
+
+test_that("source inventory preserves ordered matches and missing data", {
+    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    # Duplicate IDs and a literal Minimum name must retain first-match and
+    # normal-name precedence, rather than becoming a many-to-many join.
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(ID = c(2L, 1L, 2L), AREA = c(20, 10, 99))
+    )
+    modes <- data.frame(
+        DIST_MODE_ID = c(2L, 1L, 2L),
+        DIST_AIR = c(.2, .1, .9),
+        DIST_AROUND = .3,
+        DIST_FLOOR = .4,
+        DIST_ROOF = .1
+    )
+    DBI::dbWriteTable(dest, "DIST_MODE", modes)
+    gain <- data.table::data.table(
+        NAME = c("A", "A Minimum", "A"),
+        ROOM_ID = c(2L, 1L, 2L),
+        ROOM_NAME = c("First", "Literal", "Duplicate"),
+        CALCULATION_BASIS = c(1L, 0L, 1L),
+        DIST_MODE_ID = c(2L, 1L, 2L)
+    )
+    values <- lapply(c("A Minimum", "A", "A Minimum Minimum"), function(name) {
+        list(
+            name = name,
+            design_level = 5,
+            watts_per_area = 2,
+            schedule_name = "Daily",
+            fraction_radiant = .7
+        )
+    })
+    names(values) <- c("literal", "ordinary", "minimum")
+    # This callback checks that source-row identity survives batch matching.
+    inventory <- function(gain, values) {
+        internal_gains__source_specs(
+            dest,
+            gain,
+            values,
+            "equipment",
+            "design_level",
+            "watts_per_area",
+            "schedule_name",
+            function(item, row) {
+                item$source_row <- row
+                item
+            }
+        )
+    }
+    before <- serialize(list(gain, values), NULL)
+    result <- inventory(gain, values)
+    expect_identical(names(result), names(values))
+    expect_identical(
+        vapply(result, `[[`, integer(1L), "source_row"),
+        c(literal = 2L, ordinary = 1L, minimum = 2L)
+    )
+    expect_identical(
+        vapply(result, `[[`, character(1L), "zone"),
+        c(literal = "Literal", ordinary = "First", minimum = "Literal")
+    )
+    expect_equal(
+        vapply(result, `[[`, numeric(1L), "design_power"),
+        c(literal = 5, ordinary = 40, minimum = 5)
+    )
+    expect_identical(
+        result$ordinary$mode,
+        list(air = .2, wall = .3, floor = .4, roof = .1)
+    )
+    expect_identical(serialize(list(gain, values), NULL), before)
+    expect_identical(inventory(gain[0], list()), list())
+    values[[1L]]$name <- "Unmapped"
+    expect_error(inventory(gain, values), "!is.na\\(row\\)")
+    values[[1L]]$name <- "A Minimum"
+
+    # Missing area/mode information remains missing; it must not silently
+    # become a zero source or borrow a different room's distribution.
+    data.table::set(gain, i = 1L, j = "ROOM_ID", value = NA_integer_)
+    data.table::set(gain, i = 1L, j = "DIST_MODE_ID", value = NA_integer_)
+    missing <- inventory(gain, values)
+    expect_true(is.na(missing$ordinary$design_power))
+    expect_true(all(is.na(unlist(missing$ordinary$mode))))
+    expect_identical(missing$literal, result$literal)
+    DBI::dbWriteTable(dest, "DIST_MODE", modes[0, ], overwrite = TRUE)
+    empty <- inventory(gain, values)
+    expect_true(all(vapply(
+        empty,
+        function(item) all(is.na(unlist(item$mode))),
+        logical(1L)
+    )))
+    DBI::dbRemoveTable(dest, "DIST_MODE")
+    expect_error(inventory(gain, values), "no such table: DIST_MODE")
+    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(DIST_MODE_ID = 1L))
+    expect_null(inventory(gain, values))
 })
 
 test_that("internal gains resolve target zone-reference fields", {
@@ -298,7 +554,7 @@ test_that("internal gains resolve target zone-reference fields", {
         )
     )
     expect_identical(
-        unname(internal_gains__people_field_names(old)),
+        unname(people__field_names(old)),
         c(
             "Number of People",
             "People per Zone Floor Area",
@@ -306,17 +562,29 @@ test_that("internal gains resolve target zone-reference fields", {
         )
     )
     expect_identical(
-        unname(internal_gains__people_field_names(current)),
+        unname(people__field_names(current)),
         c(
             "Number of People",
             "People per Floor Area",
             "Floor Area per Person"
         )
     )
-    expect_error(internal_gains__people_temperature(NULL, old,
-        data.table::data.table(BASE_SENSIBLE_HEAT = 53)), "9.1.0 or newer")
-    expect_error(internal_gains__people_temperature(NULL, current,
-        data.table::data.table(BASE_SENSIBLE_HEAT = -1)), "non-negative finite")
+    expect_error(
+        people__temperature(
+            NULL,
+            old,
+            data.table::data.table(BASE_SENSIBLE_HEAT = 53)
+        ),
+        "9.1.0 or newer"
+    )
+    expect_error(
+        people__temperature(
+            NULL,
+            current,
+            data.table::data.table(BASE_SENSIBLE_HEAT = -1)
+        ),
+        "non-negative finite"
+    )
 })
 
 test_that("rejects internal gain minimum values above their maximum", {
@@ -343,11 +611,11 @@ test_that("rejects internal gain minimum values above their maximum", {
     )
 
     expect_error(
-        internal_gains__people_values(people, 1L, "Minimum"),
+        people__values(people, 1L, "Minimum"),
         "Invalid People.*minimum.*exceeds maximum"
     )
     expect_error(
-        internal_gains__light_values(
+        light__values(
             lights,
             1L,
             "watts_per_floor_area",
@@ -356,7 +624,7 @@ test_that("rejects internal gain minimum values above their maximum", {
         "Invalid Lights.*minimum.*exceeds maximum"
     )
     expect_error(
-        internal_gains__equipment_values(
+        equipment__values(
             equipment,
             1L,
             "watts_per_floor_area",
@@ -411,10 +679,10 @@ test_that("equipment moisture preserves sensible gains and uses an unmetered sou
         )
     )
 
-    gain <- internal_gains__convert_electric_equipment(dest, ep)
+    gain <- equipment__convert(dest, ep)
     # Older targets lack the execution point needed to preserve source timing.
     expect_error(
-        internal_gains__convert_electric_equipment(
+        equipment__convert(
             dest,
             eplusr::empty_idf("9.0.1")
         ),
@@ -477,7 +745,7 @@ test_that("equipment moisture preserves sensible gains and uses an unmetered sou
             "E_MIN_HUM=0.1, E_PER_AREA=1"
         )
     )
-    area_gain <- internal_gains__convert_electric_equipment(dest, ep)
+    area_gain <- equipment__convert(dest, ep)
     expect_equal(
         area_gain$value[
             class_name == "OtherEquipment" &
@@ -501,7 +769,7 @@ test_that("equipment moisture preserves sensible gains and uses an unmetered sou
         "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0, E_MIN_HUM=-0.1"
     )
     expect_error(
-        internal_gains__convert_electric_equipment(dest, ep),
+        equipment__convert(dest, ep),
         "Invalid ROOM_TYPE_DATA equipment moisture generation"
     )
     DBI::dbExecute(
@@ -509,7 +777,7 @@ test_that("equipment moisture preserves sensible gains and uses an unmetered sou
         "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0.1, E_MIN_HUM=0.2"
     )
     expect_error(
-        internal_gains__convert_electric_equipment(dest, ep),
+        equipment__convert(dest, ep),
         "MIN_HUM <= MAX_HUM"
     )
 
@@ -518,7 +786,7 @@ test_that("equipment moisture preserves sensible gains and uses an unmetered sou
         dest,
         "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=0, E_MIN_HUM=0, E_MAXPOWER=40"
     )
-    dry_gain <- internal_gains__convert_electric_equipment(
+    dry_gain <- equipment__convert(
         dest,
         eplusr::empty_idf("9.0.1")
     )
@@ -599,8 +867,20 @@ test_that("can convert internal gains from a real DeST model", {
     # A real DeST schema must supply metadata for every emitted primary gain,
     # including any nonzero minimum, directly from its source distribution.
     sources <- attr(gains, "sources")
-    expect_length(sources, sum(gains$object$class_name %in% c("People", "Lights", "ElectricEquipment")))
-    expect_true(all(vapply(sources, function(s)
-        is.finite(s$design_power) && s$design_power >= 0 &&
-            identical(names(s$mode), c("air", "wall", "floor", "roof")), logical(1L))))
+    expect_length(
+        sources,
+        sum(
+            gains$object$class_name %in%
+                c("People", "Lights", "ElectricEquipment")
+        )
+    )
+    expect_true(all(vapply(
+        sources,
+        function(s) {
+            is.finite(s$design_power) &&
+                s$design_power >= 0 &&
+                identical(names(s$mode), c("air", "wall", "floor", "roof"))
+        },
+        logical(1L)
+    )))
 })

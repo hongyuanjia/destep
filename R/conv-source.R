@@ -474,7 +474,7 @@ source__project <- function(
             add("EnergyManagementSystem:GlobalVariable", sensible)
             lines <- c(
                 lines,
-                internal_gains__people_sensible_lines(
+                people__sensible_lines(
                     item$sensible_heat,
                     temperature,
                     sensible
