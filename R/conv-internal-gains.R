@@ -1,9 +1,9 @@
-# Collect source room-type gains under the explicitly selected people mode.
-internal_gains__convert <- function(dest, ep, people_heat = "constant") {
+# Collect nominal room-type gains without reproducing DeST solver feedback.
+internal_gains__convert <- function(dest, ep) {
     conv <- Filter(
         Negate(is.null),
         list(
-            PEOPLE = people__convert(dest, ep, people_heat),
+            PEOPLE = people__convert(dest, ep),
             LIGHTS = light__convert(dest, ep),
             EQUIPMENT = equipment__convert(dest, ep)
         )

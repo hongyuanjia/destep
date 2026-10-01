@@ -120,13 +120,10 @@ source__plan <- function(faces, sources) {
             item$kind == "people" &&
                 (length(item$sensible_heat) != 1L ||
                     !is.finite(item$sensible_heat) ||
-                    item$sensible_heat < 0 ||
-                    length(item$temperature_dependent) != 1L ||
-                    !is.logical(item$temperature_dependent) ||
-                    is.na(item$temperature_dependent))
+                    item$sensible_heat < 0)
         ) {
             stop(
-                "Unsupported people source: sensible heat and temperature mode are required.",
+                "Unsupported people source: finite nonnegative nominal sensible heat is required.",
                 call. = FALSE
             )
         }
@@ -187,11 +184,7 @@ source__term <- function(item, coefficient) {
         term <- paste(
             term,
             "*",
-            if (item$temperature_dependent) {
-                paste0("SourceSensible", item$index)
-            } else {
-                source__number(item$sensible_heat)
-            }
+            source__number(item$sensible_heat)
         )
     }
     term
@@ -365,10 +358,8 @@ source__project <- function(
     objects,
     faces,
     sources,
-    solar_columns = list(),
-    partition_boundary = c("dest_air", "energyplus")
+    solar_columns = list()
 ) {
-    partition_boundary <- match.arg(partition_boundary)
     faces <- as.data.frame(faces)
     plan <- source__plan(faces, sources)
     classes <- vapply(objects, `[[`, character(1L), 1L)
@@ -395,7 +386,7 @@ source__project <- function(
             function(o) {
                 length(o) >= 2L &&
                     (grepl(
-                        "^SOURCE( ALWAYS ON$|SCHEDULE[0-9]|EQUIPMENT(RADIANT|AIR|FLUX)[0-9]| SOLAR| OPPOSITE|NEIGHBOR|REMOTE|CORRECTION|TEMPERATURE|SENSIBLE)",
+                        "^SOURCE( ALWAYS ON$|SCHEDULE[0-9]|EQUIPMENT(RADIANT|AIR|FLUX)[0-9]| SOLAR|CORRECTION)",
                         toupper(o[[2L]])
                     ) ||
                         grepl(
@@ -460,27 +451,6 @@ source__project <- function(
             "Schedule Value"
         )
         add("Output:Variable", item$schedule, "Schedule Value", "Hourly")
-        if (item$kind == "people" && item$temperature_dependent) {
-            temperature <- paste0("SourceTemperature", i)
-            sensible <- paste0("SourceSensible", i)
-            add(
-                "EnergyManagementSystem:Sensor",
-                temperature,
-                item$zone,
-                "Zone Mean Air Temperature"
-            )
-            # Globals remain available when a large school requires several
-            # ordered programs to stay within EnergyPlus's per-program limit.
-            add("EnergyManagementSystem:GlobalVariable", sensible)
-            lines <- c(
-                lines,
-                people__sensible_lines(
-                    item$sensible_heat,
-                    temperature,
-                    sensible
-                )
-            )
-        }
         if (item$kind == "solar") {
             add(
                 "OtherEquipment",
@@ -605,133 +575,8 @@ source__project <- function(
             )
         }
     }
-    # Keep the complete shared wall and add only the neighbor's prescribed
-    # source to its air boundary: Teq = Tair + Qprescribed / (A * h).
-    shared <- Filter(
-        function(o) {
-            o[[1L]] == "BuildingSurface:Detailed" && o[[7L]] == "Surface"
-        },
-        objects
-    )
-    mapping <- list()
-    for (i in if (partition_boundary == "dest_air") {
-        seq_along(shared)
-    } else {
-        integer()
-    }) {
-        wall <- shared[[i]]
-        peer <- objects[[source__index(
-            objects,
-            "BuildingSurface:Detailed",
-            wall[[8L]]
-        )]]
-        face <- faces[faces$name == peer[[2L]], ]
-        film <- objects[[source__index(
-            objects,
-            "SurfaceProperty:ConvectionCoefficients",
-            peer[[2L]]
-        )]]
-        h <- as.numeric(film[[5L]])
-        if (
-            nrow(face) != 1L ||
-                peer[[9L]] != "NoSun" ||
-                wall[[9L]] != "NoSun" ||
-                film[[3L]] != "Inside" ||
-                film[[4L]] != "Value" ||
-                !is.finite(h) ||
-                h <= 0 ||
-                any(vapply(
-                    objects,
-                    function(o) {
-                        o[[1L]] == "FenestrationSurface:Detailed" &&
-                            o[[5L]] == wall[[2L]]
-                    },
-                    logical(1L)
-                ))
-        ) {
-            stop("Unsupported shared-wall source boundary.", call. = FALSE)
-        }
-        name <- paste("Source Opposite", i)
-        air <- paste0("SourceNeighbor", i)
-        flux <- paste0("SourceRemoteFlux", i)
-        actuator <- paste0("SourceRemoteTemp", i)
-        wi <- source__index(objects, "BuildingSurface:Detailed", wall[[2L]])
-        objects[[wi]][7:8] <- c("OtherSideCoefficients", name)
-        add("Schedule:Constant", name, "", 20)
-        add(
-            "SurfaceProperty:OtherSideCoefficients",
-            name,
-            source__number(h),
-            20,
-            1,
-            0,
-            0,
-            0,
-            0,
-            name
-        )
-        add(
-            "EnergyManagementSystem:Sensor",
-            air,
-            peer[[5L]],
-            "Zone Mean Air Temperature"
-        )
-        add("EnergyManagementSystem:GlobalVariable", flux)
-        add(
-            "EnergyManagementSystem:Actuator",
-            actuator,
-            name,
-            "Schedule:Constant",
-            "Schedule Value"
-        )
-        add(
-            "EnergyManagementSystem:OutputVariable",
-            paste("Source Remote Air", i),
-            air,
-            "Averaged",
-            "ZoneTimestep",
-            "",
-            "C"
-        )
-        add(
-            "EnergyManagementSystem:OutputVariable",
-            paste("Source Remote Flux", i),
-            flux,
-            "Averaged",
-            "ZoneTimestep",
-            "",
-            "W/m2"
-        )
-        terms <- vapply(
-            Filter(function(s) s$zone == face$zone, plan),
-            function(s) {
-                source__term(s, s$fractions[[face$name]] / face$area)
-            },
-            character(1L)
-        )
-        lines <- c(
-            lines,
-            paste(
-                "SET",
-                flux,
-                "=",
-                if (length(terms)) paste(terms, collapse = " + ") else "0"
-            ),
-            paste("SET", actuator, "=", air, "+", flux, "/", source__number(h))
-        )
-        add("Output:Variable", "*", paste("Source Remote Air", i), "Hourly")
-        add("Output:Variable", "*", paste("Source Remote Flux", i), "Hourly")
-        add("Output:Variable", name, "Schedule Value", "Hourly")
-        mapping[[i]] <- list(
-            surface = wall[[2L]],
-            opposite_surface = peer[[2L]],
-            opposite_zone = peer[[5L]],
-            h = h,
-            area = face$area,
-            index = i,
-            schedule = name
-        )
-    }
+    # Surface pairing remains intact: redistribution never replaces an
+    # interzone construction with an equivalent neighbor-air boundary.
     if (length(lines)) {
         chunks <- split(lines, ceiling(seq_along(lines) / 450L))
         programs <- if (length(chunks) == 1L) {
@@ -755,7 +600,6 @@ source__project <- function(
         audit = list(
             faces = faces,
             sources = plan,
-            partitions = mapping,
             optical_changes = optical$changes,
             receiver_changes = receiving$changes
         )
@@ -823,7 +667,6 @@ source__options <- function(
                 c(
                     "weather",
                     "directory",
-                    "partition_boundary",
                     "exterior_boundary",
                     "sky_radiation"
                 )
@@ -840,13 +683,6 @@ source__options <- function(
             call. = FALSE
         )
     }
-    if (is.null(options$partition_boundary)) {
-        options$partition_boundary <- "energyplus"
-    }
-    checkmate::assert_choice(
-        options$partition_boundary,
-        c("energyplus", "dest_air")
-    )
     if (is.null(options$exterior_boundary)) {
         options$exterior_boundary <- "energyplus"
     }
@@ -856,15 +692,6 @@ source__options <- function(
     )
     # Sky and source allocation can now be selected independently. Preserve
     # the actual optical and weather dependencies of either active operation.
-    if (
-        source_distribution != "dest" &&
-            options$partition_boundary != "energyplus"
-    ) {
-        stop(
-            "partition_boundary requires source_distribution = 'dest'.",
-            call. = FALSE
-        )
-    }
     if (!is.null(options$sky_radiation)) {
         checkmate::assert_flag(options$sky_radiation)
         if (options$exterior_boundary != "dest_sky") {
@@ -961,7 +788,7 @@ source__apply <- function(dest, ep, converted, options, verbose = FALSE) {
         rep(list(0), length(solar)),
         vapply(solar, `[[`, character(1L), "schedule")
     )
-    source__project(objects, faces, sources, zero, options$partition_boundary)
+    source__project(objects, faces, sources, zero)
 
     cache <- NULL
     columns <- list()
@@ -979,8 +806,7 @@ source__apply <- function(dest, ep, converted, options, verbose = FALSE) {
         objects,
         faces,
         sources,
-        columns,
-        options$partition_boundary
+        columns
     )
     # The research builder requests detailed diagnostics. Public conversion
     # keeps its EMS inputs but leaves reporting choices to the user.
@@ -1031,7 +857,6 @@ source__apply <- function(dest, ep, converted, options, verbose = FALSE) {
         )
     }
     audit <- generated$audit
-    audit$partition_boundary <- options$partition_boundary
     audit$cache <- if (is.null(cache)) {
         NULL
     } else {

@@ -6,7 +6,7 @@ test_that("one options entry point accepts presets and reusable configurations",
     expect_identical(formals(to_eplus)$options, "objects")
     basic <- destep_opts()
     expect_s3_class(basic, "destep_options")
-    expect_equal(basic$people_heat, "constant")
+    expect_false(any(c("people_heat", "partition_boundary") %in% names(basic)))
     expect_equal(basic$window_optics, "simple_glazing")
     expect_equal(basic$source_distribution, "energyplus")
     expect_equal(basic$surface_convection, "dest")
@@ -17,20 +17,18 @@ test_that("one options entry point accepts presets and reusable configurations",
     expect_identical(unserialize(serialize(basic, NULL)), basic)
 
     dest <- destep_opts("dest")
-    expect_equal(dest$people_heat, "temperature_dependent")
+    expect_false(any(c("people_heat", "partition_boundary") %in% names(dest)))
     expect_equal(dest$window_optics, "dest_solar")
     expect_equal(dest$source_distribution, "dest")
     expect_equal(dest$exterior_boundary, "dest_sky")
     explicit <- destep_opts(
         "dest",
-        people_heat = "constant",
         source_distribution = "energyplus",
         exterior_boundary = "energyplus",
         terrain = "Country",
         solar_distribution = "FullExteriorWithReflections",
         shadow_update_days = 1L
     )
-    expect_equal(explicit$people_heat, "constant")
     expect_equal(explicit$source_distribution, "energyplus")
     expect_equal(explicit$exterior_boundary, "energyplus")
     expect_equal(explicit$window_optics, "dest_solar")
@@ -56,7 +54,10 @@ test_that("configurations reject typos and modified invalid objects before datab
         destep_opts(simulation_options = list(terrain = "Country")),
         "Unknown"
     )
-    expect_error(destep_opts(people_heat = "other"), "people_heat")
+    expect_error(destep_opts(people_heat = "constant"), "Unknown")
+    expect_error(destep_opts(people_heat = "temperature_dependent"), "Unknown")
+    expect_error(destep_opts(partition_boundary = "energyplus"), "Unknown")
+    expect_error(destep_opts(partition_boundary = "dest_air"), "Unknown")
     expect_error(destep_opts(terrain = "Forest"), "terrain")
     expect_error(destep_opts(shadow_update_days = 0), "shadow_update_days")
     invalid <- destep_opts()
@@ -66,7 +67,7 @@ test_that("configurations reject typos and modified invalid objects before datab
     invalid$unknown <- TRUE
     expect_error(to_eplus(NULL, options = invalid), "fields")
     invalid <- destep_opts()
-    invalid$people_heat <- NULL
+    invalid$window_optics <- NULL
     expect_error(to_eplus(NULL, options = invalid), "fields")
     invalid <- destep_opts()
     names(invalid)[2L] <- names(invalid)[1L]
@@ -82,18 +83,6 @@ test_that("all feature dependencies are checked through the options constructor"
     expect_error(
         destep_opts("dest", surface_convection = "energyplus"),
         "requires surface_convection"
-    )
-    expect_error(
-        destep_opts(partition_boundary = "dest_air"),
-        "partition_boundary"
-    )
-    expect_error(
-        destep_opts(
-            source_distribution = "dest",
-            surface_convection = "energyplus",
-            partition_boundary = "dest_air"
-        ),
-        "partition_boundary"
     )
     expect_error(destep_opts(sky_radiation = FALSE), "sky_radiation")
     expect_error(destep_opts("dest", sky_radiation = 1), "sky_radiation")
@@ -116,8 +105,7 @@ test_that("all feature dependencies are checked through the options constructor"
         "dest",
         weather = "future.epw",
         directory = "prepass",
-        sky_radiation = FALSE,
-        partition_boundary = "dest_air"
+        sky_radiation = FALSE
     )
     expect_identical(conv__resolve_options(supplied), supplied)
     ep <- list(version = function() "26.1.0")
@@ -158,14 +146,14 @@ test_that("conversion audits distinguish required input EMS from optional alignm
     )
     ep$add(
         "EnergyManagementSystem:Program" := list(
-            name = "DeST_People_T_1_Control",
+            name = "SourceCorrectionUpdate",
             program_line_1 = "SET Sensible = 60"
         )
     )
     audit <- conv__mode_audit(ep, basic)
     expect_equal(
         audit$ems$purpose,
-        c("equipment_moisture", "temperature_dependent_people")
+        c("equipment_moisture", "prescribed_source_distribution")
     )
     expect_equal(audit$ems$requirement, c("source_input", "optional_alignment"))
     expect_equal(

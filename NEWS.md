@@ -1,5 +1,10 @@
 # destep 0.0.0.9000
 
+- Removed DeST occupant sensible-temperature feedback and neighbor-air partition
+  approximation, including the `people_heat` and `partition_boundary` options.
+  All presets retain nominal people sensible heat, the independent prescribed
+  moisture source, and coupled interzone surfaces with their original construction.
+
 - Preserve internal-gain radiant fractions without three-decimal rounding.
   People sensible heat and nominal prescribed moisture now use separate sources,
   removing the fixed-enthalpy moisture bias at constant zone temperature.
@@ -61,9 +66,8 @@
   net receiving areas and window distribution modes are extracted automatically.
   Weather-specific solar prepasses are reused only after checking model, file,
   engine and output identities. Generated time tables retain literal source
-  fractions and deduplicate identical columns. Coupled interzone surfaces remain
-  the default; the installed-DeST neighbor-air representation requires explicit
-  selection. Whole-school equivalence and updated ASHRAE 140 acceptance remain
+  fractions and deduplicate identical columns. Coupled interzone surfaces retain
+  their original surface references. Whole-school equivalence and updated ASHRAE 140 acceptance remain
   separate validation tasks (#36).
 
 - Fixed CI initialization by replacing the removed Homebrew Actions `master`
@@ -94,14 +98,6 @@
   source follows the same minimum/variable schedules and convective/radiant
   fractions. Native zero-source and independent ratio checks confirm the
   multiplication rule; this correction does not require EMS.
-
-- Added `people_heat = "temperature_dependent"` to reproduce the previous-room-
-  temperature sensible-heat rule verified for DeST 0.2.230705. The existing
-  `"constant"` default corresponds to bshell's `--const_occupant` mode.
-  EMS updates the sensible correction before heat-balance initialization,
-  preserving minimum occupancy, per-area counts, and independent moisture.
-  This option requires EnergyPlus 9.1 or newer; radiant surface allocation
-  and whole-building equivalence remain outside the isolated validation.
 
 - Converted effective `ROOM_TYPE_DATA.FURNITURE_COEF` to a two-sided storage
   slab using the area-dependent rule verified against DeST 0.2.230705.

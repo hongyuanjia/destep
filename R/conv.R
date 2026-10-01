@@ -245,7 +245,6 @@ to_eplus <- function(
             "shadow_update_days"
         )])
     ))
-    people_heat <- conversion$people_heat
     window_optics <- conversion$window_optics
     source_distribution <- conversion$source_distribution
     surface_convection <- conversion$surface_convection
@@ -399,7 +398,7 @@ to_eplus <- function(
     )
 
     if (internal_gains__has_room_type_data(tmpdb)) {
-        conv$internal_gains <- internal_gains__convert(tmpdb, ep, people_heat)
+        conv$internal_gains <- internal_gains__convert(tmpdb, ep)
     }
     conv <- Filter(Negate(is.null), conv)
 

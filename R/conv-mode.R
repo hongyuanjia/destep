@@ -7,7 +7,7 @@
 #'
 #' @param preset \[string\] `"objects"` (default) selects constant people heat,
 #'       simple glazing, EnergyPlus source allocation and exterior radiation.
-#'       `"dest"` selects temperature-dependent people heat, DeST solar windows,
+#'       `"dest"` selects DeST solar windows,
 #'       DeST source allocation and DeST sky boundaries. Both retain source
 #'       surface convection and physical inputs. Necessary EMS, including that
 #'       for people and equipment moisture, remains available in both presets.
@@ -86,29 +86,6 @@
 #'       fields required by the selected paths need to be supplied. These values
 #'       are never inferred from reference models.
 #'
-#' @param people_heat \[string or NULL\] People sensible-heat mode. `NULL`
-#'       uses the preset. `"constant"`
-#'       preserves the existing conversion and corresponds to DeST bshell's
-#'       `--const_occupant` option. Use `"temperature_dependent"` for the
-#'       default behavior verified with DeST 0.2.230705: per-person sensible
-#'       heat is `max(0, input + 5.536 * (26 - previous temperature))` W.
-#'       This mode requires EnergyPlus 9.1 or newer and uses the preceding
-#'       EnergyPlus zone-step air temperature. Record both engines' time steps
-#'       when comparing results. The source database does not store the DeST
-#'       execution option. In either mode, nonzero people moisture requires
-#'       EnergyPlus 9.1 or newer. People carries sensible heat only; its
-#'       unmetered OtherEquipment companion converts g/h/person to latent
-#'       watts using EnergyPlus vapor enthalpy and the latest available zone
-#'       temperature. Rapid temperature changes can leave a one-zone-step
-#'       mass residual. People activity is not a metabolic input for comfort
-#'       calculations, and People latent-gain reports alone exclude the source.
-#'       Both modes preserve the nominal `O_DAMP_PER_PERSON` input, as verified
-#'       for bshell's `--const_occupant` moisture behavior. Default DeST
-#'       occupant moisture also varies with temperature; that algorithm is
-#'       not reproduced, including when `people_heat = "temperature_dependent"`.
-#'       Radiant recipient fractions and full-building numerical equivalence
-#'       remain limitations.
-#'
 #' @param window_optics \[string or NULL\] Aggregate-window optical representation.
 #'       `NULL` uses the preset.
 #'       `"simple_glazing"` preserves the existing default. The opt-in
@@ -156,10 +133,6 @@
 #'       longwave exchange, leaving a small numerical residual. The returned
 #'       model's `exterior_boundary` attribute records coefficients and tables.
 #'
-#' @param partition_boundary \[string\] `"energyplus"` retains coupled interzone
-#'       surfaces. `"dest_air"` selects the neighbor-air plus prescribed radiation
-#'       approximation verified with DeST 0.2.230705. It requires DeST source
-#'       distribution and surface convection; it is not general solver equivalence.
 #' @param sky_radiation \[logical or NULL\] Override the saved
 #'       `OPTION.CAL_SKY_RADIATION` switch for this run. `NULL` reads the source
 #'       switch. Missing switches require an explicit override. Only available
@@ -192,6 +165,17 @@
 #'
 #' @return An object of class `destep_options`, accepted by `to_eplus(options = )`.
 #' @seealso [to_eplus()]
+#' @section People inputs and interzone surfaces:
+#' Both presets retain nominal people sensible heat and `O_DAMP_PER_PERSON`;
+#' DeST occupant temperature feedback is not reproduced. Nonzero people moisture
+#' requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
+#' target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
+#' temperature changes can leave a one-zone-step mass residual. People carries
+#' sensible heat only: its activity is not a comfort-model metabolic input and
+#' its latent-gain reports exclude the independent moisture source.
+#' Interzone surfaces retain their paired surface references and constructions;
+#' no neighbor-air equivalent-temperature boundary is generated.
+#'
 #' @examples
 #' destep_opts()
 #' destep_opts("dest", exterior_boundary = "energyplus")
@@ -214,12 +198,10 @@ destep_opts <- function(
     run_period = c(1L, 365L),
     hvac = "ideal_loads",
     hvac_options = NULL,
-    people_heat = NULL,
     window_optics = NULL,
     source_distribution = NULL,
     surface_convection = "dest",
     exterior_boundary = NULL,
-    partition_boundary = "energyplus",
     sky_radiation = NULL,
     weather = NULL,
     directory = NULL,
@@ -259,23 +241,18 @@ destep_opts <- function(
     run_period <- as.integer(run_period)
     defaults <- if (preset == "dest") {
         list(
-            people_heat = "temperature_dependent",
             window_optics = "dest_solar",
             source_distribution = "dest",
             exterior_boundary = "dest_sky"
         )
     } else {
         list(
-            people_heat = "constant",
             window_optics = "simple_glazing",
             source_distribution = "energyplus",
             exterior_boundary = "energyplus"
         )
     }
     # Resolve preset defaults once so reuse never depends on missing arguments.
-    if (is.null(people_heat)) {
-        people_heat <- defaults$people_heat
-    }
     if (is.null(window_optics)) {
         window_optics <- defaults$window_optics
     }
@@ -286,15 +263,10 @@ destep_opts <- function(
         exterior_boundary <- defaults$exterior_boundary
     }
     checkmate::assert_choice(hvac, c("ideal_loads", "physical"))
-    checkmate::assert_choice(
-        people_heat,
-        c("constant", "temperature_dependent")
-    )
     checkmate::assert_choice(window_optics, c("simple_glazing", "dest_solar"))
     checkmate::assert_choice(source_distribution, c("energyplus", "dest"))
     checkmate::assert_choice(surface_convection, c("dest", "energyplus"))
     checkmate::assert_choice(exterior_boundary, c("energyplus", "dest_sky"))
-    checkmate::assert_choice(partition_boundary, c("energyplus", "dest_air"))
     if (hvac == "physical") {
         checkmate::assert_list(
             hvac_options,
@@ -310,15 +282,6 @@ destep_opts <- function(
     if (exterior_boundary == "dest_sky" && surface_convection != "dest") {
         stop(
             "exterior_boundary = 'dest_sky' requires surface_convection = 'dest'.",
-            call. = FALSE
-        )
-    }
-    if (
-        partition_boundary == "dest_air" &&
-            (source_distribution != "dest" || surface_convection != "dest")
-    ) {
-        stop(
-            "partition_boundary = 'dest_air' requires source_distribution = 'dest' and surface_convection = 'dest'.",
             call. = FALSE
         )
     }
@@ -364,12 +327,10 @@ destep_opts <- function(
             run_period = run_period,
             hvac = hvac,
             hvac_options = hvac_options,
-            people_heat = people_heat,
             window_optics = window_optics,
             source_distribution = source_distribution,
             surface_convection = surface_convection,
             exterior_boundary = exterior_boundary,
-            partition_boundary = partition_boundary,
             sky_radiation = sky_radiation,
             weather = weather,
             directory = directory,
@@ -419,7 +380,6 @@ conv__conversion_options <- function(options) {
             unclass(options[c(
                 "weather",
                 "directory",
-                "partition_boundary",
                 "exterior_boundary",
                 "sky_radiation"
             )])
@@ -428,7 +388,6 @@ conv__conversion_options <- function(options) {
     c(
         list(mode = options$preset),
         unclass(options[c(
-            "people_heat",
             "window_optics",
             "source_distribution",
             "surface_convection",
@@ -451,24 +410,15 @@ conv__mode_audit <- function(ep, options) {
     requirement <- rep("unclassified", length(programs))
     moisture <- startsWith(programs, "DeST_Moisture_")
     people_moisture <- startsWith(programs, "DeST_People_Moisture_")
-    people <- startsWith(programs, "DeST_People_T_")
     source <- startsWith(programs, "SourceCorrectionUpdate")
     sky <- startsWith(programs, "DeSTSkyWeatherUpdate")
     purpose[moisture] <- "equipment_moisture"
     purpose[people_moisture] <- "people_moisture"
-    purpose[people] <- "temperature_dependent_people"
     purpose[source] <- "prescribed_source_distribution"
     purpose[sky] <- "dest_sky_boundary"
     requirement[moisture | people_moisture] <- "source_input"
-    requirement[people | source | sky] <- "optional_alignment"
+    requirement[source | sky] <- "optional_alignment"
     effective <- options[setdiff(names(options), c("mode", "source_options"))]
-    effective$partition_boundary <- if (
-        is.null(options$source_options$partition_boundary)
-    ) {
-        "energyplus"
-    } else {
-        options$source_options$partition_boundary
-    }
     list(
         preset = options$mode,
         effective = effective,

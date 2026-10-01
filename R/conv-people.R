@@ -13,11 +13,7 @@ people__field_names <- function(ep) {
 # ROOM.TYPE -> ROOM_TYPE_DATA occupant fields -> People. The outdoor-air field
 # is handled separately by outdoor_air__convert() so People remains focused on
 # internal sensible and latent heat gains.
-people__convert <- function(dest, ep, people_heat = "constant") {
-    people_heat <- match.arg(
-        people_heat,
-        c("constant", "temperature_dependent")
-    )
+people__convert <- function(dest, ep) {
     if (!internal_gains__has_room_type_data(dest)) {
         return(NULL)
     }
@@ -163,15 +159,15 @@ people__convert <- function(dest, ep, people_heat = "constant") {
     # schedules. However, in DeST, it is a fixed value. So here we create a
     # constant activity-level schedule for each distinct activity level.
     parts$people <- conv__add_objects(dest, ep, "People", people_objects)
-    # The bshell execution switch is absent from the source database. Preserve
-    # the caller's choice in the saved People objects as well as the API call.
+    # Preserve nominal source inputs independently of the DeST execution mode.
+    # Keep this boundary visible when the generated IDF is saved or shared.
     data.table::set(
         parts$people$object,
         NULL,
         "comment",
         rep(
             list(c(
-                paste0("DeST people_heat mode: ", people_heat),
+                "People sensible heat and moisture preserve nominal source inputs; DeST occupant temperature feedback is not reproduced.",
                 "People carries source sensible heat only; its activity is not a comfort-model metabolic input.",
                 "Nominal O_DAMP_PER_PERSON is represented by the separate unmetered People Moisture source.",
                 "Moisture follows the prescribed input (--const_occupant behavior); DeST's default temperature-dependent occupant moisture is not reproduced."
@@ -180,199 +176,15 @@ people__convert <- function(dest, ep, people_heat = "constant") {
         )
     )
     parts$moisture <- people__moisture_objects(dest, ep, people)
-    if (people_heat == "temperature_dependent") {
-        parts$temperature <- people__temperature(
-            dest,
-            ep,
-            people
-        )
-    }
-
     out <- conv__combine_outputs(parts, table = people)
     attr(out, "sources") <- people__source_specs(
         dest,
         people,
         people_objects,
         field_names[["number"]],
-        field_names[["per_area"]],
-        people_heat
+        field_names[["per_area"]]
     )
     out
-}
-
-# Generate the native sensible-heat relation in one place for both the people
-# correction and any subsequent redistribution of that same sensible heat.
-people__sensible_lines <- function(heat, temperature, variable) {
-    c(
-        sprintf(
-            "SET %s = %.17g + 5.536 * (26 - %s)",
-            variable,
-            heat,
-            temperature
-        ),
-        sprintf("SET %s = @MAX 0 %s", variable, variable)
-    )
-}
-
-# Preserve the native previous-temperature sensible source while leaving the
-# independently represented People count and moisture input unchanged. Native
-# hourly equipment replay and changing-occupancy free-float checks establish
-# the source rule; radiant recipient fractions still follow EnergyPlus.
-people__temperature <- function(dest, ep, people) {
-    if (
-        numeric_version(as.character(ep$version())) < numeric_version("9.1.0")
-    ) {
-        stop(
-            "Temperature-dependent people heat requires EnergyPlus 9.1.0 or newer.",
-            call. = FALSE
-        )
-    }
-    if (
-        any(
-            !is.finite(people$BASE_SENSIBLE_HEAT) |
-                people$BASE_SENSIBLE_HEAT < 0
-        )
-    ) {
-        stop(
-            "Temperature-dependent people heat requires non-negative finite sensible inputs.",
-            call. = FALSE
-        )
-    }
-    classes <- c(
-        "OtherEquipment",
-        "EnergyManagementSystem:Sensor",
-        "EnergyManagementSystem:InternalVariable",
-        "EnergyManagementSystem:Actuator",
-        "EnergyManagementSystem:Program",
-        "EnergyManagementSystem:ProgramCallingManager"
-    )
-    values <- stats::setNames(lapply(classes, function(class) list()), classes)
-    always_on <- "Always On - DeST People Temperature"
-    zone_field <- conv__idd_field_name(ep, "OtherEquipment", 3L)
-    for (i in seq_len(nrow(people))) {
-        prefix <- paste0("DeST_People_T_", i)
-        name <- paste(people$NAME[[i]], "Temperature Correction")
-        per_area <- people$CALCULATION_BASIS[[i]] == 1L
-        maximum <- if (per_area) {
-            people$PEOPLE_PER_AREA[[i]]
-        } else {
-            people$NUMBER_OF_PEOPLE[[i]]
-        }
-        minimum <- internal_gains__zero_if_na(
-            if (per_area) {
-                people$MIN_PEOPLE_PER_AREA[[i]]
-            } else {
-                people$MIN_NUMBER_OF_PEOPLE[[i]]
-            }
-        )
-        source <- list(
-            name = name,
-            fuel_type = "None",
-            schedule_name = always_on,
-            design_level_calculation_method = "EquipmentLevel",
-            design_level = 0,
-            fraction_latent = 0,
-            fraction_radiant = people$FRACTION_RADIANT[[i]],
-            fraction_lost = 0,
-            end_use_subcategory = "DeST People Temperature Correction"
-        )
-        source[[zone_field]] <- people$ROOM_NAME[[i]]
-        values$OtherEquipment <- c(values$OtherEquipment, list(source))
-        values[["EnergyManagementSystem:Sensor"]] <- c(
-            values[["EnergyManagementSystem:Sensor"]],
-            list(
-                list(
-                    name = paste0(prefix, "_Temperature"),
-                    output_variable_or_output_meter_index_key_name = people$ROOM_NAME[[
-                        i
-                    ]],
-                    output_variable_or_output_meter_name = "Zone Mean Air Temperature"
-                ),
-                list(
-                    name = paste0(prefix, "_Schedule"),
-                    output_variable_or_output_meter_index_key_name = people$SCHEDULE_NAME[[
-                        i
-                    ]],
-                    output_variable_or_output_meter_name = "Schedule Value"
-                )
-            )
-        )
-        if (per_area) {
-            values[["EnergyManagementSystem:InternalVariable"]] <- c(
-                values[["EnergyManagementSystem:InternalVariable"]],
-                list(list(
-                    name = paste0(prefix, "_Area"),
-                    internal_data_index_key_name = people$ROOM_NAME[[i]],
-                    internal_data_type = "Zone Floor Area"
-                ))
-            )
-        }
-        values[["EnergyManagementSystem:Actuator"]] <- c(
-            values[["EnergyManagementSystem:Actuator"]],
-            list(list(
-                name = paste0(prefix, "_Power"),
-                actuated_component_unique_name = name,
-                actuated_component_type = "OtherEquipment",
-                actuated_component_control_type = "Power Level"
-            ))
-        )
-        # Apply minimum plus scheduled range once, before the zone multiplier.
-        # Clamp the total native sensible power before subtracting the existing
-        # constant People contribution, so high-temperature correction can be negative.
-        lines <- c(
-            sprintf(
-                "SET Count = %.17g + %.17g * %s_Schedule",
-                minimum,
-                maximum - minimum,
-                prefix
-            ),
-            if (per_area) sprintf("SET Count = Count * %s_Area", prefix),
-            people__sensible_lines(
-                people$BASE_SENSIBLE_HEAT[[i]],
-                paste0(prefix, "_Temperature"),
-                "Sensible"
-            ),
-            sprintf(
-                "SET %s_Power = (Sensible - %.17g) * Count",
-                prefix,
-                people$BASE_SENSIBLE_HEAT[[i]]
-            )
-        )
-        fields <- vapply(
-            seq_along(lines) + 1L,
-            function(field) {
-                conv__idd_field_name(
-                    ep,
-                    "EnergyManagementSystem:Program",
-                    field
-                )
-            },
-            character(1L)
-        )
-        values[["EnergyManagementSystem:Program"]] <- c(
-            values[["EnergyManagementSystem:Program"]],
-            list(c(
-                list(name = paste0(prefix, "_Control")),
-                stats::setNames(as.list(lines), fields)
-            ))
-        )
-        # Gains are consumed during heat-balance initialization. Calling this
-        # before the predictor leaves an extra, experimentally confirmed lag.
-        values[["EnergyManagementSystem:ProgramCallingManager"]] <- c(
-            values[["EnergyManagementSystem:ProgramCallingManager"]],
-            list(list(
-                name = paste0(prefix, "_Manager"),
-                energyplus_model_calling_point = "BeginZoneTimestepBeforeInitHeatBalance",
-                program_name_1 = paste0(prefix, "_Control")
-            ))
-        )
-    }
-    conv__combine_outputs(c(
-        list(internal_gains__always_on(dest, ep, always_on)),
-        lapply(classes, function(class) {
-            conv__add_objects(dest, ep, class, values[[class]])
-        })
-    ))
 }
 
 # Build the scheduled and minimum People objects using the source count basis.
@@ -448,20 +260,12 @@ people__source_specs <- function(
     people,
     values,
     total_field,
-    area_field,
-    people_heat
+    area_field
 ) {
-    # The temperature correction belongs to the whole source count, including
-    # both its always-on minimum and its scheduled increment.
+    # Redistributors receive the same nominal W/person as the People activity.
+    # The independent moisture companion must remain represented exactly once.
     decorate <- function(item, row) {
         item$sensible_heat <- people$BASE_SENSIBLE_HEAT[[row]]
-        item$temperature_dependent <- people_heat == "temperature_dependent"
-        if (item$temperature_dependent) {
-            item$companion_objects <- paste(
-                people$NAME[[row]],
-                "Temperature Correction"
-            )
-        }
         if (
             !is.na(people$MOISTURE_GRAMS_PER_HOUR[[row]]) &&
                 people$MOISTURE_GRAMS_PER_HOUR[[row]] > 0

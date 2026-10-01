@@ -12,12 +12,10 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "ideal_loads",
   hvac_options = NULL,
-  people_heat = NULL,
   window_optics = NULL,
   source_distribution = NULL,
   surface_convection = "dest",
   exterior_boundary = NULL,
-  partition_boundary = "energyplus",
   sky_radiation = NULL,
   weather = NULL,
   directory = NULL,
@@ -29,7 +27,7 @@ destep_opts(
 \arguments{
 \item{preset}{[string] \code{"objects"} (default) selects constant people heat,
 simple glazing, EnergyPlus source allocation and exterior radiation.
-\code{"dest"} selects temperature-dependent people heat, DeST solar windows,
+\code{"dest"} selects DeST solar windows,
 DeST source allocation and DeST sky boundaries. Both retain source
 surface convection and physical inputs. Necessary EMS, including that
 for people and equipment moisture, remains available in both presets.}
@@ -113,29 +111,6 @@ equipment and shared plant assumptions to all generated systems. Only
 fields required by the selected paths need to be supplied. These values
 are never inferred from reference models.}
 
-\item{people_heat}{[string or NULL] People sensible-heat mode. \code{NULL}
-uses the preset. \code{"constant"}
-preserves the existing conversion and corresponds to DeST bshell's
-\code{--const_occupant} option. Use \code{"temperature_dependent"} for the
-default behavior verified with DeST 0.2.230705: per-person sensible
-heat is \verb{max(0, input + 5.536 * (26 - previous temperature))} W.
-This mode requires EnergyPlus 9.1 or newer and uses the preceding
-EnergyPlus zone-step air temperature. Record both engines' time steps
-when comparing results. The source database does not store the DeST
-execution option. In either mode, nonzero people moisture requires
-EnergyPlus 9.1 or newer. People carries sensible heat only; its
-unmetered OtherEquipment companion converts g/h/person to latent
-watts using EnergyPlus vapor enthalpy and the latest available zone
-temperature. Rapid temperature changes can leave a one-zone-step
-mass residual. People activity is not a metabolic input for comfort
-calculations, and People latent-gain reports alone exclude the source.
-Both modes preserve the nominal \code{O_DAMP_PER_PERSON} input, as verified
-for bshell's \code{--const_occupant} moisture behavior. Default DeST
-occupant moisture also varies with temperature; that algorithm is
-not reproduced, including when \code{people_heat = "temperature_dependent"}.
-Radiant recipient fractions and full-building numerical equivalence
-remain limitations.}
-
 \item{window_optics}{[string or NULL] Aggregate-window optical representation.
 \code{NULL} uses the preset.
 \code{"simple_glazing"} preserves the existing default. The opt-in
@@ -182,11 +157,6 @@ feedback. Outdoor emissivity is set to \code{1e-8} to suppress target
 longwave exchange, leaving a small numerical residual. The returned
 model's \code{exterior_boundary} attribute records coefficients and tables.}
 
-\item{partition_boundary}{[string] \code{"energyplus"} retains coupled interzone
-surfaces. \code{"dest_air"} selects the neighbor-air plus prescribed radiation
-approximation verified with DeST 0.2.230705. It requires DeST source
-distribution and surface convection; it is not general solver equivalence.}
-
 \item{sky_radiation}{[logical or NULL] Override the saved
 \code{OPTION.CAL_SKY_RADIATION} switch for this run. \code{NULL} reads the source
 switch. Missing switches require an explicit override. Only available
@@ -231,6 +201,19 @@ explicitly named settings override those defaults. The constructor checks
 option values and dependencies; conversion checks model, weather and target
 version requirements. Neither preset promises full DeST solver equivalence.
 }
+\section{People inputs and interzone surfaces}{
+
+Both presets retain nominal people sensible heat and \code{O_DAMP_PER_PERSON};
+DeST occupant temperature feedback is not reproduced. Nonzero people moisture
+requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
+target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
+temperature changes can leave a one-zone-step mass residual. People carries
+sensible heat only: its activity is not a comfort-model metabolic input and
+its latent-gain reports exclude the independent moisture source.
+Interzone surfaces retain their paired surface references and constructions;
+no neighbor-air equivalent-temperature boundary is generated.
+}
+
 \examples{
 destep_opts()
 destep_opts("dest", exterior_boundary = "energyplus")

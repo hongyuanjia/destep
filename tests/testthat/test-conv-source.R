@@ -164,17 +164,13 @@ test_that("furniture receives no prescribed share and people powers retain units
     item$kind <- "people"
     item$design_power <- 2
     item$sensible_heat <- 53
-    item$temperature_dependent <- TRUE
     planned <- source__plan(faces, list(item))[[1L]]
     expect_equal(planned$fractions[["Furniture"]], 0)
     expect_gt(planned$pool[["Furniture"]], 0)
     expect_identical(
         planned$power_expression,
-        "2 * SourceSchedule1 * SourceSensible1"
+        "2 * SourceSchedule1 * 53"
     )
-    item$temperature_dependent <- FALSE
-    fixed <- source__plan(faces, list(item))[[1L]]
-    expect_identical(fixed$power_expression, "2 * SourceSchedule1 * 53")
 })
 
 test_that("shared optical tables are blocked exactly once", {

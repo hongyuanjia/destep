@@ -135,7 +135,7 @@ test_that("can convert internal gains", {
         list(air = 0.3, wall = 0.28, floor = 0.35, roof = 0.07)
     )
     expect_equal(people_sources[[1L]]$sensible_heat, 61)
-    expect_false(people_sources[[1L]]$temperature_dependent)
+    expect_false("temperature_dependent" %in% names(people_sources[[1L]]))
 
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
@@ -226,78 +226,39 @@ test_that("can convert internal gains", {
         0
     )
 
-    # The new mode must preserve existing People and latent inputs while
-    # applying the nonzero minimum count at the correct heat-balance point.
-    dynamic <- internal_gains__convert(dest, ep, "temperature_dependent")
-    dynamic_sources <- Filter(
-        function(s) s$kind == "people",
-        attr(dynamic, "sources")
-    )
-    expect_true(all(vapply(
-        dynamic_sources,
-        `[[`,
-        logical(1L),
-        "temperature_dependent"
-    )))
+    # Nominal sensible inputs do not acquire a temperature-dependent correction;
+    # the only People EMS serves the independent prescribed moisture source.
     expect_equal(
-        unique(unlist(lapply(dynamic_sources, `[[`, "companion_objects"))),
-        c("Room 101 People Temperature Correction", "Room 101 People Moisture")
+        unique(unlist(lapply(people_sources, `[[`, "companion_objects"))),
+        "Room 101 People Moisture"
     )
-    original_people <- gains$value[
-        class_name == "People",
-        .(field_name, value_chr, value_num)
+    programs <- gains$value[
+        class_name == "EnergyManagementSystem:Program",
+        value_chr
     ]
-    updated_people <- dynamic$value[
-        class_name == "People",
-        .(field_name, value_chr, value_num)
-    ]
-    expect_equal(updated_people, original_people)
+    expect_true(any(grepl("HgAirFnWTdb", programs), na.rm = TRUE))
+    expect_false(any(
+        grepl(
+            "5.536|DeST_People_T_|Temperature Correction",
+            gains$value$value_chr
+        ),
+        na.rm = TRUE
+    ))
     expect_equal(
-        dynamic$value[
+        gains$value[
             class_name == "EnergyManagementSystem:ProgramCallingManager" &
                 field_name == "EnergyPlus Model Calling Point",
             value_chr
         ],
-        rep("BeginZoneTimestepBeforeInitHeatBalance", 2L)
+        "BeginZoneTimestepBeforeInitHeatBalance"
     )
-    expect_equal(
-        dynamic$value[
-            class_name == "OtherEquipment" &
-                field_name == "Fraction Latent",
-            value_num
-        ],
-        c(1, 0, 0, 0)
-    )
-    expect_equal(
-        dynamic$value[
-            class_name == "EnergyManagementSystem:InternalVariable" &
-                field_name == "Internal Data Type",
-            value_chr
-        ],
-        rep("Zone Floor Area", 2L)
-    )
-    expect_match(
-        paste(
-            dynamic$value[
-                class_name == "EnergyManagementSystem:Program",
-                value_chr
-            ],
-            collapse = "\n"
-        ),
-        "SET Count = 0.05"
-    )
-    expect_true(any(grepl(
-        "temperature_dependent",
-        unlist(dynamic$object[class_name == "People", comment])
-    )))
 
-    # Zero reference sensible and latent heat still permits a positive cold-
-    # room feedback term; avoid the former 0/0 sensible-fraction input.
+    # A zero nominal heat input stays zero, without a cold-room heat correction.
     DBI::dbExecute(
         dest,
         "UPDATE ROOM_TYPE_DATA SET O_HEAT_PER_PERSON=0, O_DAMP_PER_PERSON=0"
     )
-    zero <- people__convert(dest, ep, "temperature_dependent")
+    zero <- people__convert(dest, ep)
     expect_equal(
         zero$value[
             class_name == "People" & field_name == "Sensible Heat Fraction",
@@ -305,7 +266,17 @@ test_that("can convert internal gains", {
         ],
         c(1, 1)
     )
-    expect_error(people__convert(dest, ep, "guess"), "arg")
+    expect_equal(
+        zero$value[
+            class_name == "Schedule:Constant" & field_name == "Hourly Value",
+            value_num
+        ],
+        c(0, 1)
+    )
+    expect_false(any(grepl(
+        "EnergyManagementSystem|OtherEquipment",
+        zero$object$class_name
+    )))
     # Existing moisture conversion remains available. Its new metadata must
     # explicitly prevent accidental use by the sensible-only projection.
     DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=1")
@@ -573,22 +544,6 @@ test_that("internal gains resolve target zone-reference fields", {
             "People per Floor Area",
             "Floor Area per Person"
         )
-    )
-    expect_error(
-        people__temperature(
-            NULL,
-            old,
-            data.table::data.table(BASE_SENSIBLE_HEAT = 53)
-        ),
-        "9.1.0 or newer"
-    )
-    expect_error(
-        people__temperature(
-            NULL,
-            current,
-            data.table::data.table(BASE_SENSIBLE_HEAT = -1)
-        ),
-        "non-negative finite"
     )
 })
 

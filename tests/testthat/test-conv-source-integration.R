@@ -132,7 +132,6 @@ test_that("public mode preserves defaults and rejects unsupported options early"
     expect_identical(
         source__options(NULL, ep, "ideal_loads", "simple_glazing", FALSE),
         list(
-            partition_boundary = "energyplus",
             exterior_boundary = "energyplus"
         )
     )
@@ -176,15 +175,21 @@ test_that("generated objects reload without parsing fields as file paths", {
     expect_equal(unname(source__objects(reloaded)), objects)
 })
 
-test_that("source allocation preserves coupled partitions unless explicitly selected", {
+test_that("source allocation retains both interzone surfaces and their constructions", {
     objects <- source__integration_geometry()[c(1L, 3L, 5L)]
     objects[[3L]][7:10] <- c("Surface", "Peer", "NoSun", "NoWind")
     peer <- objects[[3L]]
-    peer[c(2L, 5L, 8L)] <- c("Peer", "Neighbor", "Wall")
+    peer[c(2L, 4L, 5L, 8L)] <- c(
+        "Peer",
+        "Peer Construction",
+        "Neighbor",
+        "Wall"
+    )
     objects <- c(
         objects,
         list(
             peer,
+            c("Construction", "Peer Construction", "Opaque"),
             c("ElectricEquipment", "Gain"),
             c(
                 "SurfaceProperty:ConvectionCoefficients",
@@ -213,22 +218,31 @@ test_that("source allocation preserves coupled partitions unless explicitly sele
         existing_radiant = .8,
         existing_air = .2
     ))
-    coupled <- source__project(
-        objects,
-        faces,
-        sources,
-        partition_boundary = "energyplus"
-    )
+    coupled <- source__project(objects, faces, sources)
+    # Preserve complete positional records, not just a boundary label. The two
+    # sides deliberately have different constructions to catch replacement.
+    expect_identical(coupled$objects[1:5], objects[1:5])
     expect_equal(coupled$objects[[3L]][7:8], c("Surface", "Peer"))
-    expect_length(coupled$audit$partitions, 0L)
-    selected <- source__project(
-        objects,
-        faces,
-        sources,
-        partition_boundary = "dest_air"
+    expect_equal(coupled$objects[[4L]][7:8], c("Surface", "Wall"))
+    expect_false("partitions" %in% names(coupled$audit))
+    classes <- vapply(coupled$objects, `[[`, character(1L), 1L)
+    expect_false("SurfaceProperty:OtherSideCoefficients" %in% classes)
+    expect_false(any(grepl(
+        "Source Opposite|SourceNeighbor|SourceRemote",
+        unlist(coupled$objects)
+    )))
+    # Source fixed film coefficients are still input mappings, not the removed
+    # equivalent air boundary; retain both original h objects unchanged.
+    expect_identical(
+        Filter(
+            function(o) o[[1L]] == "SurfaceProperty:ConvectionCoefficients",
+            coupled$objects
+        ),
+        Filter(
+            function(o) o[[1L]] == "SurfaceProperty:ConvectionCoefficients",
+            objects
+        )
     )
-    expect_equal(selected$objects[[3L]][[7L]], "OtherSideCoefficients")
-    expect_length(selected$audit$partitions, 2L)
 })
 
 test_that("cache identity follows file contents and emitted model fields", {
