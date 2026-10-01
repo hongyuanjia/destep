@@ -82,9 +82,6 @@ test_that("explicit simulation settings update only their owning fields", {
         "shadow_update_days=1",
         fixed = TRUE
     )
-    # Rebuilding the model through the source/sky loader must retain settings.
-    rebuilt <- source__model(source__objects(ep), "23.1")
-    expect_equal(simulation__audit(rebuilt, options)$effective, audit$effective)
 })
 
 test_that("shadow frequency uses actual current or legacy schema fields", {
@@ -102,46 +99,4 @@ test_that("shadow frequency uses actual current or legacy schema fields", {
     expect_equal(current$periodic, "Periodic")
     expect_equal(current$frequency, "Shading Calculation Update Frequency")
     expect_error(simulation__shadow_fields("Unknown Layout"), "Unsupported")
-})
-
-test_that("each simulation option changes the prepass dependency identity", {
-    root <- tempfile("simulation-dependencies-")
-    dir.create(root)
-    on.exit(unlink(root, recursive = TRUE), add = TRUE)
-    for (file in c("weather.epw", "engine", "Energy+.idd")) {
-        writeLines("input identity only", file.path(root, file))
-    }
-    ep <- eplusr::empty_idf("23.1")
-    ep$add(Building = list(name = "Model"))
-    config <- list(dir = root, exe = "engine")
-    baseline <- solar__dependencies(
-        ep,
-        list(),
-        file.path(root, "weather.epw"),
-        config
-    )
-    values <- list(
-        terrain = "Country",
-        solar_distribution = "FullInteriorAndExterior",
-        shadow_update_days = 1L
-    )
-    for (name in names(values)) {
-        candidate <- eplusr::empty_idf("23.1")
-        candidate$add(Building = list(name = "Model"))
-        simulation__apply(candidate, values[name])
-        actual <- solar__dependencies(
-            candidate,
-            list(),
-            file.path(root, "weather.epw"),
-            config
-        )
-        expect_false(
-            identical(
-                source__fingerprint(actual),
-                source__fingerprint(baseline)
-            ),
-            info = name
-        )
-        expect_identical(actual$files, baseline$files)
-    }
 })

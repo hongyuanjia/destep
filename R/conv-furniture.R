@@ -23,7 +23,7 @@ furniture__slab_area <- function(area, coefficient) {
 
 # Resolve the effective room-type coefficient, rather than the unused drawing
 # ROOM.FURNITURE_COEF field, and generate a purely convective storage slab.
-furniture__convert <- function(dest, ep, source_distribution = "energyplus") {
+furniture__convert <- function(dest, ep) {
     if (
         !db_has_fields(dest, "ROOM", c("ID", "NAME", "AREA", "TYPE")) ||
             !db_has_fields(dest, "ROOM_TYPE_DATA", c("ID", "FURNITURE_COEF"))
@@ -60,10 +60,8 @@ furniture__convert <- function(dest, ep, source_distribution = "energyplus") {
     # EnergyPlus assigns equal temperatures to both faces of InternalMass and
     # reports one face's exchange. Full thickness with twice the one-face area
     # therefore preserves the native two-sided slab capacity and conductance.
-    # The IDD requires strictly positive absorptance. The prescribed-source
-    # carrier uses the independently checked 1e-12 limit so numerical radiant
-    # pickup stays negligible; ordinary conversion retains its existing value.
-    absorptance <- if (source_distribution == "dest") 1e-12 else 1e-6
+    # The IDD requires strictly positive absorptance for this storage slab.
+    absorptance <- 1e-6
     out <- conv__add(
         dest,
         ep,
@@ -108,92 +106,4 @@ furniture__convert <- function(dest, ep, source_distribution = "energyplus") {
     )
     attr(out, "assumptions") <- assumptions
     out
-}
-
-# Validate furniture storage and receiving-face metadata at the source mapping
-# boundary; all numerical furniture properties remain owned by this module.
-furniture__check_source <- function(objects, faces) {
-    mass <- Filter(function(o) o[[1L]] == "InternalMass", objects)
-    if (
-        !setequal(
-            vapply(mass, `[[`, character(1L), 2L),
-            faces$name[faces$category == "furniture"]
-        )
-    ) {
-        stop(
-            "Furniture receiving inventory must match every InternalMass object.",
-            call. = FALSE
-        )
-    }
-    for (item in mass) {
-        construction <- objects[[source__index(
-            objects,
-            "Construction",
-            item[[3L]]
-        )]]
-        material <- objects[[source__index(
-            objects,
-            "Material",
-            construction[[3L]]
-        )]]
-        film <- objects[[source__index(
-            objects,
-            "SurfaceProperty:ConvectionCoefficients",
-            item[[2L]]
-        )]]
-        face <- faces[faces$name == item[[2L]], ]
-        if (
-            face$zone != item[[4L]] ||
-                length(construction) != 3L ||
-                any(
-                    abs(as.numeric(material[4:7]) - c(.05, .11, 377, 1930)) >
-                        1e-12
-                ) ||
-                as.numeric(material[[8L]]) > 1e-10 ||
-                any(as.numeric(material[9:10]) != 0) ||
-                film[[3L]] != "Inside" ||
-                film[[4L]] != "Value" ||
-                as.numeric(film[[5L]]) != 8.7 ||
-                abs(face$epsilon - as.numeric(material[[8L]])) > 1e-16 ||
-                abs(face$area - as.numeric(utils::tail(item, 1L))) > 1e-8
-        ) {
-            stop(
-                "Unsupported furniture storage or radiative properties.",
-                call. = FALSE
-            )
-        }
-    }
-    invisible(NULL)
-}
-
-# Describe converted InternalMass objects without assigning them a prescribed
-# radiant share. Their small numerical absorption remains in the carrier pool.
-furniture__source_faces <- function(objects, faces) {
-    for (item in Filter(function(o) o[[1L]] == "InternalMass", objects)) {
-        construction <- objects[[source__index(
-            objects,
-            "Construction",
-            item[[3L]]
-        )]]
-        material <- objects[[source__index(
-            objects,
-            "Material",
-            construction[[3L]]
-        )]]
-        face <- data.frame(
-            name = item[[2L]],
-            zone = item[[4L]],
-            area = as.double(utils::tail(item, 1L)),
-            category = "furniture",
-            is_window = FALSE,
-            epsilon = as.double(material[[8L]]),
-            construction = item[[3L]],
-            host = ""
-        )
-        faces <- as.data.frame(data.table::rbindlist(
-            list(faces, face),
-            fill = TRUE
-        ))
-    }
-    faces
 }

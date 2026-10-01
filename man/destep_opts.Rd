@@ -12,25 +12,15 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "ideal_loads",
   hvac_options = NULL,
-  window_optics = NULL,
-  source_distribution = NULL,
   surface_convection = "dest",
-  exterior_boundary = NULL,
-  sky_radiation = NULL,
-  weather = NULL,
-  directory = NULL,
   terrain = NULL,
   solar_distribution = NULL,
   shadow_update_days = NULL
 )
 }
 \arguments{
-\item{preset}{[string] \code{"objects"} (default) selects constant people heat,
-simple glazing, EnergyPlus source allocation and exterior radiation.
-\code{"dest"} selects DeST solar windows,
-DeST source allocation and DeST sky boundaries. Both retain source
-surface convection and physical inputs. Necessary EMS, including that
-for people and equipment moisture, remains available in both presets.}
+\item{preset}{[string] \code{"objects"} selects source input conversion.
+Necessary moisture EMS remains available.}
 
 \item{...}{Must be empty. Supply custom settings by their full names.}
 
@@ -43,7 +33,7 @@ to select source values. Both preserve the required unit conversions.}
 \item{schedule_directory}{[string or NULL] Persistent output directory,
 required with \code{schedule_format = "file"}. Each conversion writes a
 unique CSV and returns absolute references; keep this file with the IDF.
-This directory is independent of weather-dependent prepass files.}
+This directory is independent of the source weather file.}
 
 \item{run_period}{[integer vector] Inclusive, one-based simulation start
 and end days, from 1 to 365. Defaults to \code{c(1L, 365L)} because a saved
@@ -111,68 +101,11 @@ equipment and shared plant assumptions to all generated systems. Only
 fields required by the selected paths need to be supplied. These values
 are never inferred from reference models.}
 
-\item{window_optics}{[string or NULL] Aggregate-window optical representation.
-\code{NULL} uses the preset.
-\code{"simple_glazing"} preserves the existing default. The opt-in
-\code{"dest_solar"} mode uses SC and pane count to derive solar angle tables
-for the simplified model verified with DeST 0.2.230705. It supports
-exterior one-to-three-pane aggregate windows and EnergyPlus 23.1 or newer.
-SC specifies a normal-transmittance objective of \code{0.87 * SC}, not SHGC.
-Glass resistance and each window face's source blackness are preserved.
-Single-pane solar absorption acts at mid-glass; multi-pane absorption
-acts at the outside of the aggregate glass resistance.
-EnergyPlus retains its own diffuse integration and heat-balance solver;
-native glass storage, sky exchange and room solar distribution are not
-added by this option. The tables are solar-only: visible/daylighting
-optics are not represented, and existing daylighting objects are rejected.}
-
-\item{source_distribution}{[string or NULL] \code{NULL} uses the preset.
-\code{"energyplus"} retains the default
-surface allocation. \code{"dest"} preserves the literal DeST air, wall,
-floor and roof fractions, including sums below one. This opt-in mode
-currently requires EnergyPlus 26.1 and \code{hvac = "ideal_loads"}.
-With windows it also requires \code{window_optics = "dest_solar"} and runs
-a weather-specific solar prepass. Unsupported moisture combinations,
-doors, daylighting and dynamic shading fail explicitly. Exterior
-radiation is selected independently through \code{exterior_boundary} or the
-preset; native time-integration algorithms are not reproduced.}
-
-\item{surface_convection}{[string] \code{"dest"} (default in both presets)
+\item{surface_convection}{[string] \code{"dest"} (default)
 retains fixed source coefficients on walls, floors, roofs, windows and
 doors using ordinary EnergyPlus surface-property objects. \code{"energyplus"}
 omits these overrides so EnergyPlus selects its own coefficients.
-Furniture's internal-mass exchange definition is retained separately.
-DeST sky and neighbor-air boundaries require \code{"dest"}.}
-
-\item{exterior_boundary}{[string or NULL] \code{"energyplus"} or \code{"dest_sky"}.
-\code{NULL} uses the preset. Sky conversion can be enabled independently
-of DeST source distribution. It requires EnergyPlus 26.1, ideal loads,
-source convection, \code{weather}, \code{directory}, and \code{window_optics = "dest_solar"} when windows are present. The linear sky-only boundary
-verified with DeST 0.2.230705 supports vertical walls/windows and
-horizontal roofs/exposed floors. Single-layer constructions and
-existing local environments are unsupported. A weather prepass preserves
-target height corrections and dry-bulb convection during rain. Window
-EMS copies current weather-table values without surface-temperature
-feedback. Outdoor emissivity is set to \code{1e-8} to suppress target
-longwave exchange, leaving a small numerical residual. The returned
-model's \code{exterior_boundary} attribute records coefficients and tables.}
-
-\item{sky_radiation}{[logical or NULL] Override the saved
-\code{OPTION.CAL_SKY_RADIATION} switch for this run. \code{NULL} reads the source
-switch. Missing switches require an explicit override. Only available
-with \code{exterior_boundary = "dest_sky"}.}
-
-\item{weather}{[string or NULL] Existing EPW path. Required by DeST sky
-conversion (even when sky radiation is disabled) and by DeST source
-distribution with windows.}
-
-\item{directory}{[string or NULL] Persistent directory for generated
-weather/solar time tables and prepass records, required together with
-\code{weather}. Solar tables cover a non-leap year at five-minute resolution.
-Cache reuse checks model, weather, external files, engine and generated
-data. Reconvert after changing weather, geometry, optics, schedules or
-timestep; editing or running an \code{Idf} does not refresh these tables.
-Keep the directory or copy external files when saving the model.}
+Furniture's internal-mass exchange definition is retained separately.}
 
 \item{terrain}{[string or NULL] EnergyPlus terrain: \code{"Country"}, \code{"Suburbs"},
 \code{"City"}, \code{"Ocean"} or \code{"Urban"}. \code{NULL} retains the converter/IDD default.}
@@ -184,13 +117,12 @@ Keep the directory or copy external files when saving the model.}
 Choose a method suitable for the geometry; interior beam distribution
 has enclosure/convexity requirements. A \code{WithReflections} method enables
 exterior reflections from preserved opaque \code{SHADING.ROU} values; no
-visible or specular reflectance is inferred. This is separate from
-\code{source_distribution}, which controls DeST heat allocation.}
+visible or specular reflectance is inferred.}
 
 \item{shadow_update_days}{[integer or NULL] Positive periodic shading
 update interval in days. EnergyPlus warns above 31. \code{NULL} retains the
-default. Target settings apply before prepasses, enter cache identities,
-and are recorded in \code{attr(model, "conversion")$simulation} and IDF comments.}
+default. Selections are recorded in
+\code{attr(model, "conversion")$simulation} and IDF comments.}
 }
 \value{
 An object of class \code{destep_options}, accepted by \code{to_eplus(options = )}.
@@ -198,12 +130,13 @@ An object of class \code{destep_options}, accepted by \code{to_eplus(options = )
 \description{
 Build a reusable options object for \code{\link[=to_eplus]{to_eplus()}}. A preset supplies defaults;
 explicitly named settings override those defaults. The constructor checks
-option values and dependencies; conversion checks model, weather and target
-version requirements. Neither preset promises full DeST solver equivalence.
+option values and dependencies; conversion checks model and target version
+requirements. Aggregate windows use a documented SimpleGlazing
+approximation and do not promise full DeST solver equivalence.
 }
 \section{People inputs and interzone surfaces}{
 
-Both presets retain nominal people sensible heat and \code{O_DAMP_PER_PERSON};
+Conversion retains nominal people sensible heat and \code{O_DAMP_PER_PERSON};
 DeST occupant temperature feedback is not reproduced. Nonzero people moisture
 requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
 target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
@@ -216,13 +149,11 @@ no neighbor-air equivalent-temperature boundary is generated.
 
 \examples{
 destep_opts()
-destep_opts("dest", exterior_boundary = "energyplus")
 # File schedules remain annual even when simulating days 59 through 61.
 destep_opts(schedule_format = "file", schedule_directory = "schedules",
     run_period = c(59L, 61L))
 opts <- destep_opts(
     "objects",
-    window_optics = "dest_solar",
     terrain = "Country",
     shadow_update_days = 1L
 )

@@ -1,5 +1,22 @@
 # destep 0.0.0.9000
 
+- Retired the DeST-specific window angle-table generator and its
+  `window_optics` option. Valid K/SC inputs retain the documented
+  SimpleGlazing approximation; source face blackness remains visible in
+  diagnostics because K/SC alone cannot define detailed optical layers.
+
+- Aggregate K/SC windows now report their SimpleGlazing assumptions and
+  unexpressed face emissivities by source window ID in conversion metadata
+  and saved IDF comments. Missing/invalid active window types and detailed
+  glazing without supported optical inputs fail with source identifiers
+  instead of silently using SYS_WINDOW or generic clear-glass fallbacks.
+
+- Removed the DeST per-surface heat/solar distribution and linear-sky boundary
+  adapters, their weather prepasses and cache, and the `"dest"` preset and
+  related options. Ordinary conversion again uses EnergyPlus's solar and
+  exterior heat-balance calculations. Retained source heat inputs, weather
+  conversion, fixed surface convection, and moisture-source EMS.
+
 - Removed DeST occupant sensible-temperature feedback and neighbor-air partition
   approximation, including the `people_heat` and `partition_boundary` options.
   All presets retain nominal people sensible heat, the independent prescribed

@@ -16,11 +16,6 @@ internal_gains__convert <- function(dest, ep) {
 
     # All three object families are projections of the same room-type record.
     data.table::set(attr(out, "table"), NULL, "SOURCE_TABLE", "ROOM_TYPE_DATA")
-    # Each owning converter supplies its source metadata alongside the objects.
-    attr(out, "sources") <- unname(unlist(
-        lapply(conv, attr, "sources"),
-        recursive = FALSE
-    ))
     out
 }
 
@@ -143,88 +138,6 @@ internal_gains__split_minimum <- function(
 # objects from field 2 of the selected target IDD class.
 internal_gains__zone_field_name <- function(ep, class) {
     conv__idd_field_name(ep, class, 2L)
-}
-
-# Describe the exact named values just created by an internal-gain converter.
-# This does not parse an IDF: object identity, minimum splits and design levels
-# come from that converter's own value lists; source fractions come from DeST.
-# The owner supplies its schedule field and any domain-specific metadata.
-internal_gains__source_specs <- function(
-    dest,
-    gain,
-    values,
-    kind,
-    total_field,
-    area_field,
-    schedule_field,
-    decorate
-) {
-    columns <- c(
-        "DIST_MODE_ID",
-        "DIST_AIR",
-        "DIST_AROUND",
-        "DIST_FLOOR",
-        "DIST_ROOF"
-    )
-    # Older partial schemas can still use the existing gain conversion, but
-    # cannot supply a complete prescribed surface distribution. Never invent
-    # missing fractions; the source projector rejects this absent inventory.
-    if (!db_has_fields(dest, "DIST_MODE", columns)) {
-        return(NULL)
-    }
-    distributions <- DBI::dbGetQuery(
-        dest,
-        paste("SELECT", paste(columns, collapse = ","), "FROM DIST_MODE")
-    )
-    rooms <- DBI::dbGetQuery(dest, "SELECT ID, AREA FROM ROOM")
-    # Match complete vectors once. Normal object names take precedence over
-    # the minimum suffix, and match() preserves the first duplicate-key match.
-    value_names <- vapply(values, `[[`, character(1L), "name")
-    row <- match(value_names, gain$NAME)
-    missing <- is.na(row)
-    if (any(missing)) {
-        row[missing] <- match(value_names[missing], paste(gain$NAME, "Minimum"))
-    }
-    stopifnot(!is.na(row))
-    source_rows <- row
-    areas <- rooms$AREA[match(gain$ROOM_ID, rooms$ID)]
-    mode_rows <- match(gain$DIST_MODE_ID, distributions$DIST_MODE_ID)
-    # Build only the referenced distributions, once each. An NA index keeps
-    # the existing missing-reference result, including an empty source table.
-    mode_indices <- unique(mode_rows)
-    modes <- lapply(mode_indices, function(i) {
-        stats::setNames(
-            as.list(distributions[i, -1L]),
-            c("air", "wall", "floor", "roof")
-        )
-    })
-    mode_rows <- match(mode_rows, mode_indices)
-    out <- lapply(seq_along(values), function(i) {
-        value <- values[[i]]
-        row <- source_rows[[i]]
-        per_area <- gain$CALCULATION_BASIS[[row]] == 1L
-        power <- if (per_area) {
-            value[[area_field]] * areas[[row]]
-        } else {
-            value[[total_field]]
-        }
-        item <- list(
-            name = value$name,
-            zone = gain$ROOM_NAME[[row]],
-            kind = kind,
-            design_power = power,
-            schedule = value[[schedule_field]],
-            mode = modes[[mode_rows[[row]]]],
-            existing_radiant = value$fraction_radiant,
-            existing_air = 1 - value$fraction_radiant,
-            companion_objects = character()
-        )
-        # Domain-specific heat and companion metadata belongs to the owner.
-        decorate(item, row)
-    })
-    # Index-based assembly must retain names on caller-supplied value lists.
-    names(out) <- names(values)
-    out
 }
 
 # Identify assigned positive minima that require an always-on companion.

@@ -31,20 +31,17 @@ will be modified during the conversion. Default is \code{TRUE}.}
 \code{FALSE}.}
 
 \item{options}{[string or destep_options] Conversion configuration.
-Use \code{"objects"} (default) or \code{"dest"} for a preset, or \code{\link[=destep_opts]{destep_opts()}}
-to customize feature choices, HVAC, weather/prepass inputs and target
-simulation settings in one reusable object. \code{"objects"} preserves
-supported source inputs, using EMS where necessary; \code{"dest"} additionally
-enables optional DeST behavior. See \code{\link[=destep_opts]{destep_opts()}} for defaults and
-feature restrictions.}
+Use \code{"objects"} (default) or \code{\link[=destep_opts]{destep_opts()}} to configure source
+inputs, HVAC and target simulation settings.}
 }
 \value{
-[eplusr::Idf] The converted EnergyPlus model. The opt-in source
-mode attaches a \code{source_distribution} attribute containing its input
-and cache audit. The \code{conversion} attribute records the preset, effective
-feature options and generated EMS program purposes. The selections are
-also saved in the Version object's comments. It does not establish
-whole-building equivalence.
+[eplusr::Idf] The converted EnergyPlus model. The
+\code{conversion} attribute and Version comments record the selected
+options and necessary EMS programs. Its \code{windows} table records the
+source K/SC, nominal SHGC, face blackness and unresolved optical
+properties for each window. The same aggregate assumptions appear in
+the saved IDF glazing comments. This does not establish whole-building
+equivalence.
 }
 \description{
 Convert a DeST model to EnergyPlus model
@@ -61,7 +58,7 @@ but does not reproduce DeST's internal ventilation control algorithm.
 \examples{
 \dontrun{
 to_eplus(dest, "23.1", options = "objects")
-opts <- destep_opts("objects", window_optics = "dest_solar", terrain = "Country")
+opts <- destep_opts("objects", terrain = "Country")
 to_eplus(dest, "23.1", options = opts)
 }
 

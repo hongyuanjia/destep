@@ -2,28 +2,65 @@ test_that("conv__update_names respects table dependencies", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbWriteTable(dest, "BUILDING", data.frame(
-        BUILDING_ID = 1L, NAME = "Building"
-    ))
-    DBI::dbWriteTable(dest, "ROOM", data.frame(
-        ID = 1:2, NAME = c(".", ".")
-    ))
-    DBI::dbWriteTable(dest, "SURFACE", data.frame(
-        SURFACE_ID = 11:12, NAME = c(".", "."),
-        OF_ROOM = 1:2, TYPE = 0L
-    ))
-    DBI::dbWriteTable(dest, "MAIN_ENCLOSURE", data.frame(
-        SIDE1 = 11:12, SIDE2 = c(NA_integer_, NA_integer_), KIND = 1L
-    ))
-    DBI::dbWriteTable(dest, "OUTSIDE", data.frame(
-        OUTSIDE_ID = integer(), NAME = character()
-    ))
-    DBI::dbWriteTable(dest, "GROUND", data.frame(
-        GROUND_ID = integer(), NAME = character()
-    ))
-    DBI::dbWriteTable(dest, "SHADING", data.frame(
-        ID = integer(), NAME = character()
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "BUILDING",
+        data.frame(
+            BUILDING_ID = 1L,
+            NAME = "Building"
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(
+            ID = 1:2,
+            NAME = c(".", ".")
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SURFACE",
+        data.frame(
+            SURFACE_ID = 11:12,
+            NAME = c(".", "."),
+            OF_ROOM = 1:2,
+            TYPE = 0L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "MAIN_ENCLOSURE",
+        data.frame(
+            SIDE1 = 11:12,
+            SIDE2 = c(NA_integer_, NA_integer_),
+            KIND = 1L
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "OUTSIDE",
+        data.frame(
+            OUTSIDE_ID = integer(),
+            NAME = character()
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "GROUND",
+        data.frame(
+            GROUND_ID = integer(),
+            NAME = character()
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "SHADING",
+        data.frame(
+            ID = integer(),
+            NAME = character()
+        )
+    )
 
     # The caller order is intentionally reversed; dependencies must win.
     conv__update_names(dest, c("SURFACE", "ROOM"))
@@ -39,16 +76,24 @@ test_that("conv__update_names prefixes storeys in multi-building models", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
-    DBI::dbWriteTable(dest, "BUILDING", data.frame(
-        BUILDING_ID = 1:2,
-        NAME = c("North Building", "South Building")
-    ))
-    DBI::dbWriteTable(dest, "STOREY", data.frame(
-        ID = 11:12,
-        NAME = c(".", "."),
-        NO = c(0L, 0L),
-        OF_BUILDING = 1:2
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "BUILDING",
+        data.frame(
+            BUILDING_ID = 1:2,
+            NAME = c("North Building", "South Building")
+        )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "STOREY",
+        data.frame(
+            ID = 11:12,
+            NAME = c(".", "."),
+            NO = c(0L, 0L),
+            OF_BUILDING = 1:2
+        )
+    )
 
     conv__update_names(dest, "STOREY")
 
@@ -129,14 +174,38 @@ test_that("to_eplus() works", {
     # can update all necessary names before conversion
     conv__update_names(dest)
     expect_equal(DBI::dbReadTable(dest, "STOREY")$NAME, paste("Storey", 1:3))
-    expect_true(any(grepl("3-N-1 Wall", DBI::dbReadTable(dest, "SURFACE")$NAME)))
-    expect_true(any(grepl("DefaultOutside Wall", DBI::dbReadTable(dest, "SURFACE")$NAME)))
-    expect_true(any(grepl("DefaultGround Floor", DBI::dbReadTable(dest, "SURFACE")$NAME)))
-    expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_OUTWALL")$CNAME, "ExtWall - ")))
-    expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_INWALL")$CNAME, "IntWall - ")))
-    expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_ROOF")$CNAME, "Roof - ")))
-    expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_GROUNDFLOOR")$CNAME, "GroundFloor - ")))
-    expect_true(all(startsWith(DBI::dbReadTable(dest, "SYS_MIDDLEFLOOR")$CNAME, "Ceiling - ")))
+    expect_true(any(grepl(
+        "3-N-1 Wall",
+        DBI::dbReadTable(dest, "SURFACE")$NAME
+    )))
+    expect_true(any(grepl(
+        "DefaultOutside Wall",
+        DBI::dbReadTable(dest, "SURFACE")$NAME
+    )))
+    expect_true(any(grepl(
+        "DefaultGround Floor",
+        DBI::dbReadTable(dest, "SURFACE")$NAME
+    )))
+    expect_true(all(startsWith(
+        DBI::dbReadTable(dest, "SYS_OUTWALL")$CNAME,
+        "ExtWall - "
+    )))
+    expect_true(all(startsWith(
+        DBI::dbReadTable(dest, "SYS_INWALL")$CNAME,
+        "IntWall - "
+    )))
+    expect_true(all(startsWith(
+        DBI::dbReadTable(dest, "SYS_ROOF")$CNAME,
+        "Roof - "
+    )))
+    expect_true(all(startsWith(
+        DBI::dbReadTable(dest, "SYS_GROUNDFLOOR")$CNAME,
+        "GroundFloor - "
+    )))
+    expect_true(all(startsWith(
+        DBI::dbReadTable(dest, "SYS_MIDDLEFLOOR")$CNAME,
+        "Ceiling - "
+    )))
 
     # can convert 'Building'
     expect_type(bld <- building__convert(dest, ep), "list")
@@ -144,7 +213,10 @@ test_that("to_eplus() works", {
     expect_s3_class(attr(bld, "table"), "data.table")
     # can specify which building to extract
     expect_error(building__convert(dest, ep, TRUE), "integer or character")
-    expect_equal(building__convert(dest, ep, 1), building__convert(dest, ep, "国管局1#"))
+    expect_equal(
+        building__convert(dest, ep, 1),
+        building__convert(dest, ep, "国管局1#")
+    )
 
     # can convert 'Site:Location'
     expect_type(loc <- location__convert(dest, ep), "list")
@@ -155,15 +227,21 @@ test_that("to_eplus() works", {
     # can convert 'Zone', 'ZoneList', 'ZoneGroup'
     expect_type(zn <- zone__convert(dest, ep), "list")
     expect_named(zn, c("object", "value"))
-    expect_equal(unique(zn$object$class_name), c("Zone", "ZoneList", "ZoneGroup"))
+    expect_equal(
+        unique(zn$object$class_name),
+        c("Zone", "ZoneList", "ZoneGroup")
+    )
     expect_s3_class(attr(zn, "table"), "data.table")
 
     # can convert 'Material', 'Construction'
     expect_type(const <- const__convert(dest, ep), "list")
     expect_named(const, c("object", "value"))
-    expect_equal(unique(const$object$class_name),
+    expect_equal(
+        unique(const$object$class_name),
         c(
-            "Material", "WindowMaterial:SimpleGlazingSystem", "Construction"
+            "Material",
+            "WindowMaterial:SimpleGlazingSystem",
+            "Construction"
         )
     )
     expect_s3_class(attr(const, "table"), "data.table")
@@ -179,14 +257,45 @@ test_that("to_eplus() works", {
 
     # Preserve the exact source value so the integration assertion covers the
     # Access/SQLite numeric representation instead of a rounded decimal.
-    expected_ground_reflectance <- as.numeric(DBI::dbGetQuery(
-        dest,
-        "SELECT GROUND_REFLECT_COEF FROM ENVIRONMENT"
-    )$GROUND_REFLECT_COEF)
+    expected_ground_reflectance <- as.numeric(
+        DBI::dbGetQuery(
+            dest,
+            "SELECT GROUND_REFLECT_COEF FROM ENVIRONMENT"
+        )$GROUND_REFLECT_COEF
+    )
 
     # can convert a DeST model to a valid EnergyPlus model
-    expect_s3_class(idf <- to_eplus(dest, 23.1), "Idf")
+    warnings <- character()
+    idf <- withCallingHandlers(
+        to_eplus(dest, 23.1),
+        warning = function(condition) {
+            warnings <<- c(warnings, conditionMessage(condition))
+            invokeRestart("muffleWarning")
+        }
+    )
+    expect_true(any(grepl(
+        "nominal SimpleGlazing K/SC approximation",
+        warnings,
+        fixed = TRUE
+    )))
+    expect_s3_class(idf, "Idf")
+    expect_true(nrow(attr(idf, "conversion")$windows) > 0L)
+    expect_false("window_optics" %in% names(attr(idf, "conversion")$options))
+    expect_false("Table:Lookup" %in% idf$to_table()$class)
     expect_true(idf$is_valid())
+    saved <- tempfile(fileext = ".idf")
+    idf$save(saved)
+    saved_lines <- readLines(saved, warn = FALSE)
+    expect_true(any(grepl(
+        "WINDOW_TYPE_DATA.ID=35",
+        saved_lines,
+        fixed = TRUE
+    )))
+    expect_true(any(grepl(
+        "neither value is expressed by SimpleGlazing",
+        saved_lines,
+        fixed = TRUE
+    )))
     # Request the raw field table because eplusr versions differ in the default
     # shape returned by `$to_table()` for a one-object class.
     run_period <- idf$to_table(class = "RunPeriod", all = TRUE)
@@ -205,12 +314,14 @@ test_that("to_eplus() works", {
         "12"
     )
     ground_reflectance <- idf$to_table(
-        class = "Site:GroundReflectance", all = TRUE
+        class = "Site:GroundReflectance",
+        all = TRUE
     )
     expect_equal(
         as.numeric(ground_reflectance$value[
             grepl(
-                "Ground Reflectance", ground_reflectance$field,
+                "Ground Reflectance",
+                ground_reflectance$field,
                 fixed = TRUE
             )
         ]),
@@ -224,15 +335,29 @@ test_that("to_eplus() works", {
         "Relative"
     )
     zone_geometry <- idf$to_table(class = "Zone", all = TRUE)
-    expect_true(all(zone_geometry$value[
-        zone_geometry$field %in% c(
-            "Direction of Relative North", "X Origin", "Y Origin", "Z Origin"
-        )
-    ] == 0))
+    expect_true(all(
+        zone_geometry$value[
+            zone_geometry$field %in%
+                c(
+                    "Direction of Relative North",
+                    "X Origin",
+                    "Y Origin",
+                    "Z Origin"
+                )
+        ] ==
+            0
+    ))
 
     validity <- idf$validate()
-    issue_count <- vapply(validity, function(issue) {
-        if (is.data.frame(issue)) nrow(issue) else length(issue)
-    }, integer(1))
-    expect_equal(issue_count, setNames(rep(0L, length(issue_count)), names(issue_count)))
+    issue_count <- vapply(
+        validity,
+        function(issue) {
+            if (is.data.frame(issue)) nrow(issue) else length(issue)
+        },
+        integer(1)
+    )
+    expect_equal(
+        issue_count,
+        setNames(rep(0L, length(issue_count)), names(issue_count))
+    )
 })

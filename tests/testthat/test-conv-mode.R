@@ -1,4 +1,4 @@
-test_that("one options entry point accepts presets and reusable configurations", {
+test_that("one options entry point retains source inputs and target settings", {
     expect_named(
         formals(to_eplus),
         c("dest", "ver", "copy", "verbose", "options")
@@ -6,135 +6,69 @@ test_that("one options entry point accepts presets and reusable configurations",
     expect_identical(formals(to_eplus)$options, "objects")
     basic <- destep_opts()
     expect_s3_class(basic, "destep_options")
-    expect_false(any(c("people_heat", "partition_boundary") %in% names(basic)))
-    expect_equal(basic$window_optics, "simple_glazing")
-    expect_equal(basic$source_distribution, "energyplus")
-    expect_equal(basic$surface_convection, "dest")
-    expect_equal(basic$exterior_boundary, "energyplus")
+    expect_identical(basic$surface_convection, "dest")
     expect_identical(conv__resolve_options("objects"), basic)
     expect_identical(conv__resolve_options(basic), basic)
-    expect_identical(conv__resolve_options("dest"), destep_opts("dest"))
     expect_identical(unserialize(serialize(basic, NULL)), basic)
-
-    dest <- destep_opts("dest")
-    expect_false(any(c("people_heat", "partition_boundary") %in% names(dest)))
-    expect_equal(dest$window_optics, "dest_solar")
-    expect_equal(dest$source_distribution, "dest")
-    expect_equal(dest$exterior_boundary, "dest_sky")
-    explicit <- destep_opts(
-        "dest",
-        source_distribution = "energyplus",
-        exterior_boundary = "energyplus",
+    expect_false(any(
+        c(
+            "window_optics",
+            "source_distribution",
+            "exterior_boundary",
+            "weather",
+            "directory",
+            "sky_radiation"
+        ) %in%
+            names(basic)
+    ))
+    custom <- destep_opts(
         terrain = "Country",
-        solar_distribution = "FullExteriorWithReflections",
-        shadow_update_days = 1L
+        solar_distribution = "FullExteriorWithReflections"
     )
-    expect_equal(explicit$source_distribution, "energyplus")
-    expect_equal(explicit$exterior_boundary, "energyplus")
-    expect_equal(explicit$window_optics, "dest_solar")
-    expect_identical(conv__resolve_options(explicit), explicit)
-    expect_error(to_eplus(NULL, mode = "dest"), "unused argument")
-    expect_error(to_eplus(NULL, surface_convection = "dest"), "unused argument")
-    expect_error(
-        to_eplus(NULL, options = list(preset = "objects")),
-        "destep_opts"
-    )
+    expect_identical(custom$terrain, "Country")
+    expect_identical(conv__resolve_options(custom), custom)
 })
 
-test_that("configurations reject typos and modified invalid objects before database access", {
-    expect_error(destep_opts("unknown"), "preset")
+test_that("retired solver adapter options cannot silently alter a model", {
+    expect_error(destep_opts("dest"), "preset")
+    for (option in c(
+        "source_distribution",
+        "exterior_boundary",
+        "sky_radiation",
+        "weather",
+        "directory",
+        "people_heat",
+        "partition_boundary",
+        "window_optics"
+    )) {
+        args <- stats::setNames(list("dest"), option)
+        expect_error(
+            do.call(destep_opts, args),
+            "Unknown or unnamed",
+            info = option
+        )
+    }
     expect_error(destep_opts(c("objects", "dest")), "preset")
-    expect_error(destep_opts(people_hea = "constant"), "Unknown or unnamed")
     expect_error(destep_opts("objects", "constant"), "Unknown or unnamed")
-    expect_error(
-        destep_opts(source_options = list(exterior_boundary = "dest_sky")),
-        "Unknown"
-    )
-    expect_error(
-        destep_opts(simulation_options = list(terrain = "Country")),
-        "Unknown"
-    )
-    expect_error(destep_opts(people_heat = "constant"), "Unknown")
-    expect_error(destep_opts(people_heat = "temperature_dependent"), "Unknown")
-    expect_error(destep_opts(partition_boundary = "energyplus"), "Unknown")
-    expect_error(destep_opts(partition_boundary = "dest_air"), "Unknown")
     expect_error(destep_opts(terrain = "Forest"), "terrain")
     expect_error(destep_opts(shadow_update_days = 0), "shadow_update_days")
+    expect_error(destep_opts(hvac_options = list()), "hvac_options")
+    expect_error(destep_opts(hvac = "physical"), "hvac_options")
+    opts <- destep_opts(
+        hvac = "physical",
+        hvac_options = list(chiller_nominal_cop = 4)
+    )
+    expect_equal(opts$hvac_options$chiller_nominal_cop, 4)
     invalid <- destep_opts()
     invalid$terrain <- "Forest"
     expect_error(to_eplus(NULL, options = invalid), "terrain")
     invalid <- destep_opts()
     invalid$unknown <- TRUE
     expect_error(to_eplus(NULL, options = invalid), "fields")
-    invalid <- destep_opts()
-    invalid$window_optics <- NULL
-    expect_error(to_eplus(NULL, options = invalid), "fields")
-    invalid <- destep_opts()
-    names(invalid)[2L] <- names(invalid)[1L]
-    expect_error(to_eplus(NULL, options = invalid), "fields")
+    expect_error(to_eplus(NULL, options = list()), "destep_opts")
 })
 
-test_that("all feature dependencies are checked through the options constructor", {
-    sky <- destep_opts(
-        window_optics = "dest_solar",
-        exterior_boundary = "dest_sky"
-    )
-    expect_equal(sky$source_distribution, "energyplus")
-    expect_error(
-        destep_opts("dest", surface_convection = "energyplus"),
-        "requires surface_convection"
-    )
-    expect_error(destep_opts(sky_radiation = FALSE), "sky_radiation")
-    expect_error(destep_opts("dest", sky_radiation = 1), "sky_radiation")
-    expect_error(destep_opts(weather = "model.epw"), "weather and directory")
-    expect_error(destep_opts(directory = "prepass"), "weather and directory")
-    expect_error(destep_opts(hvac_options = list()), "hvac_options")
-    expect_error(destep_opts(hvac = "physical"), "hvac_options")
-    physical <- destep_opts(
-        hvac = "physical",
-        hvac_options = list(chiller_nominal_cop = 4)
-    )
-    expect_equal(physical$hvac_options$chiller_nominal_cop, 4)
-    expect_error(
-        destep_opts("dest", hvac = "physical", hvac_options = list()),
-        "ideal_loads"
-    )
-    expect_error(destep_opts("dest", weather = 1), "weather")
-    expect_error(destep_opts("dest", directory = ""), "directory")
-    supplied <- destep_opts(
-        "dest",
-        weather = "future.epw",
-        directory = "prepass",
-        sky_radiation = FALSE
-    )
-    expect_identical(conv__resolve_options(supplied), supplied)
-    ep <- list(version = function() "26.1.0")
-    packed <- conv__conversion_options(sky)$source_options
-    expect_error(
-        source__options(
-            packed,
-            ep,
-            "ideal_loads",
-            "dest_solar",
-            FALSE,
-            "energyplus"
-        ),
-        "weather"
-    )
-    expect_error(
-        source__options(
-            packed,
-            ep,
-            "ideal_loads",
-            "simple_glazing",
-            TRUE,
-            "energyplus"
-        ),
-        "window_optics"
-    )
-})
-
-test_that("conversion audits distinguish required input EMS from optional alignment", {
+test_that("conversion audit labels necessary moisture EMS", {
     ep <- eplusr::empty_idf("23.1")
     basic <- conv__conversion_options(destep_opts())
     expect_equal(nrow(conv__mode_audit(ep, basic)$ems), 0L)
@@ -144,30 +78,12 @@ test_that("conversion audits distinguish required input EMS from optional alignm
             program_line_1 = "SET MassRate = 0.01"
         )
     )
-    ep$add(
-        "EnergyManagementSystem:Program" := list(
-            name = "SourceCorrectionUpdate",
-            program_line_1 = "SET Sensible = 60"
-        )
-    )
     audit <- conv__mode_audit(ep, basic)
-    expect_equal(
-        audit$ems$purpose,
-        c("equipment_moisture", "prescribed_source_distribution")
-    )
-    expect_equal(audit$ems$requirement, c("source_input", "optional_alignment"))
-    expect_equal(
-        audit$equipment_moisture_policy,
-        "preserve_source_input_in_both_modes"
-    )
+    expect_identical(audit$ems$purpose, "equipment_moisture")
+    expect_identical(audit$ems$requirement, "source_input")
     expect_match(
         conv__mode_comments(audit)[[2L]],
         "surface_convection=dest",
-        fixed = TRUE
-    )
-    expect_match(
-        conv__mode_comments(audit)[[3L]],
-        "equipment_moisture:source_input",
         fixed = TRUE
     )
     ep$add(
@@ -177,8 +93,8 @@ test_that("conversion audits distinguish required input EMS from optional alignm
         )
     )
     audit <- conv__mode_audit(ep, basic)
-    expect_equal(tail(audit$ems$purpose, 1L), "people_moisture")
-    expect_equal(tail(audit$ems$requirement, 1L), "source_input")
+    expect_identical(tail(audit$ems$purpose, 1L), "people_moisture")
+    expect_true(all(audit$ems$requirement == "source_input"))
 })
 
 # Use a real source database to verify that the public entry point routes both
@@ -220,6 +136,16 @@ test_that("preset strings and options objects produce equivalent real conversion
     # Furniture keeps its source exchange definition independently of the
     # envelope setting. Only InternalMass coefficients should remain here.
     fields <- converted$to_table()
+    programs <- fields$value[
+        fields$class == "EnergyManagementSystem:Program" &
+            fields$index == 1L
+    ]
+    expect_false(any(grepl(
+        "SourceCorrectionUpdate|DeSTSkyWeatherUpdate",
+        programs
+    )))
+    expect_null(attr(converted, "source_distribution"))
+    expect_null(attr(converted, "exterior_boundary"))
     remaining <- fields$value[
         fields$class == "SurfaceProperty:ConvectionCoefficients" &
             fields$index == 1L

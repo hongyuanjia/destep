@@ -1,6 +1,6 @@
 # Resolve the aggregate thermal and optical properties of every DeST window.
 # The returned table is shared by construction and fenestration conversion so
-# both paths apply exactly the same validity checks and fallback decisions.
+# both paths apply exactly the same validity checks.
 const__window_type_performance <- function(dest) {
     window <- DBI::dbGetQuery(
         dest,
@@ -71,6 +71,18 @@ const__window_type_performance <- function(dest) {
              FROM WINDOW_TYPE_DATA"
         )
         data.table::setDT(type)
+        duplicate <- type[
+            duplicated(TYPE_ID) | duplicated(TYPE_ID, fromLast = TRUE)
+        ]
+        if (nrow(duplicate)) {
+            stop(
+                sprintf(
+                    "Duplicate WINDOW_TYPE_DATA.ID reference(s): %s.",
+                    paste(unique(duplicate$TYPE_ID), collapse = ", ")
+                ),
+                call. = FALSE
+            )
+        }
         type[, TYPE_RECORD_FOUND := TRUE]
         window <- merge(
             window,
@@ -140,7 +152,64 @@ const__window_type_performance <- function(dest) {
             )
         ]
     }
+    # A missing or invalid active type cannot be repaired with an unverified
+    # SYS_WINDOW stack. Report the source window and type before object creation.
+    invalid <- window[TYPE_DATA_VALID == FALSE]
+    if (nrow(invalid)) {
+        stop(
+            sprintf(
+                "Cannot convert DeST window type input: %s.",
+                paste(
+                    sprintf(
+                        "WINDOW.ID=%s TYPE=%s (%s)",
+                        invalid$WINDOW_ID,
+                        invalid$TYPE_ID,
+                        invalid$FALLBACK_REASON
+                    ),
+                    collapse = "; "
+                )
+            ),
+            call. = FALSE
+        )
+    }
     window
+}
+
+# Preserve the physical window-face inputs that SimpleGlazing cannot express,
+# alongside the aggregate K/SC values used to create each target material.
+const__window_diagnostics <- function(dest, window_type) {
+    if (nrow(window_type) == 0L) {
+        return(data.table::data.table())
+    }
+    face <- data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        "SELECT W.ID AS WINDOW_ID,
+                S1.BLACKNESS AS SIDE1_BLACKNESS,
+                S2.BLACKNESS AS SIDE2_BLACKNESS
+         FROM WINDOW W
+         LEFT JOIN SURFACE S1 ON W.SIDE1 = S1.SURFACE_ID
+         LEFT JOIN SURFACE S2 ON W.SIDE2 = S2.SURFACE_ID"
+    ))
+    index <- match(window_type$WINDOW_ID, face$WINDOW_ID)
+    if (anyNA(index) || anyDuplicated(face$WINDOW_ID)) {
+        stop(
+            "Could not resolve one source face pair per WINDOW.ID.",
+            call. = FALSE
+        )
+    }
+    data.table::data.table(
+        WINDOW_ID = window_type$WINDOW_ID,
+        TYPE_ID = window_type$TYPE_ID,
+        TYPE_NAME = window_type$TYPE_NAME,
+        SIMPLE_GLAZING_NAME = window_type$SIMPLE_GLAZING_NAME,
+        K = window_type$K,
+        SC = window_type$SC,
+        NOMINAL_SHGC = window_type$SHGC,
+        SIDE1_BLACKNESS = as.double(face$SIDE1_BLACKNESS[index]),
+        SIDE2_BLACKNESS = as.double(face$SIDE2_BLACKNESS[index]),
+        REPRESENTATION = "SimpleGlazing: nominal SHGC = 0.87 * SC",
+        UNREPRESENTED = "physical panes; angular/diffuse optics; absorption location; two face BLACKNESS values"
+    )
 }
 
 # Read opaque and transparent layers for every distinct DeST door
@@ -419,17 +488,17 @@ const__append_dest_ground_soil <- function(layer) {
     data.table::rbindlist(list(layer, soil), use.names = TRUE, fill = TRUE)
 }
 
-# Normalize the referenced DeST layers and select detailed-window fallbacks
-# before EnergyPlus object tables are derived from them.
+# Normalize the referenced DeST layers before EnergyPlus object tables are
+# derived from them. Active windows use validated aggregate type inputs.
 const__prepare_layers <- function(dest) {
     const__assert_ground_scope(dest)
     const <- const__opaque_layers(dest)
     const <- const__append_dest_ground_soil(const)
 
-    # Resolve the aggregate type data before loading detailed SYS_WINDOW layers.
-    # Detailed layers are now retained only for windows that require fallback.
+    # Detailed SYS_WINDOW records are not proven to replace an invalid active
+    # WINDOW_TYPE_DATA row. Never load them as an implicit fallback.
     window_type <- const__window_type_performance(dest)
-    window <- const__window_layers(dest)
+    window <- data.table::data.table()
 
     # DOOR -> SYS_DOOR -> SYS_MATERIAL
     # TODO: GlazedDoor or Door?
@@ -449,45 +518,10 @@ const__prepare_layers <- function(dest) {
     # Layer order is semantic, so make it deterministic before building both
     # the source-direction and reversed EnergyPlus construction stacks.
     data.table::setorderv(const, c("ID", "KIND", "LAYER_NO"))
-    data.table::setorderv(window, c("ID", "LAYER_NO"))
-    data.table::setorderv(door, c("ID", "LAYER_NO"))
-
-    # Valid WINDOW_TYPE_DATA records replace the whole detailed glazing stack,
-    # so only load SYS_WINDOW objects still referenced by fallback windows.
-    fallback_construction <- unique(
-        window_type[TYPE_DATA_VALID == FALSE, DETAILED_CONSTRUCTION_ID]
-    )
-    fallback_construction <- fallback_construction[
-        !is.na(fallback_construction) & fallback_construction != 0L
-    ]
-    window <- window[ID %in% fallback_construction]
-
-    fallback <- unique(
-        window_type[
-            TYPE_DATA_VALID == FALSE,
-            .(WINDOW_ID, TYPE_ID, FALLBACK_REASON)
-        ]
-    )
-    if (nrow(fallback) > 0L) {
-        # Include the affected window and type identifiers so users can repair
-        # the source data instead of receiving one blanket optical warning.
-        warning(sprintf(
-            paste0(
-                "Using detailed SYS_WINDOW fallback properties for DeST ",
-                "window(s): %s. These fallback properties are not independently ",
-                "established as the active native solver inputs; verify the source window algorithm."
-            ),
-            paste(
-                sprintf(
-                    "%s (type %s: %s)",
-                    fallback$WINDOW_ID,
-                    fallback$TYPE_ID,
-                    fallback$FALLBACK_REASON
-                ),
-                collapse = "; "
-            )
-        ))
+    if (nrow(window)) {
+        data.table::setorderv(window, c("ID", "LAYER_NO"))
     }
+    data.table::setorderv(door, c("ID", "LAYER_NO"))
 
     # check if there are air layer in window constructions
     if (any(is_air <- window$MATERIAL_ID == 0L)) {
@@ -612,6 +646,34 @@ const__window_type_objects <- function(window_type) {
             glazing = glazing
         ))
     }
+
+    # Validate one thermal mapping per distinct source type before generating
+    # objects, retaining the window IDs in errors from target U-factor bounds.
+    target_u <- vapply(
+        seq_len(nrow(glazing)),
+        function(index) {
+            tryCatch(
+                const__simple_glazing_u_factor(glazing$K[[index]]),
+                error = function(condition) {
+                    type_id <- glazing$TYPE_ID[[index]]
+                    stop(
+                        sprintf(
+                            "WINDOW_TYPE_DATA.ID=%s (WINDOW.ID=%s): %s",
+                            type_id,
+                            paste(
+                                window_type[TYPE_ID == type_id, WINDOW_ID],
+                                collapse = ","
+                            ),
+                            conditionMessage(condition)
+                        ),
+                        call. = FALSE
+                    )
+                }
+            )
+        },
+        numeric(1L)
+    )
+    data.table::set(glazing, NULL, "TARGET_U_FACTOR", target_u)
 
     assert_unique_name(
         glazing$TYPE_CONSTRUCTION_NAME,
@@ -960,27 +1022,78 @@ const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
         object$construction
     )
 
+    # Retain one source row per window in the conversion audit; the target
+    # SimpleGlazing object has no fields for the two source face emissivities.
+    windows <- const__window_diagnostics(dest, source$window_type)
+    by_type <- if (nrow(windows)) {
+        windows[,
+            .(
+                WINDOW_IDS = paste(.SD[["WINDOW_ID"]], collapse = ","),
+                SOURCE_BLACKNESS = paste(
+                    sprintf(
+                        "%s:%s/%s",
+                        .SD[["WINDOW_ID"]],
+                        .SD[["SIDE1_BLACKNESS"]],
+                        .SD[["SIDE2_BLACKNESS"]]
+                    ),
+                    collapse = "; "
+                )
+            ),
+            by = c("TYPE_ID", "SIMPLE_GLAZING_NAME", "K", "SC", "NOMINAL_SHGC"),
+            .SDcols = c("WINDOW_ID", "SIDE1_BLACKNESS", "SIDE2_BLACKNESS")
+        ]
+    } else {
+        data.table::data.table()
+    }
+
     # Aggregate K/SC does not identify physical panes or their absorptance.
     # Persist the chosen equivalence in the IDF, not only in an R attribute.
     simple <- which(
         out$object$class_name == "WindowMaterial:SimpleGlazingSystem"
     )
     if (length(simple)) {
+        if (length(simple) != nrow(object$simple_glazing)) {
+            stop("SimpleGlazing object count differs from source window types.")
+        }
+        type_index <- match(
+            object$simple_glazing$SIMPLE_GLAZING_NAME,
+            by_type$SIMPLE_GLAZING_NAME
+        )
+        if (anyNA(type_index)) {
+            stop(
+                "SimpleGlazing object cannot be matched to a source window type."
+            )
+        }
         data.table::set(
             out$object,
             simple,
             "comment",
-            rep(
-                list(c(
+            lapply(type_index, function(index) {
+                type <- by_type[index]
+                c(
+                    sprintf(
+                        "DeST WINDOW_TYPE_DATA.ID=%s; WINDOW.ID=%s; K=%.9g W/(m2 K); SC=%.9g; nominal SHGC=%.9g.",
+                        type$TYPE_ID,
+                        type$WINDOW_IDS,
+                        type$K,
+                        type$SC,
+                        type$NOMINAL_SHGC
+                    ),
                     "Equivalent glazing from active WINDOW.TYPE -> WINDOW_TYPE_DATA K/SC.",
                     "Glass resistance uses nominal films 1/8.7 + 1/23.3 m2 K/W (DeST bshell 0.2.230705 evidence).",
                     "SHGC = 0.87 * SC is an assumed aggregate mapping; it is not verified native solar transmittance.",
-                    "Physical panes, angular/diffuse response and absorption location are not recovered from K/SC."
-                )),
-                length(simple)
-            )
+                    "Physical panes, angular/diffuse response and absorption location are not recovered from K/SC.",
+                    paste0(
+                        "Source WINDOW face BLACKNESS (WINDOW.ID:side1/side2) = ",
+                        type$SOURCE_BLACKNESS,
+                        "; neither value is expressed by SimpleGlazing."
+                    )
+                )
+            })
         )
     }
+
+    attr(out, "windows") <- windows
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- data.table::rbindlist(
@@ -1203,16 +1316,24 @@ const__assemble_objects <- function(
     const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
     refraction_row <- const__is_refraction_glazing(dt_glaze)
     refraction_glazing <- dt_glaze[refraction_row]
-    fallback_glazing <- dt_glaze[!refraction_row]
+    unsupported_glazing <- dt_glaze[!refraction_row]
 
-    if (nrow(fallback_glazing) > 0L) {
-        warning(
+    if (nrow(unsupported_glazing) > 0L) {
+        stop(
             sprintf(
                 paste(
-                    "Using the EnergyPlus 3 mm clear-glass fallback for DeST",
-                    "glazing without supported ordinary-glass optical inputs: %s."
+                    "Cannot convert DeST glazing without supported",
+                    "ordinary-glass optical inputs: %s. Check group, thickness,",
+                    "conductivity, extinction coefficient, refractive index and emissivity."
                 ),
-                paste(fallback_glazing$MATERIAL_NAME, collapse = ", ")
+                paste(
+                    sprintf(
+                        "%s (material ID %s)",
+                        unsupported_glazing$MATERIAL_NAME,
+                        unsupported_glazing$MATERIAL_ID
+                    ),
+                    collapse = ", "
+                )
             ),
             call. = FALSE
         )
@@ -1250,7 +1371,7 @@ const__assemble_objects <- function(
             glazing <- win_type_glazing[index]
             value <- list(
                 name = glazing$SIMPLE_GLAZING_NAME,
-                u_factor = const__simple_glazing_u_factor(glazing$K),
+                u_factor = glazing$TARGET_U_FACTOR,
                 solar_heat_gain_coefficient = glazing$SHGC,
                 visible_transmittance = if (!is.na(glazing$LIGHT_TRANS_RATIO)) {
                     glazing$LIGHT_TRANS_RATIO
@@ -1287,32 +1408,6 @@ const__assemble_objects <- function(
                     conductivity = .(refraction_glazing$MATERIAL_CONDUCTIVITY)
                 )
             )
-        },
-
-        if (nrow(fallback_glazing) > 0L) {
-            # Keep the established approximation for coated, unknown, or
-            # incomplete records that the refraction-extinction method excludes.
-            clear3mm <- list(
-                Name = "CLEAR 3MM",
-                Conductivity = 0.9,
-                Thickness = 0.003,
-                `Optical Data Type` = "SpectralAverage",
-                `Solar Transmittance at Normal Incidence` = 0.837,
-                `Front Side Solar Reflectance at Normal Incidence` = 0.075,
-                `Back Side Solar Reflectance at Normal Incidence` = 0.075,
-                `Visible Transmittance at Normal Incidence` = 0.898,
-                `Front Side Visible Reflectance at Normal Incidence` = 0.081,
-                `Back Side Visible Reflectance at Normal Incidence` = 0.081,
-                `Infrared Transmittance at Normal Incidence` = 0,
-                `Front Side Infrared Hemispherical Emissivity` = 0.84,
-                `Back Side Infrared Hemispherical Emissivity` = 0.84
-            )
-
-            glaze <- clear3mm
-            glaze$Name <- fallback_glazing$MATERIAL_NAME
-            glaze$Thickness <- round(fallback_glazing$LENGTH / 1000, 4L)
-            glaze$Conductivity <- fallback_glazing$MATERIAL_CONDUCTIVITY
-            bquote("WindowMaterial:Glazing" := .(glaze))
         },
 
         if (nrow(dt_air) > 0L) {

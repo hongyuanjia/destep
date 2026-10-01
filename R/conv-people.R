@@ -177,13 +177,6 @@ people__convert <- function(dest, ep) {
     )
     parts$moisture <- people__moisture_objects(dest, ep, people)
     out <- conv__combine_outputs(parts, table = people)
-    attr(out, "sources") <- people__source_specs(
-        dest,
-        people,
-        people_objects,
-        field_names[["number"]],
-        field_names[["per_area"]]
-    )
     out
 }
 
@@ -252,41 +245,6 @@ people__value <- function(
         value[[field]] <- NULL
     }
     value
-}
-
-# Attach People heat metadata to the same object inventory used for conversion.
-people__source_specs <- function(
-    dest,
-    people,
-    values,
-    total_field,
-    area_field
-) {
-    # Redistributors receive the same nominal W/person as the People activity.
-    # The independent moisture companion must remain represented exactly once.
-    decorate <- function(item, row) {
-        item$sensible_heat <- people$BASE_SENSIBLE_HEAT[[row]]
-        if (
-            !is.na(people$MOISTURE_GRAMS_PER_HOUR[[row]]) &&
-                people$MOISTURE_GRAMS_PER_HOUR[[row]] > 0
-        ) {
-            item$companion_objects <- c(
-                item$companion_objects,
-                paste(people$NAME[[row]], "Moisture")
-            )
-        }
-        item
-    }
-    internal_gains__source_specs(
-        dest,
-        people,
-        values,
-        "people",
-        total_field,
-        area_field,
-        "number_of_people_schedule_name",
-        decorate
-    )
 }
 
 # Convert nominal g/h/person and min/max occupant counts to kg/h or kg/h/m2.

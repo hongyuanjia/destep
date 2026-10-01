@@ -243,7 +243,7 @@ test_that("warns about SimpleGlazingSystem in EnergyPlus 9.0 through 9.3", {
     ))
 })
 
-test_that("resolves aggregate window type performance and fallbacks", {
+test_that("rejects invalid active window types instead of using SYS_WINDOW", {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
@@ -278,15 +278,87 @@ test_that("resolves aggregate window type performance and fallbacks", {
         )
     )
 
+    expect_error(
+        const__window_type_performance(dest),
+        "WINDOW.ID=2 TYPE=20 \\(invalid K value\\).*WINDOW.ID=4 TYPE=40 \\(missing WINDOW_TYPE_DATA record\\)"
+    )
+    DBI::dbExecute(dest, "UPDATE WINDOW SET TYPE = 10 WHERE ID IN (2, 4)")
     type <- const__window_type_performance(dest)
     expect_equal(type[WINDOW_ID == 1L, SHGC], 0.517, tolerance = 1e-7)
     expect_true(type[WINDOW_ID == 1L, TYPE_DATA_VALID])
     expect_equal(type[WINDOW_ID == 2L, DETAILED_CONSTRUCTION_ID], 9L)
-    expect_equal(type[WINDOW_ID == 2L, FALLBACK_REASON], "invalid K value")
     expect_true(is.na(type[WINDOW_ID == 3L, LIGHT_TRANS_RATIO]))
-    expect_equal(
-        type[WINDOW_ID == 4L, FALLBACK_REASON],
-        "missing WINDOW_TYPE_DATA record"
+    expect_true(all(is.na(type$FALLBACK_REASON)))
+    DBI::dbExecute(dest, "UPDATE WINDOW SET TYPE = 30 WHERE ID = 4")
+    DBI::dbExecute(dest, "UPDATE WINDOW_TYPE_DATA SET SC = 0 WHERE ID = 30")
+    expect_error(
+        const__window_type_performance(dest),
+        "WINDOW.ID=3 TYPE=30 \\(invalid SC value\\)"
+    )
+    DBI::dbExecute(dest, "DELETE FROM WINDOW_TYPE_DATA WHERE ID = 30")
+    DBI::dbWriteTable(
+        dest,
+        "WINDOW_TYPE_DATA",
+        data.frame(
+            ID = 10L,
+            NAME = "Duplicated",
+            K = 2.0,
+            SC = 0.5,
+            LIGHT_TRANS_RATIO = 0.5
+        ),
+        append = TRUE
+    )
+    expect_error(
+        const__window_type_performance(dest),
+        "Duplicate WINDOW_TYPE_DATA.ID reference\\(s\\): 10"
+    )
+})
+
+test_that("unrepresentable K reports its source window IDs", {
+    type <- data.table::data.table(
+        WINDOW_ID = c(11L, 12L),
+        TYPE_ID = c(5L, 5L),
+        TYPE_CONSTRUCTION_NAME = "Hot Window Construction",
+        SIMPLE_GLAZING_NAME = "Hot Window",
+        TYPE_DATA_VALID = TRUE,
+        K = 6.3,
+        SC = 0.5,
+        SHGC = 0.435,
+        LIGHT_TRANS_RATIO = 0.5
+    )
+    expect_error(
+        const__window_type_objects(type),
+        "WINDOW_TYPE_DATA.ID=5 \\(WINDOW.ID=11,12\\)"
+    )
+})
+
+test_that("rejects glazing whose optical inputs do not support a material", {
+    ep <- eplusr::empty_idf("9.0.1")
+    material <- data.table::data.table(
+        MATERIAL_DENSITY = double(),
+        MATERIAL_SPECIFIC_HEAT = double()
+    )
+    glazing <- data.table::data.table(
+        MATERIAL_ID = 7L,
+        MATERIAL_NAME = "Unknown Coating",
+        MATERIAL_GROUP = "coated glass",
+        LENGTH = 3.0,
+        MATERIAL_CONDUCTIVITY = 0.9,
+        MATERIAL_EXTINCTION_COEFFICIENT = NA_real_,
+        MATERIAL_REFRACTIVE_INDEX = NA_real_,
+        MATERIAL_EMISSIVITY = NA_real_
+    )
+    expect_error(
+        const__assemble_objects(
+            TRUE,
+            ep,
+            material,
+            data.table::data.table(),
+            glazing,
+            data.table::data.table(),
+            data.table::data.table()
+        ),
+        "Unknown Coating \\(material ID 7\\)"
     )
 })
 
@@ -305,6 +377,7 @@ test_that("returns a stable aggregate window type schema without windows", {
 
     type <- const__window_type_performance(dest)
     expect_equal(nrow(type), 0L)
+    expect_equal(nrow(const__window_diagnostics(dest, type)), 0L)
     expect_true(all(
         c(
             "TYPE_DATA_VALID",
@@ -456,26 +529,44 @@ test_that("whole-window K preserves glass resistance across nominal film convent
     # and EnergyPlus's documented glass resistance, not fitted annual loads.
     expect_equal(
         const__simple_glazing_u_factor(c(1, 2, 4, 5.8)),
-        c(0.979973204612678, 1.939886612478319, 3.833477670199475,
-            5.528375218691142),
+        c(
+            0.979973204612678,
+            1.939886612478319,
+            3.833477670199475,
+            5.528375218691142
+        ),
         tolerance = 1e-10
     )
     expect_length(const__simple_glazing_u_factor(numeric()), 0L)
     # The EnergyPlus film correlation has a small discontinuity at U=5.85.
     # Verify a resistance in that branch gap instead of rejecting a valid input.
-    branch_u <- const__simple_glazing_u_factor(1 / (0.0049 + 1 / 8.7 + 1 / 23.3))
+    branch_u <- const__simple_glazing_u_factor(
+        1 / (0.0049 + 1 / 8.7 + 1 / 23.3)
+    )
     expect_gt(branch_u, 5.85)
     expect_lt(branch_u, 6.4)
-    expect_equal(1 / branch_u - 1 / (1.788041 * branch_u - 2.886625) -
-        1 / (0.025342 * branch_u + 29.163853), 0.0049, tolerance = 1e-10)
-    expect_error(const__simple_glazing_u_factor(c(2, NA_real_)),
-        "cannot preserve glass thermal resistance")
-    expect_error(const__simple_glazing_u_factor(0),
-        "cannot preserve glass thermal resistance")
+    expect_equal(
+        1 /
+            branch_u -
+            1 / (1.788041 * branch_u - 2.886625) -
+            1 / (0.025342 * branch_u + 29.163853),
+        0.0049,
+        tolerance = 1e-10
+    )
+    expect_error(
+        const__simple_glazing_u_factor(c(2, NA_real_)),
+        "cannot preserve glass thermal resistance"
+    )
+    expect_error(
+        const__simple_glazing_u_factor(0),
+        "cannot preserve glass thermal resistance"
+    )
     # A nominal K of 6.3 requires U above the simple-window limit; silent
     # clamping would create a different construction.
-    expect_error(const__simple_glazing_u_factor(6.3),
-        "cannot preserve glass thermal resistance")
+    expect_error(
+        const__simple_glazing_u_factor(6.3),
+        "cannot preserve glass thermal resistance"
+    )
 })
 
 test_that("can convert 'Construction' and 'Material'", {
@@ -489,7 +580,8 @@ test_that("can convert 'Construction' and 'Material'", {
     conv__update_names(dest)
 
     # can convert 'Material', 'Construction'
-    expect_type(const <- const__convert(dest, ep), "list")
+    const <- const__convert(dest, ep)
+    expect_type(const, "list")
     expect_named(const, c("object", "value"))
     expect_equal(
         unique(const$object$class_name),
@@ -510,6 +602,15 @@ test_that("can convert 'Construction' and 'Material'", {
         ) %in%
             glazing$field_name
     ))
+    diagnostics <- attr(const, "windows")
+    expect_true(nrow(diagnostics) > 0L)
+    expect_equal(diagnostics$NOMINAL_SHGC, 0.87 * diagnostics$SC)
+    expect_true(all(is.finite(diagnostics$SIDE1_BLACKNESS)))
+    expect_true(all(is.finite(diagnostics$SIDE2_BLACKNESS)))
+    comments <- unlist(const$object$comment[
+        const$object$class_name == "WindowMaterial:SimpleGlazingSystem"
+    ])
+    expect_true(any(grepl("BLACKNESS", comments, fixed = TRUE)))
     material_thickness <- const$value[
         class_name == "Material" & field_name == "Thickness",
         value_num

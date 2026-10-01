@@ -1031,10 +1031,23 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
 
     dest <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
-    expect_warning(
-        idf <- to_eplus(dest, 23.1),
-        "Skipped 9 ROOM row\\(s\\)"
+    warnings <- character()
+    idf <- withCallingHandlers(to_eplus(dest, 23.1), warning = function(w) {
+        warnings <<- c(warnings, conditionMessage(w))
+        invokeRestart("muffleWarning")
+    })
+    # Each warning describes a known source input that this geometry fixture
+    # cannot project exactly. Check them all instead of hiding new warnings.
+    expected <- c(
+        "Skipped 9 ROOM row(s)",
+        "DeST window transmitted-solar distribution",
+        "nominal SimpleGlazing K/SC approximation",
+        "Mapped 28 DeST ventilation-range ROOM_RELATION row(s)"
     )
+    expect_length(warnings, length(expected))
+    for (pattern in expected) {
+        expect_true(any(grepl(pattern, warnings, fixed = TRUE)))
+    }
     # Geometry and reciprocal-construction diagnostics are emitted during
     # input processing, so one simulation day covers them without a full year.
     idf$set(Annual = list(end_month = 1L, end_day_of_month = 1L))

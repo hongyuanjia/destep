@@ -138,13 +138,6 @@ light__convert <- function(dest, ep) {
     }
 
     out <- conv__combine_outputs(parts, table = lights)
-    attr(out, "sources") <- light__source_specs(
-        dest,
-        lights,
-        light_objects,
-        "lighting_level",
-        watts_per_area_field
-    )
     out
 }
 
@@ -279,27 +272,4 @@ light__value <- function(
     )
     value[[zone_field_name]] <- lights$ROOM_NAME[[i]]
     value
-}
-
-# Record room heat separately from lighting electricity and its correction.
-light__source_specs <- function(dest, lights, values, total_field, area_field) {
-    # Preserve the correction identity for each minimum or scheduled object.
-    decorate <- function(item, row) {
-        ratio <- lights$HEAT_TO_ELECTRIC_RATIO[[row]]
-        item$design_power <- item$design_power * ratio
-        if (ratio != 1) {
-            item$companion_objects <- paste(item$name, "Heat Ratio Correction")
-        }
-        item
-    }
-    internal_gains__source_specs(
-        dest,
-        lights,
-        values,
-        "light",
-        total_field,
-        area_field,
-        "schedule_name",
-        decorate
-    )
 }

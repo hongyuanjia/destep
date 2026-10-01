@@ -118,13 +118,6 @@ equipment__convert <- function(dest, ep) {
     parts$moisture <- equipment__moisture_objects(dest, ep, equipment)
 
     out <- conv__combine_outputs(parts, table = equipment)
-    attr(out, "sources") <- equipment__source_specs(
-        dest,
-        equipment,
-        equipment_objects,
-        "design_level",
-        watts_per_area_field
-    )
     out
 }
 
@@ -230,37 +223,4 @@ equipment__value <- function(
     )
     value[[zone_field_name]] <- equipment$ROOM_NAME[[i]]
     value
-}
-
-# Keep equipment moisture restrictions with the owning equipment converter.
-equipment__source_specs <- function(
-    dest,
-    equipment,
-    values,
-    total_field,
-    area_field
-) {
-    # The existing prescribed projector supports sensible equipment only;
-    # moisture still follows this module's independent mass-source conversion.
-    decorate <- function(item, row) {
-        if (
-            any(
-                c(equipment$MAX_HUM[[row]], equipment$MIN_HUM[[row]]) != 0,
-                na.rm = TRUE
-            )
-        ) {
-            item$unsupported_reason <- "Equipment moisture is not supported by the prescribed source projector."
-        }
-        item
-    }
-    internal_gains__source_specs(
-        dest,
-        equipment,
-        values,
-        "equipment",
-        total_field,
-        area_field,
-        "schedule_name",
-        decorate
-    )
 }

@@ -17,7 +17,6 @@ Imports:
     data.table,
     DBI,
     eplusr,
-    lubridate,
     odbc,
     polyclip,
     processx,

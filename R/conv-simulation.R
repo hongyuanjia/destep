@@ -79,8 +79,7 @@ simulation__shadow_fields <- function(fields) {
     stop("Unsupported ShadowCalculation field layout.", call. = FALSE)
 }
 
-# Apply explicit settings after source objects are assembled but before any
-# weather/solar prepass. Their emitted fields enter existing cache identities.
+# Apply explicit target-engine settings after source objects are assembled.
 simulation__apply <- function(ep, options) {
     building <- options[intersect(
         names(options),

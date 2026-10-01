@@ -117,6 +117,22 @@ test_that("can convert 'WINDOW'", {
         )
     )
 
+    expect_error(
+        window__convert(dest, ep),
+        "WINDOW.ID=200 TYPE=35 \\(missing WINDOW_TYPE_DATA table or required fields\\)"
+    )
+    DBI::dbWriteTable(
+        dest,
+        "WINDOW_TYPE_DATA",
+        data.frame(
+            ID = 35L,
+            NAME = "High Performance Window",
+            K = 2.0,
+            SC = 0.4022989,
+            LIGHT_TRANS_RATIO = 0.58
+        )
+    )
+
     expect_type(window <- window__convert(dest, ep), "list")
     # Native convection removes only film overrides, preserving the window
     # geometry and the source data used by optical and construction conversion.
@@ -140,7 +156,10 @@ test_that("can convert 'WINDOW'", {
     )
     expect_s3_class(attr(window, "table"), "data.table")
     expect_equal(unique(attr(window, "table")$SURFACE_NAME), "Room Wall")
-    expect_equal(unique(attr(window, "table")$CONSTRUCTION), "Double Window")
+    expect_equal(
+        unique(attr(window, "table")$CONSTRUCTION),
+        "High Performance Window Simple Glazing Construction"
+    )
     expect_equal(attr(window, "table")$POINT_X, c(2, 2, 1, 1))
     expect_equal(attr(window, "table")$POINT_Z, c(3, 1, 1, 3))
     convection <- window$value[
@@ -157,17 +176,6 @@ test_that("can convert 'WINDOW'", {
 
     # A valid aggregate window type replaces the detailed SYS_WINDOW reference
     # while leaving the fenestration geometry and host assignment unchanged.
-    DBI::dbWriteTable(
-        dest,
-        "WINDOW_TYPE_DATA",
-        data.frame(
-            ID = 35L,
-            NAME = "High Performance Window",
-            K = 2.0,
-            SC = 0.4022989,
-            LIGHT_TRANS_RATIO = 0.58
-        )
-    )
     typed <- window__convert(dest, ep)
     expect_equal(
         unique(attr(typed, "table")$CONSTRUCTION),

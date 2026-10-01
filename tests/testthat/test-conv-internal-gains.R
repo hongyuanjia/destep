@@ -114,29 +114,6 @@ test_that("can convert internal gains", {
 
     gains <- internal_gains__convert(dest, ep)
 
-    # Source metadata must come from the same minimum/variable definitions as
-    # the emitted objects, preserving electric watts separately from room heat.
-    sources <- attr(gains, "sources")
-    expect_length(sources, 5L)
-    people_sources <- Filter(function(s) s$kind == "people", sources)
-    light_sources <- Filter(function(s) s$kind == "light", sources)
-    expect_equal(
-        vapply(people_sources, `[[`, numeric(1L), "design_power"),
-        c(1, 0.5),
-        ignore_attr = TRUE
-    )
-    expect_equal(
-        vapply(light_sources, `[[`, numeric(1L), "design_power"),
-        c(90, 18),
-        ignore_attr = TRUE
-    )
-    expect_equal(
-        light_sources[[1L]]$mode,
-        list(air = 0.3, wall = 0.28, floor = 0.35, roof = 0.07)
-    )
-    expect_equal(people_sources[[1L]]$sensible_heat, 61)
-    expect_false("temperature_dependent" %in% names(people_sources[[1L]]))
-
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
     expect_equal(
@@ -228,10 +205,14 @@ test_that("can convert internal gains", {
 
     # Nominal sensible inputs do not acquire a temperature-dependent correction;
     # the only People EMS serves the independent prescribed moisture source.
-    expect_equal(
-        unique(unlist(lapply(people_sources, `[[`, "companion_objects"))),
-        "Room 101 People Moisture"
-    )
+    expect_true(any(
+        grepl(
+            "Room 101 People Moisture",
+            gains$value$value_chr,
+            fixed = TRUE
+        ),
+        na.rm = TRUE
+    ))
     programs <- gains$value[
         class_name == "EnergyManagementSystem:Program",
         value_chr
@@ -277,14 +258,9 @@ test_that("can convert internal gains", {
         "EnergyManagementSystem|OtherEquipment",
         zero$object$class_name
     )))
-    # Existing moisture conversion remains available. Its new metadata must
-    # explicitly prevent accidental use by the sensible-only projection.
+    # Moisture remains an independent source after removing redistribution.
     DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=1")
     wet <- equipment__convert(dest, ep)
-    expect_match(
-        attr(wet, "sources")[[1L]]$unsupported_reason,
-        "Equipment moisture"
-    )
     expect_true(any(grepl("Moisture", wet$value$value_chr), na.rm = TRUE))
 })
 
@@ -404,103 +380,6 @@ test_that("lighting corrections preserve reusable values and area diagnostics", 
         light__ratio_values(lights, 1L, source, "watts_per_floor_area", NULL),
         list()
     )
-})
-
-test_that("source inventory preserves ordered matches and missing data", {
-    dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-    on.exit(DBI::dbDisconnect(dest), add = TRUE)
-    # Duplicate IDs and a literal Minimum name must retain first-match and
-    # normal-name precedence, rather than becoming a many-to-many join.
-    DBI::dbWriteTable(
-        dest,
-        "ROOM",
-        data.frame(ID = c(2L, 1L, 2L), AREA = c(20, 10, 99))
-    )
-    modes <- data.frame(
-        DIST_MODE_ID = c(2L, 1L, 2L),
-        DIST_AIR = c(.2, .1, .9),
-        DIST_AROUND = .3,
-        DIST_FLOOR = .4,
-        DIST_ROOF = .1
-    )
-    DBI::dbWriteTable(dest, "DIST_MODE", modes)
-    gain <- data.table::data.table(
-        NAME = c("A", "A Minimum", "A"),
-        ROOM_ID = c(2L, 1L, 2L),
-        ROOM_NAME = c("First", "Literal", "Duplicate"),
-        CALCULATION_BASIS = c(1L, 0L, 1L),
-        DIST_MODE_ID = c(2L, 1L, 2L)
-    )
-    values <- lapply(c("A Minimum", "A", "A Minimum Minimum"), function(name) {
-        list(
-            name = name,
-            design_level = 5,
-            watts_per_area = 2,
-            schedule_name = "Daily",
-            fraction_radiant = .7
-        )
-    })
-    names(values) <- c("literal", "ordinary", "minimum")
-    # This callback checks that source-row identity survives batch matching.
-    inventory <- function(gain, values) {
-        internal_gains__source_specs(
-            dest,
-            gain,
-            values,
-            "equipment",
-            "design_level",
-            "watts_per_area",
-            "schedule_name",
-            function(item, row) {
-                item$source_row <- row
-                item
-            }
-        )
-    }
-    before <- serialize(list(gain, values), NULL)
-    result <- inventory(gain, values)
-    expect_identical(names(result), names(values))
-    expect_identical(
-        vapply(result, `[[`, integer(1L), "source_row"),
-        c(literal = 2L, ordinary = 1L, minimum = 2L)
-    )
-    expect_identical(
-        vapply(result, `[[`, character(1L), "zone"),
-        c(literal = "Literal", ordinary = "First", minimum = "Literal")
-    )
-    expect_equal(
-        vapply(result, `[[`, numeric(1L), "design_power"),
-        c(literal = 5, ordinary = 40, minimum = 5)
-    )
-    expect_identical(
-        result$ordinary$mode,
-        list(air = .2, wall = .3, floor = .4, roof = .1)
-    )
-    expect_identical(serialize(list(gain, values), NULL), before)
-    expect_identical(inventory(gain[0], list()), list())
-    values[[1L]]$name <- "Unmapped"
-    expect_error(inventory(gain, values), "!is.na\\(row\\)")
-    values[[1L]]$name <- "A Minimum"
-
-    # Missing area/mode information remains missing; it must not silently
-    # become a zero source or borrow a different room's distribution.
-    data.table::set(gain, i = 1L, j = "ROOM_ID", value = NA_integer_)
-    data.table::set(gain, i = 1L, j = "DIST_MODE_ID", value = NA_integer_)
-    missing <- inventory(gain, values)
-    expect_true(is.na(missing$ordinary$design_power))
-    expect_true(all(is.na(unlist(missing$ordinary$mode))))
-    expect_identical(missing$literal, result$literal)
-    DBI::dbWriteTable(dest, "DIST_MODE", modes[0, ], overwrite = TRUE)
-    empty <- inventory(gain, values)
-    expect_true(all(vapply(
-        empty,
-        function(item) all(is.na(unlist(item$mode))),
-        logical(1L)
-    )))
-    DBI::dbRemoveTable(dest, "DIST_MODE")
-    expect_error(inventory(gain, values), "no such table: DIST_MODE")
-    DBI::dbWriteTable(dest, "DIST_MODE", data.frame(DIST_MODE_ID = 1L))
-    expect_null(inventory(gain, values))
 })
 
 test_that("internal gains resolve target zone-reference fields", {
@@ -824,23 +703,4 @@ test_that("can convert internal gains from a real DeST model", {
         expected$EQUIPMENT[[1L]]
     )
     expect_equal(unique(attr(gains, "table")$SOURCE_TABLE), "ROOM_TYPE_DATA")
-    # A real DeST schema must supply metadata for every emitted primary gain,
-    # including any nonzero minimum, directly from its source distribution.
-    sources <- attr(gains, "sources")
-    expect_length(
-        sources,
-        sum(
-            gains$object$class_name %in%
-                c("People", "Lights", "ElectricEquipment")
-        )
-    )
-    expect_true(all(vapply(
-        sources,
-        function(s) {
-            is.finite(s$design_power) &&
-                s$design_power >= 0 &&
-                identical(names(s$mode), c("air", "wall", "floor", "roof"))
-        },
-        logical(1L)
-    )))
 })

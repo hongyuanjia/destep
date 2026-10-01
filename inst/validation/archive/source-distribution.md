@@ -1,4 +1,12 @@
-# DeST source-distribution conversion
+# Historical validation: retired DeST source-distribution adapter
+
+This document describes an earlier implementation and is retained as a record
+of the experiments. The `source_distribution`, `exterior_boundary`, weather
+prepass and `"dest"` preset it names were removed in the 2026-10-02 conversion
+scope cleanup. The example below is not a supported current API call. Current
+source inputs use native EnergyPlus distribution and exterior heat balance.
+
+## Original record
 
 The optional `source_distribution = "dest"` mode preserves source heat-input
 fractions. It is separate from EnergyPlus's default surface allocation and from

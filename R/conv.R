@@ -194,12 +194,8 @@ MAP_ID_NAME <- list(
 #'       `FALSE`.
 #'
 #' @param options \[string or destep_options\] Conversion configuration.
-#'       Use `"objects"` (default) or `"dest"` for a preset, or [destep_opts()]
-#'       to customize feature choices, HVAC, weather/prepass inputs and target
-#'       simulation settings in one reusable object. `"objects"` preserves
-#'       supported source inputs, using EMS where necessary; `"dest"` additionally
-#'       enables optional DeST behavior. See [destep_opts()] for defaults and
-#'       feature restrictions.
+#'       Use `"objects"` (default) or [destep_opts()] to configure source
+#'       inputs, HVAC and target simulation settings.
 #'
 #' @details Outdoor ventilation retains the source minimum ACH time table.
 #'       A saved `OPTION.VARIANT_VENT = 0` disables the range supplement.
@@ -209,17 +205,18 @@ MAP_ID_NAME <- list(
 #'       The rule preserves range inputs
 #'       but does not reproduce DeST's internal ventilation control algorithm.
 #'
-#' @return \[eplusr::Idf\] The converted EnergyPlus model. The opt-in source
-#'       mode attaches a `source_distribution` attribute containing its input
-#'       and cache audit. The `conversion` attribute records the preset, effective
-#'       feature options and generated EMS program purposes. The selections are
-#'       also saved in the Version object's comments. It does not establish
-#'       whole-building equivalence.
+#' @return \[eplusr::Idf\] The converted EnergyPlus model. The
+#'       `conversion` attribute and Version comments record the selected
+#'       options and necessary EMS programs. Its `windows` table records the
+#'       source K/SC, nominal SHGC, face blackness and unresolved optical
+#'       properties for each window. The same aggregate assumptions appear in
+#'       the saved IDF glazing comments. This does not establish whole-building
+#'       equivalence.
 #'
 #' @examples
 #' \dontrun{
 #' to_eplus(dest, "23.1", options = "objects")
-#' opts <- destep_opts("objects", window_optics = "dest_solar", terrain = "Country")
+#' opts <- destep_opts("objects", terrain = "Country")
 #' to_eplus(dest, "23.1", options = opts)
 #' }
 #'
@@ -245,11 +242,7 @@ to_eplus <- function(
             "shadow_update_days"
         )])
     ))
-    window_optics <- conversion$window_optics
-    source_distribution <- conversion$source_distribution
     surface_convection <- conversion$surface_convection
-    exterior_boundary <- conversion$exterior_boundary
-    source_options <- conversion$source_options
 
     if (is_string(dest) && file.exists(dest)) {
         dest <- read_dest(dest, verbose = verbose)
@@ -294,17 +287,6 @@ to_eplus <- function(
     } else {
         ep <- eplusr::empty_idf(ver)
     }
-    if (source_distribution == "dest" || exterior_boundary == "dest_sky") {
-        source_options <- source__options(
-            source_options,
-            ep,
-            hvac,
-            window_optics,
-            db_has_rows(tmpdb, "WINDOW"),
-            source_distribution
-        )
-    }
-    conversion$source_options <- source_options
 
     # add GlobalGeometryRules
     ep$add(
@@ -346,7 +328,6 @@ to_eplus <- function(
         ep,
         attr(surface, "table"),
         geometry_profile,
-        source_distribution = source_distribution,
         surface_convection = surface_convection
     )
     door <- door__convert(
@@ -370,7 +351,7 @@ to_eplus <- function(
         ground_temperature = ground_temperature__convert(tmpdb, ep),
         building = building__convert(tmpdb, ep),
         zone = zone__convert(tmpdb, ep),
-        furniture = furniture__convert(tmpdb, ep, source_distribution),
+        furniture = furniture__convert(tmpdb, ep),
         surface = surface,
         window = window,
         door = door,
@@ -432,36 +413,25 @@ to_eplus <- function(
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
-    # Target-engine settings must precede both weather and solar preparation.
-    # Applying them only to the final IDF would leave cached inputs inconsistent.
+    # Apply user-selected target settings after model object assembly.
     simulation__apply(ep, simulation_options)
 
-    # Apply opt-in solar semantics after all geometry and constructions exist,
-    # before legacy-version object-name normalization changes their references.
-    if (window_optics == "dest_solar") {
-        solar__apply(tmpdb, ep, source_distribution, attr(window, "table"))
-    }
-
-    # Collect powers from their owning converters; only geometry is read back
-    # from the completed IDF, so clipped receiving areas match the target.
-    sky_audit <- NULL
-    if (exterior_boundary == "dest_sky") {
-        sky <- sky__apply(
-            tmpdb,
-            ep,
-            attr(surface, "table"),
-            attr(window, "table"),
-            source_options,
-            verbose
+    # Source K/SC gives an aggregate window approximation. Preserve its input
+    # limitations in the conversion audit without adding solver-specific optics.
+    window_diagnostics <- attr(conv$const, "windows")
+    if (!is.null(window_diagnostics) && nrow(window_diagnostics) > 0L) {
+        warning(
+            sprintf(
+                paste(
+                    "DeST window types %s use nominal SimpleGlazing K/SC",
+                    "approximation; source two-face BLACKNESS and detailed",
+                    "optics are not expressed. See attr(idf, 'conversion')$windows",
+                    "and IDF glazing comments."
+                ),
+                paste(unique(window_diagnostics$TYPE_ID), collapse = ", ")
+            ),
+            call. = FALSE
         )
-        ep <- sky$model
-        sky_audit <- sky$audit
-    }
-    if (source_distribution == "dest") {
-        ep <- source__apply(tmpdb, ep, conv, source_options, verbose)
-    }
-    if (!is.null(sky_audit)) {
-        attr(ep, "exterior_boundary") <- sky_audit
     }
 
     if (hvac == "physical") {
@@ -473,15 +443,18 @@ to_eplus <- function(
         conv__normalize_object_names(ep)
     }
 
-    # Keep the selected saved/fallback ventilation state visible after optional
-    # source and HVAC builders have replaced the intermediate Idf object.
+    # Keep the selected saved/fallback ventilation state visible.
     if (!is.null(conv$ventilation)) {
         attr(ep, "ventilation") <- attr(conv$ventilation, "table")
     }
-    # Required source translation EMS is retained in both presets. Record the
-    # emitted programs instead of assuming that the basic mode has no EMS.
+    # Record necessary moisture EMS from the emitted model.
     audit <- conv__mode_audit(ep, conversion)
     audit$options <- options
+    audit$windows <- if (is.null(window_diagnostics)) {
+        data.table::data.table()
+    } else {
+        data.table::copy(window_diagnostics)
+    }
     audit$schedules <- list(
         format = options$schedule_format,
         files = attr(conv$schedule, "files"),
