@@ -51,11 +51,13 @@
 #'       one shared availability schedule per system and map matching
 #'       `AC_SYS.SUPPLY_T_MIN/MAX` schedules to the cooling-coil setpoint and use
 #'       their minimum value for cooling sizing; distinct minimum and maximum
-#'       trajectories remain unsupported. Physical paths require the necessary
-#'       target IDD objects and a matching local ExpandObjects installation;
-#'       emitted fields and the expanded graph are validated against that IDD.
-#'       Tested targets are 9.0.1, 9.1.0, 9.6.0 and 23.1.0. This evidence list
-#'       is not a version whitelist or a guarantee for other target versions.
+#'       trajectories remain unsupported. Physical paths generate baseline
+#'       objects with the baseline version's local ExpandObjects installation,
+#'       then use [eplusr::transition()] for higher requested targets. Necessary
+#'       classes, emitted fields and the resulting object graph are validated.
+#'       Baseline syntax is 9.0.1, raised to 9.1 for effective moisture sources;
+#'       targets older than 9.0.1 are not maintained. Tested
+#'       baseline versions and upgraded targets are evidence, not a whitelist.
 #'       Supported models with a selected main water coil and no selected plant
 #'       use source AHU two/four-pipe water temperature schedules without
 #'       required `hvac_options`. Independent heating and cooling water stages
@@ -68,8 +70,9 @@
 #'       source model selected a chiller, boiler, or cooling tower.
 #'       Nonzero people or equipment moisture requires the target calling point
 #'       `BeginZoneTimestepBeforeInitHeatBalance`, introduced in 9.1.0. Joint
-#'       physical-system and moisture runs have been checked on 9.1.0, 9.6.0
-#'       and 23.1.0; 9.0.1 lacks that calling point and rejects nonzero sources.
+#'       physical-system and moisture runs have been checked on 9.1.0; higher
+#'       versions are obtained by transition. 9.0.1 lacks that calling point
+#'       and rejects nonzero sources.
 #'
 #' @param hvac_options \[list or NULL\] Optional target equipment overrides.
 #'       Missing fan inputs use EnergyPlus 9.0.1 template defaults: total
