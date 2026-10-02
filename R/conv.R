@@ -207,7 +207,9 @@ MAP_ID_NAME <- list(
 #'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model. The
 #'       `conversion` attribute and Version comments record the selected
-#'       options and necessary EMS programs. Its `windows` table records the
+#'       options, resolved HVAC representation, source component record counts,
+#'       and necessary EMS programs.
+#'       Its `windows` table records the
 #'       source K/SC, nominal SHGC, face blackness and unresolved optical
 #'       properties for each window. The same aggregate assumptions appear in
 #'       the saved IDF glazing comments. This does not establish whole-building
@@ -232,7 +234,7 @@ to_eplus <- function(
     # Resolve one configuration before reading or copying the source database.
     options <- conv__resolve_options(options)
     conversion <- conv__conversion_options(options)
-    hvac <- options$hvac
+    requested_hvac <- options$hvac
     hvac_options <- options$hvac_options
     simulation_options <- simulation__options(Filter(
         Negate(is.null),
@@ -260,9 +262,19 @@ to_eplus <- function(
         stop("'verbose' should be a single logical value of 'TRUE' or 'FALSE'")
     }
 
-    # Enforce the supported DeST HVAC boundary before any conversion-side copy
-    # or EnergyPlus object generation can obscure the source system type.
-    hvac__assert_supported_system_types(dest)
+    # Resolve HVAC from effective room ownership before copying or generating
+    # objects. Only an explicit load-analysis request may omit a source system.
+    hvac_inventory <- hvac__source_inventory(dest)
+    if (requested_hvac != "ideal_loads") {
+        hvac__assert_supported_system_types(dest, hvac_inventory)
+    }
+    hvac <- hvac__resolve_representation(requested_hvac, hvac_inventory)
+    if (hvac != "physical" && !is.null(hvac_options)) {
+        abort(
+            "hvac_options were supplied but the source has no physical HVAC path.",
+            class = "destep_unused_hvac_equipment_options"
+        )
+    }
 
     # copy the DeST database to a temporary SQLite database since we need to
     # update the database
@@ -366,7 +378,20 @@ to_eplus <- function(
             tmpdb,
             ep,
             options$schedule_format,
-            options$schedule_directory
+            options$schedule_directory,
+            # Linked water properties store references in DATA_LONG rather
+            # than schedule-named columns, so the generic scan cannot see them.
+            extra_ids = if (hvac == "physical") {
+                handlers <- DBI::dbReadTable(tmpdb, "AHU")
+                ids <- handlers$AHU_ID[
+                    handlers$OF_AC_SYS %in%
+                        hvac_inventory$systems$AC_SYS_ID
+                ]
+                properties <- hvac__read_ahu_properties(tmpdb, ids)
+                unique(properties$schedule_id[!is.na(properties$schedule_id)])
+            } else {
+                integer()
+            }
         ),
         thermostat = if (hvac == "ideal_loads") {
             thermostat__convert(tmpdb, ep)
@@ -450,6 +475,14 @@ to_eplus <- function(
     # Record necessary moisture EMS from the emitted model.
     audit <- conv__mode_audit(ep, conversion)
     audit$options <- options
+    audit$hvac <- list(
+        requested = requested_hvac,
+        resolved = hvac,
+        source = hvac_inventory,
+        terminals = attr(ep, "hvac_terminals"),
+        water = attr(ep, "hvac_water"),
+        effective_options = attr(ep, "hvac_effective_options")
+    )
     audit$windows <- if (is.null(window_diagnostics)) {
         data.table::data.table()
     } else {
@@ -467,6 +500,11 @@ to_eplus <- function(
         c(
             un_list(ver$object$comment),
             conv__mode_comments(audit),
+            hvac__terminal_comments(audit$hvac$terminals),
+            hvac__water_comments(
+                audit$hvac$water,
+                audit$hvac$effective_options
+            ),
             simulation__comments(audit$simulation)
         ),
         append = NULL

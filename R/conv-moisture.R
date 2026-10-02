@@ -16,11 +16,15 @@ moisture__objects <- function(dest, ep, equipment, prefix_base, label) {
         return(NULL)
     }
 
-    # Earlier calling points cannot update moisture before current-step gains
-    # are evaluated. Reject them instead of shifting the source schedule.
-    if (
-        numeric_version(as.character(ep$version())) < numeric_version("9.1.0")
-    ) {
+    # The target must offer the pre-initialization calling point introduced in
+    # 9.1. Check its actual IDD choices rather than inferring them from a number.
+    calling_points <- unlist(
+        ep$definition(
+            "EnergyManagementSystem:ProgramCallingManager"
+        )$field_choice("energyplus_model_calling_point"),
+        use.names = FALSE
+    )
+    if (!"BeginZoneTimestepBeforeInitHeatBalance" %in% calling_points) {
         stop(
             paste(
                 sprintf(

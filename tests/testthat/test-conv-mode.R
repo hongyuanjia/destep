@@ -52,8 +52,12 @@ test_that("retired solver adapter options cannot silently alter a model", {
     expect_error(destep_opts("objects", "constant"), "Unknown or unnamed")
     expect_error(destep_opts(terrain = "Forest"), "terrain")
     expect_error(destep_opts(shadow_update_days = 0), "shadow_update_days")
-    expect_error(destep_opts(hvac_options = list()), "hvac_options")
-    expect_error(destep_opts(hvac = "physical"), "hvac_options")
+    expect_s3_class(destep_opts(hvac_options = list()), "destep_options")
+    expect_error(
+        destep_opts(hvac = "ideal_loads", hvac_options = list()),
+        "hvac_options"
+    )
+    expect_s3_class(destep_opts(hvac = "physical"), "destep_options")
     opts <- destep_opts(
         hvac = "physical",
         hvac_options = list(chiller_nominal_cop = 4)
@@ -122,6 +126,12 @@ test_that("preset strings and options objects produce equivalent real conversion
     expect_true(converted$is_valid())
     audit <- attr(converted, "conversion")
     expect_identical(audit$options, custom)
+    expect_s3_class(audit$hvac$source$components, "data.table")
+    expect_true(any(grepl(
+        "destep model-local plant records:",
+        un_list(converted$Version$comment()),
+        fixed = TRUE
+    )))
     expect_equal(audit$effective$surface_convection, "energyplus")
     expect_equal(audit$simulation$effective$terrain, "Country")
     expect_equal(

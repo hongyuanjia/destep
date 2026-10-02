@@ -104,11 +104,14 @@ ideal_loads__convert <- function(dest, ep) {
     out
 }
 
-# Warn when a room group references a DeST air-conditioning system that the
-# current IdealLoads path does not yet convert to physical EnergyPlus objects.
+# Warn when a conditioned room references a DeST air-conditioning system that
+# an explicitly requested IdealLoads analysis copy does not represent.
 ideal_loads__warn_physical_hvac <- function(dest, ideal) {
     system_ids <- sort(unique(ideal$OF_AC_SYS[
-        !is.na(ideal$OF_AC_SYS) & ideal$OF_AC_SYS != 0L
+        !is.na(ideal$IS_AC_ROOM) &
+            ideal$IS_AC_ROOM != 0L &
+            !is.na(ideal$OF_AC_SYS) &
+            ideal$OF_AC_SYS > 0L
     ]))
     if (!length(system_ids)) {
         return(invisible(NULL))
