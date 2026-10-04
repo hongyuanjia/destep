@@ -12,10 +12,7 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "auto",
   hvac_options = NULL,
-  surface_convection = "dest",
-  terrain = NULL,
-  solar_distribution = NULL,
-  shadow_update_days = NULL
+  surface_convection = "dest"
 )
 }
 \arguments{
@@ -120,7 +117,26 @@ Zone outdoor-air design allocation preserves source room minima and
 system total. \code{zone_outdoor_air_flow_m3_s} is an optional named ROOM.ID
 override, subject to the same total and terminal flow bounds.
 Effective values and origins are recorded per system in
-\code{attr(model, "conversion")$hvac$effective_options} and IDF comments.
+\code{attr(model, "conversion")$hvac$effective_options} and IDF comments.}
+
+\item{surface_convection}{[string] \code{"dest"} (default)
+retains fixed source coefficients on walls, floors, roofs, windows and
+doors using ordinary EnergyPlus surface-property objects. \code{"energyplus"}
+omits these overrides so EnergyPlus selects its own coefficients.
+Furniture's internal-mass exchange definition is retained separately.}
+}
+\value{
+An object of class \code{destep_options}, accepted by \code{to_idf(options = )}.
+}
+\description{
+Build a reusable options object for \code{\link[=to_idf]{to_idf()}}. A preset supplies defaults;
+explicitly named settings override those defaults. The constructor checks
+option values and dependencies; conversion checks model and target version
+requirements. Aggregate windows use a documented SimpleGlazing
+approximation and do not promise full DeST solver equivalence.
+}
+\section{HVAC support and equivalent representations}{
+
 Room terminal reheat retains \code{ROOM.SET_TERMINAL_MAX} in total W and
 explicit ROOM \code{ROOM_REHEATER_TYPE}; positive capacity with an absent
 type uses a disclosed converter electric default. Single-zone CAV and
@@ -164,42 +180,21 @@ nonzero recovery pressure loss is specified. A native plate exchanger
 uses constant effectiveness, zero auxiliary power, and native economizer
 lockout. No HX outlet temperature limit or frost protection is inferred;
 these target assumptions and unmapped pressure loss are audited.
+The recovery exhaust equals the zone outdoor-air supply; this balanced
+exhaust topology is an equivalent assumption, not a detailed source
+duct-network mapping. Equal seasonal maxima do not establish constant
+DeST operating effectiveness.
 Total-heat, unequal-seasonal, and multizone recovery remain unsupported.
-Unsupported inputs are diagnosed rather than silently disabled.}
-
-\item{surface_convection}{[string] \code{"dest"} (default)
-retains fixed source coefficients on walls, floors, roofs, windows and
-doors using ordinary EnergyPlus surface-property objects. \code{"energyplus"}
-omits these overrides so EnergyPlus selects its own coefficients.
-Furniture's internal-mass exchange definition is retained separately.}
-
-\item{terrain}{[string or NULL] EnergyPlus terrain: \code{"Country"}, \code{"Suburbs"},
-\code{"City"}, \code{"Ocean"} or \code{"Urban"}. \code{NULL} retains the converter/IDD default.}
-
-\item{solar_distribution}{[string or NULL] EnergyPlus solar method:
-\code{"MinimalShadowing"}, \code{"FullExterior"}, \code{"FullInteriorAndExterior"},
-\code{"FullExteriorWithReflections"} or
-\code{"FullInteriorAndExteriorWithReflections"}. \code{NULL} retains the default.
-Choose a method suitable for the geometry; interior beam distribution
-has enclosure/convexity requirements. A \code{WithReflections} method enables
-exterior reflections from preserved opaque \code{SHADING.ROU} values; no
-visible or specular reflectance is inferred.}
-
-\item{shadow_update_days}{[integer or NULL] Positive periodic shading
-update interval in days. EnergyPlus warns above 31. \code{NULL} retains the
-default. Selections are recorded in
-\code{attr(model, "conversion")$simulation} and IDF comments.}
+Unsupported inputs are diagnosed rather than silently disabled.
+Selected positive AHU duct-network references remain unsupported,
+even when rated fan parameters can be read. Diagnostics identify the
+system, AHU and duct network; unused AHUs do not block conversion.
+Detailed coil performance, selected central plants, independent water
+loops and unresolved room-group terminal inheritance remain outside
+the supported subsets. Target defaults never override selected source
+equipment that has no implemented mapping.
 }
-\value{
-An object of class \code{destep_options}, accepted by \code{to_eplus(options = )}.
-}
-\description{
-Build a reusable options object for \code{\link[=to_eplus]{to_eplus()}}. A preset supplies defaults;
-explicitly named settings override those defaults. The constructor checks
-option values and dependencies; conversion checks model and target version
-requirements. Aggregate windows use a documented SimpleGlazing
-approximation and do not promise full DeST solver equivalence.
-}
+
 \section{People inputs and interzone surfaces}{
 
 Conversion retains nominal people sensible heat and \code{O_DAMP_PER_PERSON};
@@ -220,11 +215,10 @@ destep_opts(schedule_format = "file", schedule_directory = "schedules",
     run_period = c(59L, 61L))
 opts <- destep_opts(
     "objects",
-    terrain = "Country",
-    shadow_update_days = 1L
+    surface_convection = "energyplus"
 )
-# to_eplus(dest, "23.1", options = opts)
+# to_idf(dest, "23.1", options = opts)
 }
 \seealso{
-\code{\link[=to_eplus]{to_eplus()}}
+\code{\link[=to_idf]{to_idf()}}
 }

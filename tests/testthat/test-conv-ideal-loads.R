@@ -455,13 +455,13 @@ test_that("can convert ROOM_TYPE_DATA ideal loads from a real DeST model", {
     )
 })
 
-test_that("to_eplus() includes resolvable ideal loads references", {
+test_that("to_idf() includes resolvable ideal loads references", {
     skip_on_cran()
 
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
-    idf <- to_eplus(src, 23.1)
+    idf <- to_idf(src, 23.1)
     ideal <- idf$to_table(class = "ZoneHVAC:IdealLoadsAirSystem", all = TRUE)
     humidistat <- idf$to_table(class = "ZoneControl:Humidistat", all = TRUE)
     outdoor_air <- idf$to_table(

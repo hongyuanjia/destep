@@ -253,13 +253,13 @@ test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST mode
     )
 })
 
-test_that("to_eplus() includes resolvable thermostat references", {
+test_that("to_idf() includes resolvable thermostat references", {
     skip_on_cran()
 
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
-    idf <- to_eplus(src, 23.1)
+    idf <- to_idf(src, 23.1)
     control <- idf$to_table(class = "ZoneControl:Thermostat", all = TRUE)
     setpoint <- idf$to_table(
         class = "ThermostatSetpoint:DualSetpoint",

@@ -102,7 +102,7 @@ test_that("single-room main water coil uses the source water boundary", {
         model,
         "UPDATE ROOM_TYPE_DATA SET O_DAMP_PER_PERSON=0, E_MAX_HUM=0, E_MIN_HUM=0"
     )
-    target <- suppressWarnings(to_eplus(model, "9.0.1"))
+    target <- suppressWarnings(to_idf(model, "9.0.1"))
     expect_true(target$is_valid())
     expect_equal(target$object_num(class = "Coil:Heating:Water"), 1L)
     expect_equal(
@@ -124,7 +124,7 @@ test_that("single-room main water coil uses the source water boundary", {
     expect_equal(as.numeric(manager$`Minimum Supply Air Temperature`), 14)
     expect_equal(as.numeric(manager$`Maximum Supply Air Temperature`), 32)
     expect_error(
-        suppressWarnings(to_eplus(
+        suppressWarnings(to_idf(
             model,
             "9.0.1",
             options = destep_opts(
@@ -171,7 +171,7 @@ test_that("modern physical targets retain source moisture and terminal reference
     )
     expect_true(any(moisture$O_MAXNUMBER * moisture$O_DAMP_PER_PERSON > 0))
     for (version in versions) {
-        target <- suppressWarnings(to_eplus(model, version))
+        target <- suppressWarnings(to_idf(model, version))
         expect_true(target$is_valid())
         expect_identical(as.character(target$version()), version)
         if (version == "9.1.0") {
@@ -274,7 +274,7 @@ test_that("room terminal capacity is independent of central AHU reheat", {
         model,
         "UPDATE ROOM_TYPE_DATA SET O_DAMP_PER_PERSON=0, E_MAX_HUM=0, E_MIN_HUM=0"
     )
-    idf <- suppressWarnings(to_eplus(
+    idf <- suppressWarnings(to_idf(
         model,
         "9.0.1",
         options = destep_opts(hvac = "physical")
@@ -313,7 +313,7 @@ test_that("room terminal capacity is independent of central AHU reheat", {
         "UPDATE ROOM SET SET_TERMINAL_MAX=0 WHERE ID=?",
         params = list(source$zones$room_id[[1L]])
     )
-    mixed <- suppressWarnings(to_eplus(
+    mixed <- suppressWarnings(to_idf(
         model,
         "9.0.1",
         options = destep_opts(hvac = "physical")
@@ -330,7 +330,7 @@ test_that("room terminal capacity is independent of central AHU reheat", {
     # Central reheat is never substituted by a different set of room terminals.
     DBI::dbExecute(model, "UPDATE AHU SET REHEAT_TYPE=1")
     expect_error(
-        suppressWarnings(to_eplus(
+        suppressWarnings(to_idf(
             model,
             "9.0.1",
             options = destep_opts(hvac = "physical")

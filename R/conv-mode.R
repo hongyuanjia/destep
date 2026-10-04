@@ -1,6 +1,6 @@
 #' Configure DeST-to-EnergyPlus conversion
 #'
-#' Build a reusable options object for [to_eplus()]. A preset supplies defaults;
+#' Build a reusable options object for [to_idf()]. A preset supplies defaults;
 #' explicitly named settings override those defaults. The constructor checks
 #' option values and dependencies; conversion checks model and target version
 #' requirements. Aggregate windows use a documented SimpleGlazing
@@ -103,6 +103,8 @@
 #'       override, subject to the same total and terminal flow bounds.
 #'       Effective values and origins are recorded per system in
 #'       `attr(model, "conversion")$hvac$effective_options` and IDF comments.
+#'
+#' @section HVAC support and equivalent representations:
 #'       Room terminal reheat retains `ROOM.SET_TERMINAL_MAX` in total W and
 #'       explicit ROOM `ROOM_REHEATER_TYPE`; positive capacity with an absent
 #'       type uses a disclosed converter electric default. Single-zone CAV and
@@ -146,8 +148,19 @@
 #'       uses constant effectiveness, zero auxiliary power, and native economizer
 #'       lockout. No HX outlet temperature limit or frost protection is inferred;
 #'       these target assumptions and unmapped pressure loss are audited.
+#'       The recovery exhaust equals the zone outdoor-air supply; this balanced
+#'       exhaust topology is an equivalent assumption, not a detailed source
+#'       duct-network mapping. Equal seasonal maxima do not establish constant
+#'       DeST operating effectiveness.
 #'       Total-heat, unequal-seasonal, and multizone recovery remain unsupported.
 #'       Unsupported inputs are diagnosed rather than silently disabled.
+#'       Selected positive AHU duct-network references remain unsupported,
+#'       even when rated fan parameters can be read. Diagnostics identify the
+#'       system, AHU and duct network; unused AHUs do not block conversion.
+#'       Detailed coil performance, selected central plants, independent water
+#'       loops and unresolved room-group terminal inheritance remain outside
+#'       the supported subsets. Target defaults never override selected source
+#'       equipment that has no implemented mapping.
 #'
 #' @param surface_convection \[string\] `"dest"` (default)
 #'       retains fixed source coefficients on walls, floors, roofs, windows and
@@ -155,23 +168,8 @@
 #'       omits these overrides so EnergyPlus selects its own coefficients.
 #'       Furniture's internal-mass exchange definition is retained separately.
 #'
-#' @param terrain \[string or NULL\] EnergyPlus terrain: `"Country"`, `"Suburbs"`,
-#'       `"City"`, `"Ocean"` or `"Urban"`. `NULL` retains the converter/IDD default.
-#' @param solar_distribution \[string or NULL\] EnergyPlus solar method:
-#'       `"MinimalShadowing"`, `"FullExterior"`, `"FullInteriorAndExterior"`,
-#'       `"FullExteriorWithReflections"` or
-#'       `"FullInteriorAndExteriorWithReflections"`. `NULL` retains the default.
-#'       Choose a method suitable for the geometry; interior beam distribution
-#'       has enclosure/convexity requirements. A `WithReflections` method enables
-#'       exterior reflections from preserved opaque `SHADING.ROU` values; no
-#'       visible or specular reflectance is inferred.
-#' @param shadow_update_days \[integer or NULL\] Positive periodic shading
-#'       update interval in days. EnergyPlus warns above 31. `NULL` retains the
-#'       default. Selections are recorded in
-#'       `attr(model, "conversion")$simulation` and IDF comments.
-#'
-#' @return An object of class `destep_options`, accepted by `to_eplus(options = )`.
-#' @seealso [to_eplus()]
+#' @return An object of class `destep_options`, accepted by `to_idf(options = )`.
+#' @seealso [to_idf()]
 #' @section People inputs and interzone surfaces:
 #' Conversion retains nominal people sensible heat and `O_DAMP_PER_PERSON`;
 #' DeST occupant temperature feedback is not reproduced. Nonzero people moisture
@@ -190,10 +188,9 @@
 #'     run_period = c(59L, 61L))
 #' opts <- destep_opts(
 #'     "objects",
-#'     terrain = "Country",
-#'     shadow_update_days = 1L
+#'     surface_convection = "energyplus"
 #' )
-#' # to_eplus(dest, "23.1", options = opts)
+#' # to_idf(dest, "23.1", options = opts)
 #' @export
 destep_opts <- function(
     preset = "objects",
@@ -203,10 +200,7 @@ destep_opts <- function(
     run_period = c(1L, 365L),
     hvac = "auto",
     hvac_options = NULL,
-    surface_convection = "dest",
-    terrain = NULL,
-    solar_distribution = NULL,
-    shadow_update_days = NULL
+    surface_convection = "dest"
 ) {
     if (length(list(...))) {
         stop(
@@ -254,14 +248,6 @@ destep_opts <- function(
         )
     }
 
-    simulation__options(Filter(
-        Negate(is.null),
-        list(
-            terrain = terrain,
-            solar_distribution = solar_distribution,
-            shadow_update_days = shadow_update_days
-        )
-    ))
     structure(
         list(
             preset = preset,
@@ -270,10 +256,7 @@ destep_opts <- function(
             run_period = run_period,
             hvac = hvac,
             hvac_options = hvac_options,
-            surface_convection = surface_convection,
-            terrain = terrain,
-            solar_distribution = solar_distribution,
-            shadow_update_days = shadow_update_days
+            surface_convection = surface_convection
         ),
         class = "destep_options"
     )

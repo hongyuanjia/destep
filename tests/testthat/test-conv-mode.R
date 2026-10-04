@@ -1,9 +1,9 @@
-test_that("one options entry point retains source inputs and target settings", {
+test_that("one options entry point retains source inputs and representation choices", {
     expect_named(
-        formals(to_eplus),
+        formals(to_idf),
         c("dest", "ver", "copy", "verbose", "options")
     )
-    expect_identical(formals(to_eplus)$options, "objects")
+    expect_identical(formals(to_idf)$options, "objects")
     basic <- destep_opts()
     expect_s3_class(basic, "destep_options")
     expect_identical(basic$surface_convection, "dest")
@@ -22,10 +22,9 @@ test_that("one options entry point retains source inputs and target settings", {
             names(basic)
     ))
     custom <- destep_opts(
-        terrain = "Country",
-        solar_distribution = "FullExteriorWithReflections"
+        surface_convection = "energyplus"
     )
-    expect_identical(custom$terrain, "Country")
+    expect_identical(custom$surface_convection, "energyplus")
     expect_identical(conv__resolve_options(custom), custom)
 })
 
@@ -39,7 +38,10 @@ test_that("retired solver adapter options cannot silently alter a model", {
         "directory",
         "people_heat",
         "partition_boundary",
-        "window_optics"
+        "window_optics",
+        "terrain",
+        "solar_distribution",
+        "shadow_update_days"
     )) {
         args <- stats::setNames(list("dest"), option)
         expect_error(
@@ -50,8 +52,6 @@ test_that("retired solver adapter options cannot silently alter a model", {
     }
     expect_error(destep_opts(c("objects", "dest")), "preset")
     expect_error(destep_opts("objects", "constant"), "Unknown or unnamed")
-    expect_error(destep_opts(terrain = "Forest"), "terrain")
-    expect_error(destep_opts(shadow_update_days = 0), "shadow_update_days")
     expect_s3_class(destep_opts(hvac_options = list()), "destep_options")
     expect_error(
         destep_opts(hvac = "ideal_loads", hvac_options = list()),
@@ -65,11 +65,11 @@ test_that("retired solver adapter options cannot silently alter a model", {
     expect_equal(opts$hvac_options$chiller_nominal_cop, 4)
     invalid <- destep_opts()
     invalid$terrain <- "Forest"
-    expect_error(to_eplus(NULL, options = invalid), "terrain")
+    expect_error(to_idf(NULL, options = invalid), "fields")
     invalid <- destep_opts()
     invalid$unknown <- TRUE
-    expect_error(to_eplus(NULL, options = invalid), "fields")
-    expect_error(to_eplus(NULL, options = list()), "destep_opts")
+    expect_error(to_idf(NULL, options = invalid), "fields")
+    expect_error(to_idf(NULL, options = list()), "destep_opts")
 })
 
 test_that("conversion audit labels necessary moisture EMS", {
@@ -107,22 +107,17 @@ test_that("preset strings and options objects produce equivalent real conversion
     skip_on_cran()
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
-    from_string <- suppressWarnings(to_eplus(src, "23.1", options = "objects"))
+    from_string <- suppressWarnings(to_idf(src, "23.1", options = "objects"))
     opts <- destep_opts()
-    from_object <- suppressWarnings(to_eplus(src, "23.1", options = opts))
+    from_object <- suppressWarnings(to_idf(src, "23.1", options = opts))
     expect_equal(from_object$to_table(), from_string$to_table())
     expect_equal(
         attr(from_object, "conversion"),
         attr(from_string, "conversion")
     )
     expect_identical(opts, destep_opts())
-    custom <- destep_opts(
-        surface_convection = "energyplus",
-        terrain = "Country",
-        solar_distribution = "FullExteriorWithReflections",
-        shadow_update_days = 1L
-    )
-    converted <- suppressWarnings(to_eplus(src, "23.1", options = custom))
+    custom <- destep_opts(surface_convection = "energyplus")
+    converted <- suppressWarnings(to_idf(src, "23.1", options = custom))
     expect_true(converted$is_valid())
     audit <- attr(converted, "conversion")
     expect_identical(audit$options, custom)
@@ -133,12 +128,8 @@ test_that("preset strings and options objects produce equivalent real conversion
         fixed = TRUE
     )))
     expect_equal(audit$effective$surface_convection, "energyplus")
-    expect_equal(audit$simulation$effective$terrain, "Country")
-    expect_equal(
-        audit$simulation$effective$solar_distribution,
-        "FullExteriorWithReflections"
-    )
-    expect_equal(audit$simulation$effective$shadow_update_days, 1L)
+    expect_equal(audit$simulation, attr(from_string, "conversion")$simulation)
+    expect_true(all(audit$simulation$selection == "retained_default"))
     expect_true(
         "SurfaceProperty:ConvectionCoefficients" %in%
             from_string$to_table()$class
@@ -172,5 +163,17 @@ test_that("preset strings and options objects produce equivalent real conversion
         ),
         length(remaining)
     )
-    expect_identical(custom$terrain, "Country")
+    expect_identical(custom$surface_convection, "energyplus")
+})
+
+# Public model/weather names are paired, with no legacy export or wrapper.
+test_that("model conversion exports to_idf alongside to_epw", {
+    exports <- getNamespaceExports("destep")
+    expect_true(all(c("to_idf", "to_epw", "destep_opts") %in% exports))
+    expect_false("to_eplus" %in% exports)
+    expect_false(exists(
+        "to_eplus",
+        envir = asNamespace("destep"),
+        inherits = FALSE
+    ))
 })

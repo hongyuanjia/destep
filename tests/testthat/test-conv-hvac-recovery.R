@@ -102,7 +102,7 @@ test_that("constant sensible recovery survives expansion and transition", {
             "MIN_T_EX_COEF=0, MIN_D_EX_COEF=0, MAX_T_EX_COEF=0.4, MAX_D_EX_COEF=0.4"
         )
     )
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))

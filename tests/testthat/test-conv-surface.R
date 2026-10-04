@@ -1032,7 +1032,7 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
     dest <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
     warnings <- character()
-    idf <- withCallingHandlers(to_eplus(dest, 23.1), warning = function(w) {
+    idf <- withCallingHandlers(to_idf(dest, 23.1), warning = function(w) {
         warnings <<- c(warnings, conditionMessage(w))
         invokeRestart("muffleWarning")
     })

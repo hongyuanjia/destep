@@ -24,9 +24,9 @@ models can be inspected, edited, and simulated with
   configurations.
 - Convert DeST climate data to EnergyPlus EPW weather files.
 
-`destep` is under active development. See `?to_eplus` for supported
-model features, conversion options, and EnergyPlus version requirements,
-and [NEWS](NEWS.md) for recent changes.
+`destep` is under active development. See `?to_idf` for supported model
+features, conversion options, and EnergyPlus version requirements, and
+[NEWS](NEWS.md) for recent changes.
 
 ## Installation
 
@@ -54,7 +54,7 @@ eplusr::use_idd("23.1", download = "auto")
 ``` r
 # Convert the model and its weather data
 dest <- read_dest(path)
-idf <- to_eplus(dest, "23.1")
+idf <- to_idf(dest, "23.1")
 idf
 #> ── EnergPlus Input Data File ───────────────────────────────────────────────────
 #>  • Path: NOT LOCAL
@@ -72,11 +72,9 @@ idf
 #> └─ [001<O>] Class: <Site:GroundReflectance>
 #>
 #> Group: <Schedules>
-#> ├─ [003<O>] Class: <ScheduleTypeLimits>
-#> │─ [100<O>] Class: <Schedule:Day:Interval>
-#> │─ [188<O>] Class: <Schedule:Week:Compact>
-#> │─ [178<O>] Class: <Schedule:Year>
-#> └─ [005<O>] Class: <Schedule:Constant>
+#> ├─ [004<O>] Class: <ScheduleTypeLimits>
+#> │─ [178<O>] Class: <Schedule:Compact>
+#> └─ [058<O>] Class: <Schedule:Constant>
 #>
 #> Group: <Surface Construction Elements>
 #> ├─ [021<O>] Class: <Material>
@@ -99,7 +97,7 @@ idf
 #> ├─ [027<O>] Class: <People>
 #> │─ [027<O>] Class: <Lights>
 #> │─ [021<O>] Class: <ElectricEquipment>
-#> └─ [027<O>] Class: <OtherEquipment>
+#> └─ [054<O>] Class: <OtherEquipment>
 #>
 #> Group: <Zone Airflow>
 #> └─ [056<O>] Class: <ZoneVentilation:DesignFlowRate>
@@ -118,6 +116,13 @@ idf
 #> Group: <Zone HVAC Equipment Connections>
 #> ├─ [027<O>] Class: <ZoneHVAC:EquipmentList>
 #> └─ [027<O>] Class: <ZoneHVAC:EquipmentConnections>
+#>
+#> Group: <Energy Management System (EMS)>
+#> ├─ [054<O>] Class: <EnergyManagementSystem:Sensor>
+#> │─ [027<O>] Class: <EnergyManagementSystem:Actuator>
+#> │─ [027<O>] Class: <EnergyManagementSystem:ProgramCallingManager>
+#> │─ [027<O>] Class: <EnergyManagementSystem:Program>
+#> └─ [027<O>] Class: <EnergyManagementSystem:InternalVariable>
 
 epw <- to_epw(dest)
 epw
