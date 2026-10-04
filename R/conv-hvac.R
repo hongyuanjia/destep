@@ -1743,6 +1743,7 @@ hvac__system_sources <- function(dest, options = NULL) {
     controls <- hvac__conditioned_controls(dest)
     systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
     system_ids <- sort(unique(controls$OF_AC_SYS))
+    hvac__assert_supported_fan_networks(dest, system_ids)
     sources <- lapply(system_ids, function(system_id) {
         terminal <- NULL
         system <- systems[AC_SYS_ID == system_id]

@@ -139,15 +139,6 @@ hvac__boundary_options <- function(dest, overrides = NULL) {
             class = "destep_unsupported_hvac_plant_mapping"
         )
     }
-    if (db_has_fields(dest, "AHU", "AHURES")) {
-        networks <- DBI::dbGetQuery(dest, "SELECT AHURES FROM AHU")$AHURES
-        if (any(!is.na(networks) & networks > 0L)) {
-            abort(
-                "Selected source duct-network/fan inputs require their own verified mapping; target fan defaults cannot replace them.",
-                class = "destep_unsupported_hvac_fan_mapping"
-            )
-        }
-    }
     forbidden <- c(
         "chiller_type",
         "chiller_nominal_cop",
@@ -181,6 +172,44 @@ hvac__boundary_options <- function(dest, overrides = NULL) {
         )
     }
     list(overrides = overrides, water_boundary = TRUE)
+}
+
+# Check only AHUs owned by the systems being converted. Library or unused
+# system records must not block another system; selected networks still cannot
+# be replaced by target fan defaults while their topology is unsupported.
+hvac__assert_supported_fan_networks <- function(dest, system_ids) {
+    if (!length(system_ids) || !db_has_fields(dest, "AHU", "AHURES")) {
+        return(invisible(NULL))
+    }
+    handlers <- DBI::dbGetQuery(
+        dest,
+        "SELECT AHU_ID, OF_AC_SYS, AHURES FROM AHU"
+    )
+    selected <- handlers[
+        handlers$OF_AC_SYS %in%
+            system_ids &
+            !is.na(handlers$AHURES) &
+            handlers$AHURES > 0L,
+        ,
+        drop = FALSE
+    ]
+    if (!nrow(selected)) {
+        return(invisible(NULL))
+    }
+    detail <- sprintf(
+        "AC_SYS=%s, AHU=%s, DUCTNET=%s",
+        selected$OF_AC_SYS,
+        selected$AHU_ID,
+        selected$AHURES
+    )
+    abort(
+        paste0(
+            "Selected source duct-network/fan inputs are not yet mapped: ",
+            paste(detail, collapse = "; "),
+            ". Target fan defaults cannot replace these source inputs."
+        ),
+        class = "destep_unsupported_hvac_fan_mapping"
+    )
 }
 
 # Resolve defaults per system: a CAV system must not inherit VAV fan pressure.

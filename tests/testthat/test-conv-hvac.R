@@ -338,3 +338,37 @@ test_that("room terminal capacity is independent of central AHU reheat", {
         class = "destep_unsupported_hvac_reheat_type"
     )
 })
+
+# Exercise the production descriptor path with an independent source copy:
+# adding an unused network must not change the converted system or defaults.
+test_that("unused AHU networks do not change production system descriptors", {
+    skip_on_cran()
+    path <- Sys.getenv("DESTEP_TEST_HVAC_SINGLE_SQLITE", unset = "")
+    if (!nzchar(path) || !file.exists(path)) {
+        skip("The archived AE101 DeST source database is required.")
+    }
+    isolated <- tempfile(fileext = ".sqlite")
+    expect_true(file.copy(path, isolated))
+    on.exit(unlink(isolated), add = TRUE)
+    model <- DBI::dbConnect(RSQLite::SQLite(), isolated)
+    on.exit(DBI::dbDisconnect(model), add = TRUE)
+    baseline <- hvac__system_sources(model)
+    handler <- DBI::dbReadTable(model, "AHU")[1L, , drop = FALSE]
+    handler$AHU_ID <- 987654L
+    handler$OF_AC_SYS <- 987655L
+    handler$AHURES <- 987656L
+    DBI::dbAppendTable(model, "AHU", handler)
+    expect_equal(hvac__system_sources(model), baseline)
+    # Referencing the same unsupported network must still fail before any
+    # target template can substitute generic fan values.
+    DBI::dbExecute(
+        model,
+        "UPDATE AHU SET AHURES=987656 WHERE AHU_ID=?",
+        params = list(baseline[[1L]]$source$ahu_id[[1L]])
+    )
+    expect_error(
+        hvac__system_sources(model),
+        "DUCTNET=987656",
+        class = "destep_unsupported_hvac_fan_mapping"
+    )
+})

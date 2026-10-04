@@ -186,3 +186,31 @@ test_that("two-pipe stage availability follows source temperature bounds", {
     data.table::set(water, NULL, "water_type", 2L)
     expect_null(hvac__two_pipe_phase(con, 1L, water))
 })
+
+# Network ownership determines support, independently of unused catalogue rows.
+test_that("fan network restrictions identify only referenced systems", {
+    con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(con))
+    DBI::dbWriteTable(
+        con,
+        "AHU",
+        data.frame(
+            AHU_ID = c(10L, 20L, 30L, 40L),
+            OF_AC_SYS = c(1L, 2L, 3L, NA_integer_),
+            AHURES = c(0L, 200L, 300L, 400L)
+        )
+    )
+    expect_invisible(hvac__assert_supported_fan_networks(con, integer()))
+    expect_invisible(hvac__assert_supported_fan_networks(con, 1L))
+    expect_error(
+        hvac__assert_supported_fan_networks(con, c(1L, 2L)),
+        "AC_SYS=2, AHU=20, DUCTNET=200",
+        class = "destep_unsupported_hvac_fan_mapping"
+    )
+    expect_error(
+        hvac__assert_supported_fan_networks(con, c(2L, 3L)),
+        "AC_SYS=2, AHU=20, DUCTNET=200; AC_SYS=3, AHU=30, DUCTNET=300"
+    )
+    DBI::dbExecute(con, "DELETE FROM AHU")
+    expect_invisible(hvac__assert_supported_fan_networks(con, 1L))
+})

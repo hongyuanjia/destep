@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Duct-network support checks now apply only to converted air systems.
+  Unused AHUs no longer block conversion; unsupported selected networks report
+  their source system, AHU and network identifiers.
+
 - Sensible heat recovery no longer inherits the HVAC template's fixed 5 C
   outlet temperature limit. The native exchanger default preserves the
   source efficiency without this extra restriction. Conversion notes now
