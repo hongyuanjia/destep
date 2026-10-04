@@ -273,6 +273,9 @@ hvac__water_comments <- function(water, effective) {
     c(
         "destep water coil: equivalent native cooling/heating stages; target autosizing is approximate, not DeST coil performance",
         "destep water plant: scheduled temperature boundary; no inferred chiller/boiler/tower or associated electricity/fuel",
+        if (any(water$water_type == 1L)) {
+            "destep two-pipe stages: native coil and loop availability derived from water strictly outside source supply-air bounds; no inferred calendar season"
+        },
         sprintf(
             "destep AHU %s %s water: source SCHEDULE_YEAR ID=%s; range=%g..%g C",
             water$ahu_id,
@@ -366,6 +369,118 @@ hvac__replace_boundary_plants <- function(model, water) {
         }
         model$object(manager_name)$set(
             schedule_name = water$schedule_name[[index]]
+        )
+    }
+    invisible(model)
+}
+# Classify two-pipe operating water only when its temperature is outside the
+# source supply-air interval. In that subset, the cooling/heating role is
+# unambiguous without a season threshold or a DeST control algorithm. Water
+# inside the interval needs a different verified equivalent representation.
+hvac__two_pipe_phase <- function(dest, system_id, water) {
+    if (water$water_type[[1L]] != 1L) {
+        return(NULL)
+    }
+    system <- DBI::dbGetQuery(
+        dest,
+        "SELECT SUPPLY_T_MIN, SUPPLY_T_MAX FROM AC_SYS WHERE AC_SYS_ID=?",
+        params = list(system_id)
+    )
+    checkmate::assert_data_frame(system, nrows = 1L)
+    ids <- c(water$schedule_id[[1L]], unlist(system, use.names = FALSE))
+    values <- lapply(ids, function(id) {
+        row <- DBI::dbGetQuery(
+            dest,
+            "SELECT DATA FROM SCHEDULE_YEAR WHERE SCHEDULE_ID=?",
+            params = list(id)
+        )
+        checkmate::assert_data_frame(row, nrows = 1L)
+        value <- schedule__decode(row$DATA[[1L]], as.character(id))
+        checkmate::assert_numeric(
+            value,
+            len = 8760L,
+            finite = TRUE,
+            any.missing = FALSE
+        )
+        value
+    })
+    cold <- values[[1L]] < values[[2L]]
+    hot <- values[[1L]] > values[[3L]]
+    if (any(values[[2L]] > values[[3L]]) || any(cold == hot)) {
+        abort(
+            sprintf(
+                paste(
+                    "AC_SYS %s two-pipe water must be strictly below the source minimum",
+                    "or above the source maximum supply-air temperature at every hour.",
+                    "Intermediate/equal water temperatures need a verified coil-control mapping."
+                ),
+                system_id
+            ),
+            class = "destep_unsupported_hvac_water_changeover"
+        )
+    }
+    list(cooling = as.integer(cold), heating = as.integer(hot))
+}
+
+# Native coil and plant availability must agree: a cooling controller cannot
+# operate a water coil carrying hot water. Shared loops also require identical
+# phase schedules across their AHUs. Apply this after template refinement so
+# generated schedules and component references cannot be overwritten.
+hvac__apply_water_phase <- function(model, sources) {
+    phases <- lapply(sources, `[[`, "water_phase")
+    if (all(vapply(phases, is.null, logical(1L)))) {
+        return(invisible(model))
+    }
+    if (!all(vapply(phases, identical, logical(1L), phases[[1L]]))) {
+        abort(
+            "Shared water loops require identical two-pipe stage availability across AHUs.",
+            class = "destep_unsupported_hvac_water_loop_mapping"
+        )
+    }
+    # Two fixed roles and a small number of systems are component I/O, not
+    # elementwise schedule processing; hourly classification was vectorized.
+    for (role in c("cooling", "heating")) {
+        label <- if (role == "cooling") "Cooling" else "Heating"
+        name <- paste("DeST Two Pipe", label, "Availability")
+        values <- schedule__compact_values(phases[[1L]][[role]], name, "")
+        fields <- vapply(
+            seq_along(values),
+            function(index) {
+                conv__idd_field_name(model, "Schedule:Compact", index)
+            },
+            character(1L)
+        )
+        model$add(`Schedule:Compact` = stats::setNames(as.list(values), fields))
+        manager <- paste(name, "Manager")
+        model$add(
+            `AvailabilityManager:Scheduled` = list(
+                name = manager,
+                schedule_name = name
+            ),
+            `AvailabilityManagerAssignmentList` = list(
+                name = paste(manager, "List"),
+                availability_manager_1_object_type = "AvailabilityManager:Scheduled",
+                availability_manager_1_name = manager
+            )
+        )
+        loop <- if (role == "cooling") {
+            "DeST Chilled Water Loop Chilled Water Loop"
+        } else {
+            "DeST Hot Water Loop Hot Water Loop"
+        }
+        model$object(loop)$set(
+            availability_manager_list_name = paste(manager, "List")
+        )
+        for (source in sources) {
+            coil <- paste("DeST AC_SYS", source$system_id, label, "Coil")
+            model$object(coil)$set(availability_schedule_name = name)
+        }
+        model$object(name)$comment(
+            paste(
+                "Derived from source two-pipe water and supply-air temperature bounds;",
+                "native equivalent-stage availability, not inferred seasonal control."
+            ),
+            append = TRUE
         )
     }
     invisible(model)

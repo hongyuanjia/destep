@@ -320,3 +320,112 @@ hvac__terminal_comments <- function(terminals) {
         terminals$outdoor_air_allocation_origin
     )
 }
+# Replace the one-room passive terminal with native constant-volume electric
+# reheat when ROOM supplies an active terminal. Preserve the zone inlet and
+# split the upstream node only for legacy Uncontrolled objects, which have
+# no separate inlet. The native terminal controls heat from zone demand;
+# source watts cap the coil and no AHU reheat is inferred.
+hvac__refine_single_terminal <- function(model, source, terminal) {
+    if (!terminal$terminal_has_reheat[[1L]]) {
+        return(invisible(model))
+    }
+    checkmate::assert_true(terminal$terminal_type[[1L]] == 1L)
+    zone <- source$zone_name[[1L]]
+    connections <- model$to_table(
+        class = "ZoneHVAC:EquipmentConnections",
+        wide = TRUE
+    )
+    connection <- connections[connections$`Zone Name` == zone]
+    checkmate::assert_data_frame(connection, nrows = 1L)
+    equipment <- model$object(connection$`Zone Conditioning Equipment List Name`[[
+        1L
+    ]])
+    equipment_type <- unname(unlist(equipment$value(
+        "zone_equipment_1_object_type"
+    )))
+    equipment_name <- unname(unlist(equipment$value("zone_equipment_1_name")))
+    unit <- NULL
+    if (equipment_type == "ZoneHVAC:AirDistributionUnit") {
+        unit <- model$object(equipment_name)
+        old <- model$object(unname(unlist(unit$value("air_terminal_name"))))
+        inlet <- unname(unlist(old$value("air_inlet_node_name")))
+        outlet <- unname(unlist(old$value("air_outlet_node_name")))
+    } else {
+        checkmate::assert_choice(
+            equipment_type,
+            "AirTerminal:SingleDuct:Uncontrolled"
+        )
+        old <- model$object(equipment_name)
+        outlet <- unname(unlist(old$value("zone_supply_air_node_name")))
+        inlet <- paste(zone, "Terminal Reheat Inlet")
+        # Change only the splitter outlet feeding this zone, not references
+        # to the original zone inlet used by thermostat/control objects.
+        splitter <- model$to_table(class = "AirLoopHVAC:ZoneSplitter")
+        rows <- splitter[!is.na(splitter$value) & splitter$value == outlet]
+        checkmate::assert_data_frame(rows, nrows = 1L)
+        do.call(
+            model$object(rows$id[[1L]])$set,
+            stats::setNames(list(inlet), rows$field[[1L]])
+        )
+    }
+    availability <- unname(unlist(old$value("availability_schedule_name")))
+    # A blank native availability field means always available. Leave it
+    # blank rather than passing eplusr's NA sentinel as an IDF field value.
+    if (!length(availability) || is.na(availability)) {
+        availability <- NULL
+    }
+    name <- old$name()
+    coil <- paste(zone, "Terminal Electric Reheat")
+    suppressMessages(model$del(old$id(), .force = TRUE))
+    model$add(
+        `Coil:Heating:Electric` = list(
+            name = coil,
+            availability_schedule_name = availability,
+            efficiency = 1,
+            nominal_capacity = terminal$terminal_capacity_w[[1L]],
+            air_inlet_node_name = inlet,
+            air_outlet_node_name = outlet
+        ),
+        `AirTerminal:SingleDuct:ConstantVolume:Reheat` = list(
+            name = name,
+            availability_schedule_name = availability,
+            air_outlet_node_name = outlet,
+            air_inlet_node_name = inlet,
+            maximum_air_flow_rate = source$supply_flow_m3_s[[1L]],
+            reheat_coil_object_type = "Coil:Heating:Electric",
+            reheat_coil_name = coil
+        )
+    )
+    if (is.null(unit)) {
+        unit_name <- paste(zone, "Terminal Air Distribution Unit")
+        model$add(
+            `ZoneHVAC:AirDistributionUnit` = list(
+                name = unit_name,
+                air_distribution_unit_outlet_node_name = outlet,
+                air_terminal_object_type = "AirTerminal:SingleDuct:ConstantVolume:Reheat",
+                air_terminal_name = name
+            )
+        )
+        equipment$set(
+            zone_equipment_1_object_type = "ZoneHVAC:AirDistributionUnit",
+            zone_equipment_1_name = unit_name
+        )
+    } else {
+        unit$set(
+            air_terminal_object_type = "AirTerminal:SingleDuct:ConstantVolume:Reheat"
+        )
+    }
+    model$object(coil)$comment(
+        c(
+            sprintf(
+                "DeST ROOM %s SET_TERMINAL_MAX=%g W; terminal type origin=%s.",
+                terminal$room_id[[1L]],
+                terminal$terminal_capacity_w[[1L]],
+                terminal$terminal_type_origin[[1L]]
+            ),
+            "Target electric-to-heat efficiency=1; native zone-demand control; no inferred AHU reheat."
+        ),
+        append = TRUE
+    )
+    invisible(model)
+}

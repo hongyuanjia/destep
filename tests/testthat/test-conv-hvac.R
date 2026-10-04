@@ -77,9 +77,9 @@ test_that("single-room air systems retain source heater and pipe fields", {
     expect_identical(sources[[1L]]$source$source_water_type[[1L]], 0L)
 
     DBI::dbExecute(model, "UPDATE ROOM SET SET_TERMINAL_MAX=1000")
-    expect_error(
-        hvac__system_sources(model, list()),
-        class = "destep_unsupported_hvac_terminal_type"
+    expect_equal(
+        hvac__system_sources(model, list())[[1L]]$terminal$terminal_capacity_w,
+        1000
     )
     DBI::dbExecute(model, "UPDATE ROOM SET SET_TERMINAL_MAX=0")
 

@@ -139,3 +139,50 @@ test_that('missing target parameters receive disclosed per-system defaults', {
         list(typo = 1)
     ))
 })
+# Supply-water temperature, not month or a guessed outdoor threshold, selects
+# the compatible equivalent stage. Ambiguous ranges stay explicit failures.
+test_that("two-pipe stage availability follows source temperature bounds", {
+    con <- hvac__water_fixture()
+    on.exit(DBI::dbDisconnect(con))
+    DBI::dbWriteTable(
+        con,
+        "AC_SYS",
+        data.frame(AC_SYS_ID = 1L, SUPPLY_T_MIN = 53L, SUPPLY_T_MAX = 54L)
+    )
+    for (id in 53:54) {
+        DBI::dbExecute(
+            con,
+            "INSERT INTO SCHEDULE_YEAR VALUES(?,?,?)",
+            params = list(
+                id,
+                paste("Air", id),
+                list(writeBin(
+                    rep(if (id == 53L) 14 else 32, 8760L),
+                    raw(),
+                    endian = "little"
+                ))
+            )
+        )
+    }
+    water <- hvac__water_boundary_source(con, 10L)
+    phase <- hvac__two_pipe_phase(con, 1L, water)
+    expect_identical(phase$cooling, rep(c(1L, 0L), 4380L))
+    expect_identical(phase$heating, 1L - phase$cooling)
+    for (temperature in c(14, 20, 32)) {
+        DBI::dbExecute(
+            con,
+            "UPDATE SCHEDULE_YEAR SET DATA=? WHERE SCHEDULE_ID=50",
+            params = list(list(writeBin(
+                rep(temperature, 8760L),
+                raw(),
+                endian = "little"
+            )))
+        )
+        expect_error(
+            hvac__two_pipe_phase(con, 1L, water),
+            class = "destep_unsupported_hvac_water_changeover"
+        )
+    }
+    data.table::set(water, NULL, "water_type", 2L)
+    expect_null(hvac__two_pipe_phase(con, 1L, water))
+})

@@ -1744,6 +1744,7 @@ hvac__system_sources <- function(dest, options = NULL) {
     systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
     system_ids <- sort(unique(controls$OF_AC_SYS))
     sources <- lapply(system_ids, function(system_id) {
+        terminal <- NULL
         system <- systems[AC_SYS_ID == system_id]
         checkmate::assert_data_table(
             system,
@@ -1762,12 +1763,13 @@ hvac__system_sources <- function(dest, options = NULL) {
         if (system_type == 0L && room_count == 1L) {
             path <- "single_zone_cav"
             source <- hvac__single_zone_cav_source(dest, system_id)
-            # The existing one-room refinement assumes an uncontrolled
-            # terminal. Do not silently omit a source room reheater there.
             terminal <- hvac__room_terminal_source(dest, source$room_id)
-            if (terminal$terminal_has_reheat[[1L]]) {
+            if (
+                terminal$terminal_has_reheat[[1L]] &&
+                    terminal$terminal_type[[1L]] != 1L
+            ) {
                 abort(
-                    "Single-zone CAV ROOM terminal reheat is not yet mapped; its source capacity cannot be omitted.",
+                    "Single-zone CAV hot-water terminal reheat requires a verified terminal water-loop mapping.",
                     class = "destep_unsupported_hvac_terminal_type"
                 )
             }
@@ -1827,7 +1829,9 @@ hvac__system_sources <- function(dest, options = NULL) {
             path = path,
             source = source,
             options = effective,
-            water = water
+            water = water,
+            water_phase = hvac__two_pipe_phase(dest, system_id, water),
+            terminal = terminal
         )
     })
 
@@ -1910,6 +1914,66 @@ hvac__convert <- function(dest, model, options) {
     # per-system defaults instead of requiring a fictitious plant selection.
     boundary <- hvac__boundary_options(dest, options)
     sources <- hvac__system_sources(dest, boundary)
+    treatment <- lapply(sources, function(item) {
+        result <- hvac__air_treatment_source(dest, item$system_id)
+        if (
+            result$target_type != "None" &&
+                nrow(result$controls) > 1L &&
+                !item$path %in% c("multizone_cav", "multizone_vav")
+        ) {
+            abort(
+                "Shared electric humidification requires a mapped multizone CAV or VAV system.",
+                class = "destep_unsupported_hvac_humidity_control"
+            )
+        }
+        if (
+            result$supply_humidity_control == "ems_minimum_rh" &&
+                item$path != "single_zone_cav"
+        ) {
+            abort(
+                "Supply-RH lower control is currently mapped only for single-zone CAV electric humidification.",
+                class = "destep_unsupported_hvac_humidity_control"
+            )
+        }
+        if (
+            result$dehumidification == "native_cooling_coil" &&
+                !item$path %in% c("single_zone_cav", "multizone_cav")
+        ) {
+            abort(
+                "VAV cooling-coil dehumidification is not yet supported; the native humidity override has unresolved convergence failures.",
+                class = "destep_unsupported_hvac_dehumidification"
+            )
+        }
+        if (
+            result$heat_recovery$type != "None" &&
+                item$path != "single_zone_cav"
+        ) {
+            abort(
+                "Multizone heat recovery requires a mapped common exhaust stream, which is not yet supported.",
+                class = "destep_unsupported_hvac_heat_recovery"
+            )
+        }
+        result
+    })
+    humidity_ids <- lapply(treatment, function(item) {
+        if (
+            item$target_type == "None" &&
+                item$dehumidification != "native_cooling_coil"
+        ) {
+            return(NULL)
+        }
+        names <- c(
+            item$controls$HUMIDIFYING_SCHEDULE_NAME,
+            item$controls$DEHUMIDIFYING_SCHEDULE_NAME
+        )
+        vapply(names, function(name) model$object(name)$id(), integer(1L))
+    })
+    supply_rh_ids <- lapply(treatment, function(item) {
+        if (item$supply_humidity_control != "ems_minimum_rh") {
+            return(NULL)
+        }
+        model$object(item$supply_rh$name)$id()
+    })
     hvac__assert_target_capabilities(
         model,
         vapply(sources, `[[`, character(1L), "path")
@@ -1968,11 +2032,25 @@ hvac__convert <- function(dest, model, options) {
                 source$zones$zone_name
             )
         }
+        hvac__configure_recovery_template(
+            model,
+            descriptor$system_id,
+            treatment[[index]]$heat_recovery
+        )
     }
 
     # Normalize the base model and every HVAC template as one reference graph
     # before the target-version preprocessor expands the objects.
     conv__normalize_object_names(model)
+    humidity_names <- lapply(humidity_ids, function(ids) {
+        vapply(ids, function(id) model$object(id)$name(), character(1L))
+    })
+    supply_rh_names <- lapply(supply_rh_ids, function(id) {
+        if (is.null(id)) {
+            return(NULL)
+        }
+        model$object(id)$name()
+    })
     for (index in seq_along(sources)) {
         if (sources[[index]]$path == "single_zone_cav") {
             sources[[index]]$source <- hvac__refresh_single_zone_name(
@@ -2006,11 +2084,53 @@ hvac__convert <- function(dest, model, options) {
                 descriptor$source,
                 options
             )
+            hvac__refine_single_terminal(
+                direct,
+                descriptor$source,
+                descriptor$terminal
+            )
         } else {
             hvac__refine_multizone_airside(
                 direct,
                 descriptor$source,
                 options
+            )
+        }
+    }
+    hvac__apply_water_phase(direct, sources)
+    for (index in seq_along(treatment)) {
+        # Source-control order may differ from the airside zone inventory.
+        zone_source <- if (sources[[index]]$path == "single_zone_cav") {
+            sources[[index]]$source
+        } else {
+            sources[[index]]$source$zones
+        }
+        humidity_zones <- zone_source$zone_name[match(
+            treatment[[index]]$controls$ROOM_ID,
+            zone_source$room_id
+        )]
+        hvac__refine_heat_recovery(
+            direct,
+            sources[[index]]$system_id,
+            treatment[[index]]$heat_recovery,
+            sources[[index]]$source$zone_name
+        )
+        hvac__refine_room_humidity(
+            direct,
+            treatment[[index]],
+            humidity_names[[index]],
+            humidity_zones
+        )
+        if (treatment[[index]]$target_type != "None") {
+            hvac__refine_humidifier(
+                direct,
+                treatment[[index]],
+                humidity_zones
+            )
+            hvac__refine_supply_humidity(
+                direct,
+                treatment[[index]],
+                supply_rh_names[[index]]
             )
         }
     }
@@ -2024,7 +2144,32 @@ hvac__convert <- function(dest, model, options) {
             sources,
             function(descriptor) {
                 if (descriptor$path == "single_zone_cav") {
-                    return(NULL)
+                    selected <- data.table::copy(descriptor$terminal)
+                    data.table::set(
+                        selected,
+                        NULL,
+                        "zone_name",
+                        descriptor$source$zone_name
+                    )
+                    data.table::set(
+                        selected,
+                        NULL,
+                        "ac_system_id",
+                        descriptor$system_id
+                    )
+                    data.table::set(
+                        selected,
+                        NULL,
+                        "outdoor_air_flow_m3_s",
+                        descriptor$source$outdoor_air_flow_m3_s
+                    )
+                    data.table::set(
+                        selected,
+                        NULL,
+                        "outdoor_air_allocation_origin",
+                        "source_single_zone_system_total"
+                    )
+                    return(selected)
                 }
                 selected <- data.table::copy(descriptor$source$zones)
                 data.table::set(
@@ -2039,6 +2184,11 @@ hvac__convert <- function(dest, model, options) {
         fill = TRUE
     )
     attr(direct, "hvac_water") <- water
+    attr(direct, "hvac_air_treatment") <- treatment
+    direct$objects_in_class("Version")[[1L]]$comment(
+        hvac__air_treatment_comments(treatment),
+        append = TRUE
+    )
     attr(direct, "hvac_effective_options") <- lapply(sources, function(item) {
         origins <- stats::setNames(
             rep("target_representation_default", length(item$options)),

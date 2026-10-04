@@ -389,7 +389,7 @@ to_eplus <- function(
             ep,
             options$schedule_format,
             options$schedule_directory,
-            # Linked water properties store references in DATA_LONG rather
+            # Linked water/RH properties store references in DATA_LONG rather
             # than schedule-named columns, so the generic scan cannot see them.
             extra_ids = if (hvac == "physical") {
                 handlers <- DBI::dbReadTable(tmpdb, "AHU")
@@ -398,7 +398,13 @@ to_eplus <- function(
                         hvac_inventory$systems$AC_SYS_ID
                 ]
                 properties <- hvac__read_ahu_properties(tmpdb, ids)
-                unique(properties$schedule_id[!is.na(properties$schedule_id)])
+                unique(c(
+                    properties$schedule_id[!is.na(properties$schedule_id)],
+                    hvac__supply_rh_schedule_ids(
+                        tmpdb,
+                        hvac_inventory$systems$AC_SYS_ID
+                    )
+                ))
             } else {
                 integer()
             }
@@ -500,6 +506,7 @@ to_eplus <- function(
         source = hvac_inventory,
         terminals = attr(ep, "hvac_terminals"),
         water = attr(ep, "hvac_water"),
+        air_treatment = attr(ep, "hvac_air_treatment"),
         effective_options = attr(ep, "hvac_effective_options")
     )
     audit$windows <- if (is.null(window_diagnostics)) {
@@ -525,6 +532,7 @@ to_eplus <- function(
                 audit$versions$transition
             ),
             conv__mode_comments(audit),
+            hvac__air_treatment_comments(audit$hvac$air_treatment),
             hvac__terminal_comments(audit$hvac$terminals),
             hvac__water_comments(
                 audit$hvac$water,
