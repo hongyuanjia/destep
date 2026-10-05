@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Reject noninteger system property references through the shared source reader,
+  identify supply-humidity EMS in conversion audits, and load water changeover
+  schedules in batches without changing their hourly values (#41).
+
 - Duct-network support checks now apply only to converted air systems.
   Unused AHUs no longer block conversion; unsupported selected networks report
   their source system, AHU and network identifiers (#41).

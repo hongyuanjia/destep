@@ -19,6 +19,22 @@ test_that("system humidity properties follow reachable ownership", {
         )
     )
     expect_identical(hvac__system_property(con, 1L, "AC_SYS_MINF_SCH"), 16L)
+    for (value in c(16.5, NA_real_, Inf, .Machine$integer.max + 1)) {
+        DBI::dbExecute(
+            con,
+            "UPDATE EXT_PROPERTY SET DATA_LONG=? WHERE PROPERTY_ID=11",
+            params = list(value)
+        )
+        expect_error(
+            hvac__system_property(con, 1L, "AC_SYS_MINF_SCH"),
+            class = "destep_unresolved_hvac_property"
+        )
+    }
+    DBI::dbExecute(
+        con,
+        "UPDATE EXT_PROPERTY SET DATA_LONG=16 WHERE PROPERTY_ID=11"
+    )
+
     DBI::dbExecute(
         con,
         "UPDATE EXT_PROPERTY SET NEXT_PROPERTY=10 WHERE PROPERTY_ID=11"

@@ -174,3 +174,35 @@ test_that("preset strings and options objects produce equivalent real conversion
     )
     expect_identical(custom$terrain, "Country")
 })
+
+# HVAC-generated coordinate conversion is a required source input; external
+# EMS remains visibly unclassified rather than being attributed to destep.
+test_that("conversion audit identifies supply humidity EMS", {
+    ep <- eplusr::empty_idf("9.1")
+    for (name in c(
+        "DeST_Supply_RH_1_Cache",
+        "DeST_Supply_RH_1_Convert",
+        "External"
+    )) {
+        ep$add(
+            `EnergyManagementSystem:Program` = list(
+                name = name,
+                program_line_1 = "SET X = 1"
+            )
+        )
+    }
+    audit <- conv__mode_audit(ep, list(mode = "objects"))
+    expect_identical(
+        audit$ems$purpose,
+        c("supply_humidity", "supply_humidity", "unclassified")
+    )
+    expect_identical(
+        audit$ems$requirement,
+        c("source_input", "source_input", "unclassified")
+    )
+    expect_match(
+        conv__mode_comments(audit)[[3L]],
+        "supply_humidity:source_input",
+        fixed = TRUE
+    )
+})
