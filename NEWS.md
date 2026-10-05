@@ -1,5 +1,53 @@
 # destep 0.0.0.9000
 
+- Reject noninteger system property references through the shared source reader,
+  identify supply-humidity EMS in conversion audits, and load water changeover
+  schedules in batches without changing their hourly values (#41).
+
+- Duct-network support checks now apply only to converted air systems.
+  Unused AHUs no longer block conversion; unsupported selected networks report
+  their source system, AHU and network identifiers (#41).
+
+- Sensible heat recovery no longer inherits the HVAC template's fixed 5 C
+  outlet temperature limit. The native exchanger default preserves the
+  source efficiency without this extra restriction. Conversion notes now
+  state explicitly that heat-recovery pressure loss is not separately mapped (#41).
+
+- Multizone VAV electric humidification now retains source room RH schedules
+  and terminal minimum/maximum airflow. Native critical-zone control uses
+  actual terminal flow; no humidity-control EMS or user option is added.
+  Active VAV dehumidification remains unsupported after native-control
+  convergence failures in independent variable-flow probes (#41).
+
+- Multizone CAV room humidity upper bounds now use native critical-zone
+  control on the existing cooling coil. Each room retains its paired RH
+  schedules; combined humidification and dehumidification share the same
+  humidistats. Explicit 1e-9 to 1 kg/kg target guards avoid native fixed
+  humidity bounds. Equipment limits and native temperature/humidity
+  tradeoffs remain; no reheat or EMS is added for this control (#41).
+
+- Multizone CAV electric humidification now retains each room's RH schedules
+  and uses native critical-zone control on the shared air loop. Explicit
+  numerical humidity-ratio guards (1e-9 to 1 kg/kg) replace native defaults
+  that can add humidity at zero room demand or clip higher demands. These
+  guards are target settings, not source limits; demands outside them are not
+  represented. Equipment capacity and saturation remain unchanged. Multizone
+  VAV dehumidification and multizone supply-RH bounds remain unsupported (#41).
+
+- Single-zone electric humidification now reads linked supply minimum-RH
+  schedules, including schedules used only by system extended properties.
+  Necessary EMS converts RH to humidity ratio at current supply temperature
+  and pressure while retaining native room demand and equipment capacity.
+  Compact/file schedules and shared fraction/percent references are retained;
+  supply maximum-RH control remains unsupported (#41).
+
+- Single-zone CAV room humidity upper bounds now control the existing cooling
+  coil through native EnergyPlus temperature/humidity control. Heating and
+  cooling moisture controls share one room humidistat. Source temperature
+  targets remain, but humidity control can override them; unmet requirements
+  are possible and DeST AHU optimization is not reproduced. No reheat or EMS is
+  added for this control. Restrictive supply-RH upper bounds remain unsupported (#41).
+
 - Build conversion audit metadata and saved comments after IDF transition so
   reported object and simulation settings match the requested target (#39).
 

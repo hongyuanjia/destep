@@ -208,3 +208,72 @@ test_that("VAV default allocation stays inside minimum operating flows", {
         class = "destep_invalid_hvac_air_balance"
     )
 })
+
+# Check the public conversion graph against ROOM capacity and separate terminal
+# ownership, including the generated old-version graph and an upgraded IDF.
+test_that("single-zone electric reheat preserves source capacity and zone inlet", {
+    skip_on_cran()
+    path <- Sys.getenv("DESTEP_TEST_HVAC_SINGLE_SQLITE", unset = "")
+    skip_if(!file.exists(path), "Archived single-zone AE source is required")
+    original <- DBI::dbConnect(
+        RSQLite::SQLite(),
+        path,
+        flags = RSQLite::SQLITE_RO
+    )
+    con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    RSQLite::sqliteCopyDatabase(original, con)
+    DBI::dbDisconnect(original)
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+    DBI::dbExecute(con, "UPDATE ROOM SET SET_TERMINAL_MAX=1234")
+    DBI::dbExecute(con, "UPDATE AHU SET HUMIDIFIER=0, HEAT_RECOVER=0")
+    DBI::dbExecute(
+        con,
+        "UPDATE ROOM_TYPE_DATA SET O_DAMP_PER_PERSON=0,E_MIN_HUM=0,E_MAX_HUM=0"
+    )
+    model <- suppressWarnings(to_eplus(con, "9.0.1"))
+    audit <- attr(model, "conversion")$hvac$terminals
+    expect_equal(audit$terminal_capacity_w, 1234)
+    expect_identical(audit$terminal_type_origin, "converter_default_electric")
+    expect_true(audit$terminal_has_reheat)
+    terminal <- model$to_table(
+        class = "AirTerminal:SingleDuct:ConstantVolume:Reheat",
+        wide = TRUE
+    )
+    coil <- model$to_table(class = "Coil:Heating:Electric", wide = TRUE)
+    expect_equal(nrow(terminal), 1L)
+    expect_equal(nrow(coil), 1L)
+    expect_equal(as.numeric(coil$`Nominal Capacity`), 1234)
+    expect_equal(as.numeric(coil$Efficiency), 1)
+    expect_identical(coil$Name, terminal$`Reheat Coil Name`)
+    expect_identical(coil$`Air Inlet Node Name`, terminal$`Air Inlet Node Name`)
+    expect_identical(
+        coil$`Air Outlet Node Name`,
+        terminal$`Air Outlet Node Name`
+    )
+    connection <- model$to_table(
+        class = "ZoneHVAC:EquipmentConnections",
+        wide = TRUE
+    )
+    expect_identical(
+        connection$`Zone Air Inlet Node or NodeList Name`,
+        terminal$`Air Outlet Node Name`
+    )
+    splitter <- model$to_table(class = "AirLoopHVAC:ZoneSplitter")
+    expect_true(terminal$`Air Inlet Node Name` %in% splitter$value)
+    expect_false(terminal$`Air Outlet Node Name` %in% splitter$value)
+    expect_true(model$is_valid())
+    target <- tempfile(fileext = ".idf")
+    on.exit(unlink(target), add = TRUE)
+    model$save(target, overwrite = TRUE)
+    newer <- eplusr::transition(model, "23.1.0")
+    expect_true(newer$is_valid())
+    expect_equal(
+        as.numeric(
+            newer$to_table(
+                class = "Coil:Heating:Electric",
+                wide = TRUE
+            )$`Nominal Capacity`
+        ),
+        1234
+    )
+})

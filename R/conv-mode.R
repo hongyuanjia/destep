@@ -91,6 +91,11 @@
 #'       temperatures of 7/60 C are sizing assumptions; full source schedules
 #'       determine operational supply temperatures. Main coil technology,
 #'       water schedules and plant choices cannot be overridden with this list.
+#'       Two-pipe equivalent stages use native coil/loop availability derived
+#'       from source temperatures: water must be strictly below the minimum
+#'       or above the maximum supply-air bound at each hour. Intermediate or
+#'       equal temperatures remain unsupported; shared loops require identical
+#'       stage availability. No calendar-based season rule is inferred.
 #'       Single-zone constant source supply-air bounds constrain native feedback
 #'       managers; varying bounds currently stop conversion.
 #'       Zone outdoor-air design allocation preserves source room minima and
@@ -100,12 +105,49 @@
 #'       `attr(model, "conversion")$hvac$effective_options` and IDF comments.
 #'       Room terminal reheat retains `ROOM.SET_TERMINAL_MAX` in total W and
 #'       explicit ROOM `ROOM_REHEATER_TYPE`; positive capacity with an absent
-#'       type uses a disclosed converter electric default. Hot-water terminals
+#'       type uses a disclosed converter electric default. Single-zone CAV and
+#'       multizone paths place electric reheat at the room terminal, with the
+#'       source capacity ceiling and native target zone-demand control.
+#'       Hot-water terminals
 #'       and central AHU reheat remain unsupported. No fictitious electric
 #'       preheat, chiller, boiler or cooling tower is generated for a source
 #'       that only specifies its water boundary. The existing physical path
-#'       still omits steam humidifier and heat-recovery mapping; these remain
-#'       limitations, not defaults inferred from the source.
+#'       supports single-zone electric steam humidification with source room-RH
+#'       schedules and target autosizing. Source humidifiers with zero room and
+#'       supply minimum RH are recorded as inactive. Single-zone and multizone CAV room-RH
+#'       upper bounds use native temperature/humidity control on the existing
+#'       cooling coil, independently of humidifier presence. Source temperature
+#'       targets remain, but native humidity control can supersede them; unmet
+#'       temperature/RH requirements are possible. DeST AHU optimization is not
+#'       reproduced and no reheat is added for humidity control. Single-zone
+#'       electric humidification also retains a source supply-RH lower bound:
+#'       necessary EMS converts it using current supply-fan outlet temperature
+#'       and barometric pressure, taking the larger of the room and supply
+#'       minimum humidity-ratio targets without changing equipment capacity.
+#'       Supply-RH upper bounds remain unsupported.
+#'       An absent source humidifier stays absent; positive
+#'       room lower RH then produces a warning and an audit record, without
+#'       inventing equipment. Active external-steam or spray humidifiers
+#'       remain unsupported. Multizone CAV/VAV electric
+#'       humidification preserves a humidistat per source room and uses native
+#'       critical-zone control on the shared air loop. Its target numerical
+#'       humidity-ratio guards are 1e-9 and 1 kg/kg, not DeST input limits;
+#'       demands outside this interval are not represented. Native low-load
+#'       behavior, capacity and saturation can leave room targets unmet.
+#'       Multizone CAV room upper RH uses the native critical-zone maximum humidity
+#'       manager on the existing cooling coil with the same numerical guards.
+#'       VAV room lower RH uses the same native minimum manager and preserves
+#'       source terminal flow bounds. Active VAV dehumidification remains
+#'       unsupported because native humidity override probes failed to converge.
+#'       Multizone supply-RH bounds remain unsupported.
+#'       Single-zone sensible heat recovery retains equal seasonal maximum
+#'       coefficients when minima are zero and no source duct network or
+#'       nonzero recovery pressure loss is specified. A native plate exchanger
+#'       uses constant effectiveness, zero auxiliary power, and native economizer
+#'       lockout. No HX outlet temperature limit or frost protection is inferred;
+#'       these target assumptions and unmapped pressure loss are audited.
+#'       Total-heat, unequal-seasonal, and multizone recovery remain unsupported.
+#'       Unsupported inputs are diagnosed rather than silently disabled.
 #'
 #' @param surface_convection \[string\] `"dest"` (default)
 #'       retains fixed source coefficients on walls, floors, roofs, windows and
@@ -286,6 +328,11 @@ conv__mode_audit <- function(ep, options) {
     purpose[moisture] <- "equipment_moisture"
     purpose[people_moisture] <- "people_moisture"
     requirement[moisture | people_moisture] <- "source_input"
+    # Supply-RH coordinate conversion is source-input EMS owned by HVAC.
+    # Keep unrelated caller programs unclassified rather than inferring intent.
+    supply_humidity <- startsWith(programs, "DeST_Supply_RH_")
+    purpose[supply_humidity] <- "supply_humidity"
+    requirement[supply_humidity] <- "source_input"
     effective <- options[setdiff(names(options), "mode")]
     list(
         preset = options$mode,
