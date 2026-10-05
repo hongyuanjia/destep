@@ -2,6 +2,13 @@
 
 ## destep 0.0.0.9000
 
+- Reject negative source people counts and lighting/equipment power
+  bounds instead of dropping them or changing their hourly profiles. AHU
+  water schedule references must be exact integers, and water
+  temperatures use the shared annual decoder with explicit missing-value
+  checks. EPW source flags are generated in batches while preserving
+  every positional code (#44).
+
 - `to_epw(radiation_time = "auto")` compares the centered and hour-start
   intervals and selects only a uniquely passing candidate. Ambiguous and
   wholly inconsistent inputs stop with both diagnostics; successful
