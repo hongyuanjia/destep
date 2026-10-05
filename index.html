@@ -60,7 +60,7 @@
 <li>Generate load-calculation models and selected physical HVAC configurations.</li>
 <li>Convert DeST climate data to EnergyPlus EPW weather files.</li>
 </ul>
-<p><code>destep</code> is under active development. See <code><a href="reference/to_eplus.html">?to_eplus</a></code> for supported model features, conversion options, and EnergyPlus version requirements, and <a href="NEWS.html">NEWS</a> for recent changes.</p>
+<p><code>destep</code> is under active development. See <code><a href="reference/to_idf.html">?to_idf</a></code> for supported model features, conversion options, and EnergyPlus version requirements, and <a href="NEWS.html">NEWS</a> for recent changes.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -86,7 +86,7 @@
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Convert the model and its weather data</span></span>
 <span><span class="va">dest</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/read_dest.html">read_dest</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
-<span><span class="va">idf</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/to_eplus.html">to_eplus</a></span><span class="op">(</span><span class="va">dest</span>, <span class="st">"23.1"</span><span class="op">)</span></span>
+<span><span class="va">idf</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/to_idf.html">to_idf</a></span><span class="op">(</span><span class="va">dest</span>, <span class="st">"23.1"</span><span class="op">)</span></span>
 <span><span class="va">idf</span></span>
 <span><span class="co">#&gt; ── EnergPlus Input Data File ───────────────────────────────────────────────────</span></span>
 <span><span class="co">#&gt;  • Path: NOT LOCAL</span></span>
@@ -104,11 +104,9 @@
 <span><span class="co">#&gt; └─ [001&lt;O&gt;] Class: &lt;Site:GroundReflectance&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Schedules&gt;</span></span>
-<span><span class="co">#&gt; ├─ [003&lt;O&gt;] Class: &lt;ScheduleTypeLimits&gt;</span></span>
-<span><span class="co">#&gt; │─ [100&lt;O&gt;] Class: &lt;Schedule:Day:Interval&gt;</span></span>
-<span><span class="co">#&gt; │─ [188&lt;O&gt;] Class: &lt;Schedule:Week:Compact&gt;</span></span>
-<span><span class="co">#&gt; │─ [178&lt;O&gt;] Class: &lt;Schedule:Year&gt;</span></span>
-<span><span class="co">#&gt; └─ [005&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
+<span><span class="co">#&gt; ├─ [004&lt;O&gt;] Class: &lt;ScheduleTypeLimits&gt;</span></span>
+<span><span class="co">#&gt; │─ [178&lt;O&gt;] Class: &lt;Schedule:Compact&gt;</span></span>
+<span><span class="co">#&gt; └─ [058&lt;O&gt;] Class: &lt;Schedule:Constant&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Surface Construction Elements&gt;</span></span>
 <span><span class="co">#&gt; ├─ [021&lt;O&gt;] Class: &lt;Material&gt;</span></span>
@@ -131,7 +129,7 @@
 <span><span class="co">#&gt; ├─ [027&lt;O&gt;] Class: &lt;People&gt;</span></span>
 <span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;Lights&gt;</span></span>
 <span><span class="co">#&gt; │─ [021&lt;O&gt;] Class: &lt;ElectricEquipment&gt;</span></span>
-<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;OtherEquipment&gt;</span></span>
+<span><span class="co">#&gt; └─ [054&lt;O&gt;] Class: &lt;OtherEquipment&gt;</span></span>
 <span><span class="co">#&gt;</span></span>
 <span><span class="co">#&gt; Group: &lt;Zone Airflow&gt;</span></span>
 <span><span class="co">#&gt; └─ [056&lt;O&gt;] Class: &lt;ZoneVentilation:DesignFlowRate&gt;</span></span>
@@ -150,6 +148,13 @@
 <span><span class="co">#&gt; Group: &lt;Zone HVAC Equipment Connections&gt;</span></span>
 <span><span class="co">#&gt; ├─ [027&lt;O&gt;] Class: &lt;ZoneHVAC:EquipmentList&gt;</span></span>
 <span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;ZoneHVAC:EquipmentConnections&gt;</span></span>
+<span><span class="co">#&gt;</span></span>
+<span><span class="co">#&gt; Group: &lt;Energy Management System (EMS)&gt;</span></span>
+<span><span class="co">#&gt; ├─ [054&lt;O&gt;] Class: &lt;EnergyManagementSystem:Sensor&gt;</span></span>
+<span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;EnergyManagementSystem:Actuator&gt;</span></span>
+<span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;EnergyManagementSystem:ProgramCallingManager&gt;</span></span>
+<span><span class="co">#&gt; │─ [027&lt;O&gt;] Class: &lt;EnergyManagementSystem:Program&gt;</span></span>
+<span><span class="co">#&gt; └─ [027&lt;O&gt;] Class: &lt;EnergyManagementSystem:InternalVariable&gt;</span></span>
 <span></span>
 <span><span class="va">epw</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/to_epw.html">to_epw</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
 <span><span class="va">epw</span></span>

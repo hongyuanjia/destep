@@ -1,11 +1,11 @@
 # Configure DeST-to-EnergyPlus conversion
 
-Build a reusable options object for [`to_eplus()`](to_eplus.md). A
-preset supplies defaults; explicitly named settings override those
-defaults. The constructor checks option values and dependencies;
-conversion checks model and target version requirements. Aggregate
-windows use a documented SimpleGlazing approximation and do not promise
-full DeST solver equivalence.
+Build a reusable options object for [`to_idf()`](to_idf.md). A preset
+supplies defaults; explicitly named settings override those defaults.
+The constructor checks option values and dependencies; conversion checks
+model and target version requirements. Aggregate windows use a
+documented SimpleGlazing approximation and do not promise full DeST
+solver equivalence.
 
 ## Usage
 
@@ -18,10 +18,7 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "auto",
   hvac_options = NULL,
-  surface_convection = "dest",
-  terrain = NULL,
-  solar_distribution = NULL,
-  shadow_update_days = NULL
+  surface_convection = "dest"
 )
 ```
 
@@ -146,50 +143,6 @@ destep_opts(
   subject to the same total and terminal flow bounds. Effective values
   and origins are recorded per system in
   `attr(model, "conversion")$hvac$effective_options` and IDF comments.
-  Room terminal reheat retains `ROOM.SET_TERMINAL_MAX` in total W and
-  explicit ROOM `ROOM_REHEATER_TYPE`; positive capacity with an absent
-  type uses a disclosed converter electric default. Single-zone CAV and
-  multizone paths place electric reheat at the room terminal, with the
-  source capacity ceiling and native target zone-demand control.
-  Hot-water terminals and central AHU reheat remain unsupported. No
-  fictitious electric preheat, chiller, boiler or cooling tower is
-  generated for a source that only specifies its water boundary. The
-  existing physical path supports single-zone electric steam
-  humidification with source room-RH schedules and target autosizing.
-  Source humidifiers with zero room and supply minimum RH are recorded
-  as inactive. Single-zone and multizone CAV room-RH upper bounds use
-  native temperature/humidity control on the existing cooling coil,
-  independently of humidifier presence. Source temperature targets
-  remain, but native humidity control can supersede them; unmet
-  temperature/RH requirements are possible. DeST AHU optimization is not
-  reproduced and no reheat is added for humidity control. Single-zone
-  electric humidification also retains a source supply-RH lower bound:
-  necessary EMS converts it using current supply-fan outlet temperature
-  and barometric pressure, taking the larger of the room and supply
-  minimum humidity-ratio targets without changing equipment capacity.
-  Supply-RH upper bounds remain unsupported. An absent source humidifier
-  stays absent; positive room lower RH then produces a warning and an
-  audit record, without inventing equipment. Active external-steam or
-  spray humidifiers remain unsupported. Multizone CAV/VAV electric
-  humidification preserves a humidistat per source room and uses native
-  critical-zone control on the shared air loop. Its target numerical
-  humidity-ratio guards are 1e-9 and 1 kg/kg, not DeST input limits;
-  demands outside this interval are not represented. Native low-load
-  behavior, capacity and saturation can leave room targets unmet.
-  Multizone CAV room upper RH uses the native critical-zone maximum
-  humidity manager on the existing cooling coil with the same numerical
-  guards. VAV room lower RH uses the same native minimum manager and
-  preserves source terminal flow bounds. Active VAV dehumidification
-  remains unsupported because native humidity override probes failed to
-  converge. Multizone supply-RH bounds remain unsupported. Single-zone
-  sensible heat recovery retains equal seasonal maximum coefficients
-  when minima are zero and no source duct network or nonzero recovery
-  pressure loss is specified. A native plate exchanger uses constant
-  effectiveness, zero auxiliary power, and native economizer lockout. No
-  HX outlet temperature limit or frost protection is inferred; these
-  target assumptions and unmapped pressure loss are audited. Total-heat,
-  unequal-seasonal, and multizone recovery remain unsupported.
-  Unsupported inputs are diagnosed rather than silently disabled.
 
 - surface_convection:
 
@@ -199,32 +152,65 @@ destep_opts(
   EnergyPlus selects its own coefficients. Furniture's internal-mass
   exchange definition is retained separately.
 
-- terrain:
-
-  \[string or NULL\] EnergyPlus terrain: `"Country"`, `"Suburbs"`,
-  `"City"`, `"Ocean"` or `"Urban"`. `NULL` retains the converter/IDD
-  default.
-
-- solar_distribution:
-
-  \[string or NULL\] EnergyPlus solar method: `"MinimalShadowing"`,
-  `"FullExterior"`, `"FullInteriorAndExterior"`,
-  `"FullExteriorWithReflections"` or
-  `"FullInteriorAndExteriorWithReflections"`. `NULL` retains the
-  default. Choose a method suitable for the geometry; interior beam
-  distribution has enclosure/convexity requirements. A `WithReflections`
-  method enables exterior reflections from preserved opaque
-  `SHADING.ROU` values; no visible or specular reflectance is inferred.
-
-- shadow_update_days:
-
-  \[integer or NULL\] Positive periodic shading update interval in days.
-  EnergyPlus warns above 31. `NULL` retains the default. Selections are
-  recorded in `attr(model, "conversion")$simulation` and IDF comments.
-
 ## Value
 
-An object of class `destep_options`, accepted by `to_eplus(options = )`.
+An object of class `destep_options`, accepted by `to_idf(options = )`.
+
+## HVAC support and equivalent representations
+
+Room terminal reheat retains `ROOM.SET_TERMINAL_MAX` in total W and
+explicit ROOM `ROOM_REHEATER_TYPE`; positive capacity with an absent
+type uses a disclosed converter electric default. Single-zone CAV and
+multizone paths place electric reheat at the room terminal, with the
+source capacity ceiling and native target zone-demand control. Hot-water
+terminals and central AHU reheat remain unsupported. No fictitious
+electric preheat, chiller, boiler or cooling tower is generated for a
+source that only specifies its water boundary. The existing physical
+path supports single-zone electric steam humidification with source
+room-RH schedules and target autosizing. Source humidifiers with zero
+room and supply minimum RH are recorded as inactive. Single-zone and
+multizone CAV room-RH upper bounds use native temperature/humidity
+control on the existing cooling coil, independently of humidifier
+presence. Source temperature targets remain, but native humidity control
+can supersede them; unmet temperature/RH requirements are possible. DeST
+AHU optimization is not reproduced and no reheat is added for humidity
+control. Single-zone electric humidification also retains a source
+supply-RH lower bound: necessary EMS converts it using current
+supply-fan outlet temperature and barometric pressure, taking the larger
+of the room and supply minimum humidity-ratio targets without changing
+equipment capacity. Supply-RH upper bounds remain unsupported. An absent
+source humidifier stays absent; positive room lower RH then produces a
+warning and an audit record, without inventing equipment. Active
+external-steam or spray humidifiers remain unsupported. Multizone
+CAV/VAV electric humidification preserves a humidistat per source room
+and uses native critical-zone control on the shared air loop. Its target
+numerical humidity-ratio guards are 1e-9 and 1 kg/kg, not DeST input
+limits; demands outside this interval are not represented. Native
+low-load behavior, capacity and saturation can leave room targets unmet.
+Multizone CAV room upper RH uses the native critical-zone maximum
+humidity manager on the existing cooling coil with the same numerical
+guards. VAV room lower RH uses the same native minimum manager and
+preserves source terminal flow bounds. Active VAV dehumidification
+remains unsupported because native humidity override probes failed to
+converge. Multizone supply-RH bounds remain unsupported. Single-zone
+sensible heat recovery retains equal seasonal maximum coefficients when
+minima are zero and no source duct network or nonzero recovery pressure
+loss is specified. A native plate exchanger uses constant effectiveness,
+zero auxiliary power, and native economizer lockout. No HX outlet
+temperature limit or frost protection is inferred; these target
+assumptions and unmapped pressure loss are audited. The recovery exhaust
+equals the zone outdoor-air supply; this balanced exhaust topology is an
+equivalent assumption, not a detailed source duct-network mapping. Equal
+seasonal maxima do not establish constant DeST operating effectiveness.
+Total-heat, unequal-seasonal, and multizone recovery remain unsupported.
+Unsupported inputs are diagnosed rather than silently disabled. Selected
+positive AHU duct-network references remain unsupported, even when rated
+fan parameters can be read. Diagnostics identify the system, AHU and
+duct network; unused AHUs do not block conversion. Detailed coil
+performance, selected central plants, independent water loops and
+unresolved room-group terminal inheritance remain outside the supported
+subsets. Target defaults never override selected source equipment that
+has no implemented mapping.
 
 ## People inputs and interzone surfaces
 
@@ -241,7 +227,7 @@ equivalent-temperature boundary is generated.
 
 ## See also
 
-[`to_eplus()`](to_eplus.md)
+[`to_idf()`](to_idf.md)
 
 ## Examples
 
@@ -267,15 +253,6 @@ destep_opts()
 #> 
 #> $surface_convection
 #> [1] "dest"
-#> 
-#> $terrain
-#> NULL
-#> 
-#> $solar_distribution
-#> NULL
-#> 
-#> $shadow_update_days
-#> NULL
 #> 
 #> attr(,"class")
 #> [1] "destep_options"
@@ -303,21 +280,11 @@ destep_opts(schedule_format = "file", schedule_directory = "schedules",
 #> $surface_convection
 #> [1] "dest"
 #> 
-#> $terrain
-#> NULL
-#> 
-#> $solar_distribution
-#> NULL
-#> 
-#> $shadow_update_days
-#> NULL
-#> 
 #> attr(,"class")
 #> [1] "destep_options"
 opts <- destep_opts(
     "objects",
-    terrain = "Country",
-    shadow_update_days = 1L
+    surface_convection = "energyplus"
 )
-# to_eplus(dest, "23.1", options = opts)
+# to_idf(dest, "23.1", options = opts)
 ```

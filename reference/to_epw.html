@@ -44,7 +44,7 @@ call its <code>$save()</code> method to write an EPW file.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">to_epw</span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">to_epw</span><span class="op">(</span><span class="va">dest</span>, radiation_time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"centered"</span>, <span class="st">"hour_start"</span>, <span class="st">"auto"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -55,11 +55,41 @@ call its <code>$save()</code> method to write an EPW file.</p>
 <dd><p>A DBI connection, a path to a SQLite database produced by
 <code><a href="read_dest.html">read_dest()</a></code>, or a path to a DeST Access <code>.accdb</code>/<code>.mdb</code> file.</p></dd>
 
+
+<dt id="arg-radiation-time">radiation_time<a class="anchor" aria-label="anchor" href="#arg-radiation-time"></a></dt>
+<dd><p>Solar interval represented by each source radiation
+record. <code>"centered"</code> (the existing default approximation) uses
+<code>[HOUR - 0.5, HOUR + 0.5]</code>. <code>"hour_start"</code> uses <code>[HOUR, HOUR + 1]</code>,
+for hourly interval data imported with zero-based hour indices, such as
+the ASHRAE 140 TF models prepared from TMY3. <code>"auto"</code> evaluates both
+intervals and selects one only when it alone passes the sunlight and DNI
+checks. If both pass or both fail, conversion stops with both diagnostics.
+Explicit choices should follow source provenance.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>An <code><a href="https://hongyuanjia.github.io/eplusr/reference/Epw.html" class="external-link">eplusr::Epw</a></code> object. The <code>destep_audit</code> attribute records input
 repairs and radiation diagnostics.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>DNI is estimated from horizontal beam radiation and the mean positive sine
+of solar altitude over the selected interval. GHI and DHI alone do not
+uniquely recover measured hourly DNI; the estimate assumes constant DNI
+during the sunlit part of the interval. No radiation values are shifted or
+interpolated, and output rows retain the EPW hours 1 through 24.
+The centered convention retains the existing conversion approximation;
+its solar support is half an hour earlier than the EPW record interval.
+Inconsistent positive beam radiation without sunlight and DNI above
+1500 W/m2 are rejected rather than discarded or clipped.</p>
+<p>Automatic selection is an inference from physical consistency, not proof of
+the source timestamp definition. It never selects the smaller DNI or the
+candidate with fewer failures. With no discriminating radiation (including
+an all-zero year), both candidates can pass and an explicit choice is needed.
+The audit records the requested and selected conventions, selection reason,
+and candidate diagnostics. Automatic-selection errors inherit from
+<code>destep_radiation_time_error</code> and expose these diagnostics as <code>$candidates</code>.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

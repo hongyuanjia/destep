@@ -2,6 +2,30 @@
 
 ## destep 0.0.0.9000
 
+- `to_epw(radiation_time = "auto")` compares the centered and hour-start
+  intervals and selects only a uniquely passing candidate. Ambiguous and
+  wholly inconsistent inputs stop with both diagnostics; successful
+  audits retain both candidates and the inferred selection reason. The
+  existing default remains `"centered"`, an approximation rather than a
+  confirmed timestamp definition for every DeST weather source (#43).
+
+- `to_epw(radiation_time = "hour_start")` supports hourly interval
+  weather imported with zero-based indices, including the ASHRAE 140 TF
+  TMY3 data. The default retains the existing centered approximation.
+  The selected convention is recorded in the EPW header and audit;
+  source GHI/DHI and row order are preserved. Radiation inconsistent
+  with sunlight now fails with source hours instead of silently
+  discarding positive beam radiation (#43).
+
+- Model conversion is now exported as
+  [`to_idf()`](../reference/to_idf.md), paired with
+  [`to_epw()`](../reference/to_epw.md). Conversion choices use
+  [`destep_opts()`](../reference/destep_opts.md); target terrain, solar
+  distribution and shadow-update overrides have been removed from that
+  constructor. Their EnergyPlus defaults are retained and users can edit
+  the returned IDF. HVAC help distinguishes supported source mappings,
+  equivalent assumptions and unsupported selected equipment (#42).
+
 - Reject noninteger system property references through the shared source
   reader, identify supply-humidity EMS in conversion audits, and load
   water changeover schedules in batches without changing their hourly
@@ -156,16 +180,15 @@
   0.84. Windows sharing one optical type retain separate thermal
   properties when needed (#36).
 
-- Added opt-in `source_distribution = "dest"` to
-  [`to_eplus()`](../reference/to_eplus.md) for EnergyPlus 26.1
-  ideal-loads models. Source converters supply their own heat metadata;
-  net receiving areas and window distribution modes are extracted
-  automatically. Weather-specific solar prepasses are reused only after
-  checking model, file, engine and output identities. Generated time
-  tables retain literal source fractions and deduplicate identical
-  columns. Coupled interzone surfaces retain their original surface
-  references. Whole-school equivalence and updated ASHRAE 140 acceptance
-  remain separate validation tasks (#36).
+- Added opt-in `source_distribution = "dest"` to `to_eplus()` for
+  EnergyPlus 26.1 ideal-loads models. Source converters supply their own
+  heat metadata; net receiving areas and window distribution modes are
+  extracted automatically. Weather-specific solar prepasses are reused
+  only after checking model, file, engine and output identities.
+  Generated time tables retain literal source fractions and deduplicate
+  identical columns. Coupled interzone surfaces retain their original
+  surface references. Whole-school equivalence and updated ASHRAE 140
+  acceptance remain separate validation tasks (#36).
 
 - Fixed CI initialization by replacing the removed Homebrew Actions
   `master` reference with the upstream recommended pinned release (#34).
@@ -230,10 +253,9 @@
   while retaining explicit errors for unsupported `AC_SYS_TYPE` values
   (#33).
 
-- Stopped [`to_eplus()`](../reference/to_eplus.md) with an explicit list
-  of source systems when a DeST model contains an unsupported
-  `AC_SYS_TYPE` other than 0 or 1, preventing unsupported HVAC families
-  from being omitted silently.
+- Stopped `to_eplus()` with an explicit list of source systems when a
+  DeST model contains an unsupported `AC_SYS_TYPE` other than 0 or 1,
+  preventing unsupported HVAC families from being omitted silently.
 
 - Corrected the `AHU.FAN` schema description: the field stores the rated
   air flow of the selected cooling or dehumidification device in m3/h,
