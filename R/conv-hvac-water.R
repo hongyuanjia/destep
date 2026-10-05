@@ -472,14 +472,14 @@ hvac__apply_water_phase <- function(model, sources) {
         label <- if (role == "cooling") "Cooling" else "Heating"
         name <- paste("DeST Two Pipe", label, "Availability")
         values <- schedule__compact_values(phases[[1L]][[role]], name, "")
-        fields <- vapply(
-            seq_along(values),
-            function(index) {
-                conv__idd_field_name(model, "Schedule:Compact", index)
-            },
-            character(1L)
-        )
-        model$add(`Schedule:Compact` = stats::setNames(as.list(values), fields))
+        # Load extensible fields in one batch. Per-field IDD queries grow with
+        # every hourly change and dominate conversion for irregular schedules.
+        model$load(data.table::data.table(
+            id = 1L,
+            class = "Schedule:Compact",
+            index = seq_along(values),
+            value = values
+        ))
         manager <- paste(name, "Manager")
         model$add(
             `AvailabilityManager:Scheduled` = list(

@@ -157,6 +157,11 @@ test_that("default outdoor air preserves system total and declared room minima",
         unique(result$zones$outdoor_air_allocation_origin),
         "source_room_minima_plus_system_remainder"
     )
+    expect_error(
+        hvac__terminal_outdoor_air(source, c("10" = 0.2, "20" = 0.1)),
+        "below the source ROOM minimum",
+        class = "destep_invalid_hvac_air_balance"
+    )
     explicit <- hvac__terminal_outdoor_air(source, c("10" = 0.1, "20" = 0.2))
     expect_equal(explicit$zones$outdoor_air_flow_m3_s, c(0.2, 0.1))
     expect_identical(

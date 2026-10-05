@@ -311,6 +311,11 @@ conv__mode_audit <- function(ep, options) {
     purpose[moisture] <- "equipment_moisture"
     purpose[people_moisture] <- "people_moisture"
     requirement[moisture | people_moisture] <- "source_input"
+    # Supply-RH coordinate conversion is source-input EMS owned by HVAC.
+    # Keep unrelated caller programs unclassified rather than inferring intent.
+    supply_humidity <- startsWith(programs, "DeST_Supply_RH_")
+    purpose[supply_humidity] <- "supply_humidity"
+    requirement[supply_humidity] <- "source_input"
     effective <- options[setdiff(names(options), "mode")]
     list(
         preset = options$mode,
