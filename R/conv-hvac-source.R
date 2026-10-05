@@ -199,8 +199,11 @@ hvac__read_ahu_properties <- function(dest, ahu_ids = NULL) {
     )
     checkmate::assert_integerish(
         out$data_long[schedule],
+        tol = 0,
         any.missing = FALSE,
-        lower = 0
+        lower = 0,
+        upper = .Machine$integer.max,
+        .var.name = "AHU water schedule references"
     )
     data.table::set(
         out,

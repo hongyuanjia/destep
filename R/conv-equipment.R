@@ -34,7 +34,7 @@ equipment__convert <- function(dest, ep) {
             S.NAME           AS SCHEDULE_NAME,
             T.E_DIST_MODE    AS DIST_MODE_ID,
             T.E_PER_AREA     AS CALCULATION_BASIS,
-            CASE WHEN T.E_MAXPOWER > 0 OR T.E_MINPOWER > 0 OR
+            CASE WHEN T.E_MAXPOWER != 0 OR T.E_MINPOWER != 0 OR
                 T.E_MAX_HUM != 0 OR T.E_MIN_HUM != 0
                 THEN 1 ELSE 0 END AS ACTIVE,
             CASE

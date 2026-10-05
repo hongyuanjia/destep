@@ -126,6 +126,23 @@ test_that("to_epw() derives finite direct normal radiation and source flags", {
     expect_lt(attr(epw, "destep_audit")$maximum_derived_dni_w_m2, 1500)
 })
 
+# Keep every positional pair and row name intact when expanding the two flags.
+test_that("EPW source flags preserve all positional codes and empty input", {
+    daylight <- c(night = FALSE, day = TRUE, night_again = FALSE)
+    suffix <- paste(rep("?9", 15L), collapse = "")
+    expected <- stats::setNames(
+        c(
+            paste0("?9E9E9?9?9?9?0", suffix),
+            paste0("?9E9E9?9?9?9D9", suffix),
+            paste0("?9E9E9?9?9?9?0", suffix)
+        ),
+        names(daylight)
+    )
+    expect_identical(epw__source_flags(daylight), expected)
+    expect_identical(epw__source_flags(logical()), character())
+    expect_error(epw__source_flags(c(TRUE, NA)), "missing")
+})
+
 test_that("DNI uses centered-hour solar geometry near sunrise", {
     environment <- epw_test__environment(latitude = 39.8, longitude = 116.4667)
     hour <- (80L - 1L) * 24L + 6L

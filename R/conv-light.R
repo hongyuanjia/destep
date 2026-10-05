@@ -19,7 +19,7 @@ light__convert <- function(dest, ep) {
             S.NAME           AS SCHEDULE_NAME,
             T.L_DIST_MODE    AS DIST_MODE_ID,
             T.L_PER_AREA     AS CALCULATION_BASIS,
-            CASE WHEN T.L_MAXPOWER > 0 OR T.L_MINPOWER > 0
+            CASE WHEN T.L_MAXPOWER != 0 OR T.L_MINPOWER != 0
                 THEN 1 ELSE 0 END AS ACTIVE,
             CASE
                 WHEN T.L_PER_AREA = 1 THEN 'Watts/Area'
