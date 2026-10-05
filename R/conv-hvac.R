@@ -227,17 +227,21 @@ hvac__supply_temperature_source <- function(dest, system) {
         )
     }
 
-    schedule_ids <- as.integer(c(
+    # Source foreign keys must be exact integers before any coercion occurs.
+    schedule_ids <- c(
         system$SUPPLY_T_MIN[[1L]],
         system$SUPPLY_T_MAX[[1L]]
-    ))
+    )
     checkmate::assert_integerish(
         schedule_ids,
+        tol = 0,
         len = 2L,
         lower = 1L,
+        upper = .Machine$integer.max,
         any.missing = FALSE,
         .var.name = "AC_SYS SUPPLY_T_MIN/MAX references"
     )
+    schedule_ids <- as.integer(schedule_ids)
     schedules <- data.table::as.data.table(DBI::dbGetQuery(
         dest,
         sprintf(
@@ -248,6 +252,7 @@ hvac__supply_temperature_source <- function(dest, system) {
             paste(unique(schedule_ids), collapse = ", ")
         )
     ))
+    hvac__assert_unique_key(schedules$SCHEDULE_ID, "SCHEDULE_YEAR.SCHEDULE_ID")
     unresolved <- setdiff(schedule_ids, schedules$SCHEDULE_ID)
     if (length(unresolved) > 0L) {
         abort(
@@ -261,13 +266,15 @@ hvac__supply_temperature_source <- function(dest, system) {
 
     values <- lapply(schedule_ids, function(schedule_id) {
         raw_data <- schedules[SCHEDULE_ID == schedule_id, DATA][[1L]]
-        readBin(raw_data, what = "double", n = 8760L)
+        # Share binary length and endianness checks with all source schedules.
+        schedule__decode(raw_data, as.character(schedule_id))
     })
     for (index in seq_along(values)) {
         checkmate::assert_numeric(
             values[[index]],
             len = 8760L,
             finite = TRUE,
+            any.missing = FALSE,
             .var.name = paste0(
                 "SCHEDULE_YEAR.DATA for supply-temperature schedule ",
                 schedule_ids[[index]]
