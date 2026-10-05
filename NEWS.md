@@ -5,6 +5,9 @@
   source ownership and linked schedules, retain required moisture inputs, and
   diagnose unsupported selected equipment explicitly (#38).
 
+- Use percent-compatible target schedule limits after RH conversion while
+  preserving shared fractional schedules and decoded source inputs (#37).
+
 - Keep development validation records local and exclude them from distributed
   package files (#37).
 
