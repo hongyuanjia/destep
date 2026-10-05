@@ -1,64 +1,38 @@
 # destep 0.0.0.9000
 
-- Retired the DeST-specific window angle-table generator and its
-  `window_optics` option. Valid K/SC inputs retain the documented
-  SimpleGlazing approximation; source face blackness remains visible in
-  diagnostics because K/SC alone cannot define detailed optical layers.
+- Unified source conversion settings in `to_eplus(options = )` and
+  `destep_opts()`. The `"objects"` preset preserves source inputs, with explicit
+  schedule, HVAC, surface-convection and target simulation settings (#37).
 
-- Aggregate K/SC windows now report their SimpleGlazing assumptions and
-  unexpressed face emissivities by source window ID in conversion metadata
-  and saved IDF comments. Missing/invalid active window types and detailed
-  glazing without supported optical inputs fail with source identifiers
-  instead of silently using SYS_WINDOW or generic clear-glass fallbacks.
+- Replaced weekday-dependent source schedules with date-based compact or file
+  schedules that preserve all 8760 hourly values and unit conversions. Added
+  explicit simulation day ranges on a non-leap calendar (#37).
 
-- Removed the DeST per-surface heat/solar distribution and linear-sky boundary
-  adapters, their weather prepasses and cache, and the `"dest"` preset and
-  related options. Ordinary conversion again uses EnergyPlus's solar and
-  exterior heat-balance calculations. Retained source heat inputs, weather
-  conversion, fixed surface convection, and moisture-source EMS.
+- Split people, lighting, equipment and prescribed moisture conversion into
+  dedicated modules. Retained radiant-fraction precision and represented
+  nominal people sensible heat and moisture independently. Moisture requires
+  EnergyPlus 9.1 or newer and remains incompatible with the current 9.0.1
+  physical HVAC path; rapid temperature changes can leave a one-step residual.
+  Temperature-dependent occupant feedback and humidity caps are not reproduced
+  (#37).
 
-- Removed DeST occupant sensible-temperature feedback and neighbor-air partition
-  approximation, including the `people_heat` and `partition_boundary` options.
-  All presets retain nominal people sensible heat, the independent prescribed
-  moisture source, and coupled interzone surfaces with their original construction.
+- Retired DeST-specific window angle tables, surface heat/solar distribution,
+  sky-boundary prepasses, occupant feedback and neighbor-air approximations,
+  together with the `"dest"` preset and their options. Conversion uses native
+  EnergyPlus solar and exterior heat-balance calculations, retains coupled
+  interzone constructions and fixed source convection, and records the
+  remaining window, furniture and ground-depth assumptions (#37).
 
-- Preserve internal-gain radiant fractions without three-decimal rounding.
-  People sensible heat and nominal prescribed moisture now use separate sources,
-  removing the fixed-enthalpy moisture bias at constant zone temperature.
-  Nonzero people moisture requires EnergyPlus 9.1 or newer; rapid temperature
-  changes can still leave a one-zone-step residual. The current 9.0.1 physical
-  HVAC path cannot be combined with this source. Nominal occupant moisture
-  follows DeST's constant-occupant input behavior; DeST's default
-  temperature-dependent occupant moisture and humidity cap are not reproduced.
+- Diagnose unsupported or invalid window inputs with source identifiers.
+  Aggregate K/SC windows retain the documented SimpleGlazing approximation;
+  unexpressed face emissivities remain visible in conversion metadata. Apply
+  automatic soil per construction and reject unverified non-floor
+  ground-contact stacks (#37).
 
-- Apply automatic-soil idempotence per construction, diagnose possible explicit
-  soil duplication, and reject unverified non-floor ground-contact stacks.
-  Saved IDF comments identify window, furniture and ground-depth assumptions.
-
-- Preserved opaque shading-panel reflectance in ordinary EnergyPlus shading
-  property objects, including overhang and side-fin pieces. Reflection remains
-  controlled by the selected solar-distribution method (#37).
-
-- Added `destep_opts()` settings for terrain, solar distribution and
-  periodic shadow updates. Explicit choices apply before weather/solar prepasses,
-  enter cache identities and remain visible in conversion metadata and IDF comments (#37).
-
-- Unified conversion configuration in `to_eplus(options = )`: accept
-  `"objects"`, `"dest"`, or a reusable `destep_opts()` object with explicit
-  per-feature settings. Previous top-level feature, HVAC and simulation
-  arguments move into `destep_opts()`; weather and boundary settings have a
-  single location. Effective options and EMS purposes remain auditable.
-  Basic conversion retains EMS required for source equipment moisture.
-  Surface convection can be selected independently, and DeST sky boundaries
-  no longer require DeST heat-source allocation (#37).
-
-- Fixed ventilation conversion to honor a saved `VARIANT_VENT = 0` switch.
-  Minimum ventilation is retained and the range supplement is omitted. Missing
-  saved switches retain the legacy rule and are identified in conversion metadata (#37).
-
-- Added single-pane aggregate windows to `window_optics = "dest_solar"`,
-  preserving glass resistance, solar absorption location and face blackness,
-  including use with DeST source distribution and sky-boundary options (#37).
+- Honor saved `VARIANT_VENT = 0` by retaining minimum ventilation and omitting
+  its variable increment. Record the fallback when the saved switch is absent.
+  Preserve opaque `SHADING.ROU` in generated shading reflectance properties;
+  reflection remains controlled by the selected solar-distribution method (#37).
 
 - Fixed exposed-floor outside absorptance conversion to preserve literal zero
   values. The converter no longer substitutes unrelated exterior-wall or

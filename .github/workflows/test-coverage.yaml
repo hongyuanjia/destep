@@ -3,8 +3,8 @@
 on:
   push:
     branches: [main, master]
+  # Include dependent PRs whose base is another feature branch.
   pull_request:
-    branches: [main, master]
 
 name: test-coverage
 
