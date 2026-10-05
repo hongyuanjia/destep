@@ -10,7 +10,7 @@ destep_opts(
   schedule_format = "compact",
   schedule_directory = NULL,
   run_period = c(1L, 365L),
-  hvac = "ideal_loads",
+  hvac = "auto",
   hvac_options = NULL,
   surface_convection = "dest",
   terrain = NULL,
@@ -44,8 +44,13 @@ always cover the full year, including for a partial run period.
 Conversion guarantees the initial correspondence only; later user
 edits to the IDF, files or calendar are not monitored.}
 
-\item{hvac}{[string] HVAC representation. \code{"ideal_loads"}, the default,
-preserves the established load-only conversion. \code{"physical"} groups
+\item{hvac}{[string] HVAC representation. \code{"auto"} (default) reads effective
+room and system references: unconditioned rooms receive no air system,
+source load-only controls use IdealLoads, and supported actual systems
+select physical conversion. Incomplete or mixed source definitions stop
+rather than silently dropping equipment. Explicit \code{"ideal_loads"}
+produces a load-analysis copy even when the source contains a real
+system; its conversion audit records that simplification. \code{"physical"} groups
 conditioned rooms by their referenced \code{AC_SYS} and generates each
 supported air loop independently. A one-room \code{AC_SYS_TYPE = 0} system
 uses a dedicated constant-volume graph. Type-0 systems with multiple
@@ -64,42 +69,58 @@ with a warning; larger conflicts stop conversion. Multizone paths require
 one shared availability schedule per system and map matching
 \code{AC_SYS.SUPPLY_T_MIN/MAX} schedules to the cooling-coil setpoint and use
 their minimum value for cooling sizing; distinct minimum and maximum
-trajectories remain unsupported. Physical paths require
-\code{ver = "9.0.1"}, an installed matching EnergyPlus version, and explicit
-\code{hvac_options} for parameters absent from DeST. All HVAC representations
-reject models containing \code{AC_SYS_TYPE} values other than 0 and 1 instead
-of silently omitting unsupported systems.
-The current physical path cannot be combined with nonzero people or
-equipment moisture: its 9.0.1 output predates the required EMS calling
-point. Use \code{"ideal_loads"} on EnergyPlus 9.1 or newer for these sources.}
+trajectories remain unsupported. Physical paths require the necessary
+target IDD objects and a matching local ExpandObjects installation;
+emitted fields and the expanded graph are validated against that IDD.
+Tested targets are 9.0.1, 9.1.0, 9.6.0 and 23.1.0. This evidence list
+is not a version whitelist or a guarantee for other target versions.
+Supported models with a selected main water coil and no selected plant
+use source AHU two/four-pipe water temperature schedules without
+required \code{hvac_options}. Independent heating and cooling water stages
+are a target equivalent; their autosized performance is approximate.
+Selected plants and conflicting AHU water-loop ownership currently stop
+until their mappings are supported. Automatic and
+physical conversion reject effective \code{AC_SYS_TYPE} values other than 0
+and 1. Unreferenced system records do not define converted equipment.
+Populated \verb{LIB_*} tables are catalogues; they do not establish that a
+source model selected a chiller, boiler, or cooling tower.
+Nonzero people or equipment moisture requires the target calling point
+\code{BeginZoneTimestepBeforeInitHeatBalance}, introduced in 9.1.0. Joint
+physical-system and moisture runs have been checked on 9.1.0, 9.6.0
+and 23.1.0; 9.0.1 lacks that calling point and rejects nonzero sources.}
 
-\item{hvac_options}{[list or NULL] Named equipment parameters required by
-the selected \code{hvac = "physical"} paths. Common fan fields are
+\item{hvac_options}{[list or NULL] Optional target equipment overrides.
+Missing fan inputs use EnergyPlus 9.0.1 template defaults: total
+efficiency 0.7, motor efficiency 0.9, motor-in-air fraction 1;
+CAV supply/return pressure 600/300 Pa, VAV pressure 1000/500 Pa, and
+native inlet-vane power coefficients. These are target assumptions,
+not a conversion of DeST AHU fan-power fields. Accepted names are
 \code{supply_fan_total_efficiency}, \code{supply_fan_delta_pressure_pa},
-\code{supply_fan_motor_efficiency}, \code{supply_fan_motor_in_air_fraction}, the
-corresponding four \verb{return_fan_*} fields,
-\code{zone_exhaust_fan_total_efficiency}, and
-\code{zone_exhaust_fan_pressure_rise_pa}. Common coil and plant fields are
-\code{chilled_water_design_setpoint_c}, \code{condenser_water_design_setpoint_c},
-\code{chiller_type}, \code{chiller_nominal_cop}, and \code{tower_type}. A model with
-any single-zone type-0 path also requires five
-\verb{return_fan_power_coefficient_*} fields,
-\code{cooling_coil_design_setpoint_c},
-\code{heating_coil_design_setpoint_c},
-\code{heating_coil_rated_air_water_convection_ratio},
-\code{hot_water_design_setpoint_c}, \code{boiler_type}, \code{boiler_efficiency}, and
-\code{boiler_fuel_type}. Type-1 paths also require the five fan power
-coefficients; multizone type-0 paths use constant-volume fans and do not.
-All terminal-reheat paths require \code{cooling_coil_type = "ChilledWater"},
-\code{preheat_coil_type = "Electric"}, \code{preheat_coil_design_setpoint_c},
-\code{reheat_coil_type = "Electric"}, and a named numeric
-\code{zone_outdoor_air_flow_m3_s} vector. Its names must be exactly the DeST
-\code{ROOM.ID} values served by terminal-reheat paths. Allocations are checked
-per \code{AC_SYS}, and each system sum must equal that source system's minimum
-outdoor-air flow. One flat option list currently applies the same
-equipment and shared plant assumptions to all generated systems. Only
-fields required by the selected paths need to be supplied. These values
-are never inferred from reference models.}
+\code{supply_fan_motor_efficiency}, \code{supply_fan_motor_in_air_fraction},
+the corresponding four \verb{return_fan_*} fields, five
+\code{return_fan_power_coefficient_1} through \verb{_5} fields,
+\code{zone_exhaust_fan_total_efficiency}, \code{zone_exhaust_fan_pressure_rise_pa},
+and \code{heating_coil_rated_air_water_convection_ratio} (native default 0.5).
+Flow-balancing exhaust and water-loop pumps default to zero pressure
+head, adding no assumed electricity. Equivalent coil water design
+temperatures of 7/60 C are sizing assumptions; full source schedules
+determine operational supply temperatures. Main coil technology,
+water schedules and plant choices cannot be overridden with this list.
+Single-zone constant source supply-air bounds constrain native feedback
+managers; varying bounds currently stop conversion.
+Zone outdoor-air design allocation preserves source room minima and
+system total. \code{zone_outdoor_air_flow_m3_s} is an optional named ROOM.ID
+override, subject to the same total and terminal flow bounds.
+Effective values and origins are recorded per system in
+\code{attr(model, "conversion")$hvac$effective_options} and IDF comments.
+Room terminal reheat retains \code{ROOM.SET_TERMINAL_MAX} in total W and
+explicit ROOM \code{ROOM_REHEATER_TYPE}; positive capacity with an absent
+type uses a disclosed converter electric default. Hot-water terminals
+and central AHU reheat remain unsupported. No fictitious electric
+preheat, chiller, boiler or cooling tower is generated for a source
+that only specifies its water boundary. The existing physical path
+still omits steam humidifier and heat-recovery mapping; these remain
+limitations, not defaults inferred from the source.}
 
 \item{surface_convection}{[string] \code{"dest"} (default)
 retains fixed source coefficients on walls, floors, roofs, windows and

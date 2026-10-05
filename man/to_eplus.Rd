@@ -37,7 +37,9 @@ inputs, HVAC and target simulation settings.}
 \value{
 [eplusr::Idf] The converted EnergyPlus model. The
 \code{conversion} attribute and Version comments record the selected
-options and necessary EMS programs. Its \code{windows} table records the
+options, resolved HVAC representation, source component record counts,
+and necessary EMS programs.
+Its \code{windows} table records the
 source K/SC, nominal SHGC, face blackness and unresolved optical
 properties for each window. The same aggregate assumptions appear in
 the saved IDF glazing comments. This does not establish whole-building

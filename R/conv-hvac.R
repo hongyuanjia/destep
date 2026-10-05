@@ -1,25 +1,11 @@
 # Stop conversion before unsupported DeST HVAC families can be silently
 # represented by an unrelated EnergyPlus system.
-hvac__assert_supported_system_types <- function(dest) {
-    if (!db_has_rows(dest, "AC_SYS")) {
-        return(invisible(TRUE))
+hvac__assert_supported_system_types <- function(dest, inventory = NULL) {
+    if (is.null(inventory)) {
+        inventory <- hvac__source_inventory(dest)
     }
-    required <- c("AC_SYS_ID", "NAME", "AC_SYS_TYPE")
-    if (!db_has_fields(dest, "AC_SYS", required)) {
-        abort(
-            paste0(
-                "The DeST AC_SYS table must contain fields: ",
-                paste(required, collapse = ", "),
-                "."
-            ),
-            class = "destep_invalid_hvac_source_schema"
-        )
-    }
-
-    systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
-    unsupported <- systems[
-        is.na(AC_SYS_TYPE) | !AC_SYS_TYPE %in% c(0L, 1L),
-        .(AC_SYS_ID, NAME, AC_SYS_TYPE)
+    unsupported <- inventory$systems[
+        inventory$systems$SYSTEM_STATE == "unsupported_type"
     ]
     if (!nrow(unsupported)) {
         return(invisible(TRUE))
@@ -29,9 +15,13 @@ hvac__assert_supported_system_types <- function(dest) {
     # system directly in DeST instead of receiving only an opaque type code.
     details <- unsupported[, sprintf(
         "%s (NAME=%s, AC_SYS_TYPE=%s)",
-        ifelse(is.na(AC_SYS_ID), "NA", as.character(AC_SYS_ID)),
-        ifelse(is.na(NAME), "NA", as.character(NAME)),
-        ifelse(is.na(AC_SYS_TYPE), "NA", as.character(AC_SYS_TYPE))
+        data.table::fifelse(is.na(AC_SYS_ID), "NA", as.character(AC_SYS_ID)),
+        data.table::fifelse(is.na(NAME), "NA", as.character(NAME)),
+        data.table::fifelse(
+            is.na(AC_SYS_TYPE),
+            "NA",
+            as.character(AC_SYS_TYPE)
+        )
     )]
     abort(
         paste0(
@@ -44,7 +34,8 @@ hvac__assert_supported_system_types <- function(dest) {
     )
 }
 
-# List external parameters used by one or more physical air-system paths.
+# List target representation fields used by the native fan graph. All receive
+# defaults internally; this list is not a required user-input contract.
 hvac__common_required_options <- function() {
     c(
         "supply_fan_total_efficiency",
@@ -55,52 +46,36 @@ hvac__common_required_options <- function() {
         "return_fan_delta_pressure_pa",
         "return_fan_motor_efficiency",
         "return_fan_motor_in_air_fraction",
-        "return_fan_power_coefficient_1",
-        "return_fan_power_coefficient_2",
-        "return_fan_power_coefficient_3",
-        "return_fan_power_coefficient_4",
-        "return_fan_power_coefficient_5",
+        paste0("return_fan_power_coefficient_", seq_len(5L)),
         "zone_exhaust_fan_total_efficiency",
-        "zone_exhaust_fan_pressure_rise_pa",
-        "chilled_water_design_setpoint_c",
-        "condenser_water_design_setpoint_c",
-        "chiller_type",
-        "chiller_nominal_cop",
-        "tower_type"
+        "zone_exhaust_fan_pressure_rise_pa"
     )
 }
 
-# Select only the equipment parameters required by one physical HVAC path.
+# Validate resolved internal fields for each supported target graph. Source
+# technology is always water; no compatibility branch selects electric heat.
 hvac__required_options <- function(
     path = c("single_zone_cav", "multizone_cav", "multizone_vav")
 ) {
     path <- match.arg(path)
-    if (path == "single_zone_cav") {
-        return(c(
-            hvac__common_required_options(),
-            "cooling_coil_design_setpoint_c",
-            "heating_coil_design_setpoint_c",
-            "heating_coil_rated_air_water_convection_ratio",
-            "hot_water_design_setpoint_c",
-            "boiler_type",
-            "boiler_efficiency",
-            "boiler_fuel_type"
-        ))
-    }
-    required <- c(
-        hvac__common_required_options(),
-        hvac__terminal_reheat_required_options()
-    )
+    required <- hvac__common_required_options()
     if (path == "multizone_cav") {
         required <- setdiff(
             required,
-            paste0(
-                "return_fan_power_coefficient_",
-                seq_len(5L)
-            )
+            paste0("return_fan_power_coefficient_", seq_len(5L))
         )
     }
-    required
+    if (path == "single_zone_cav") {
+        c(
+            required,
+            "cooling_coil_design_setpoint_c",
+            "heating_coil_design_setpoint_c",
+            "heating_coil_type",
+            "heating_coil_rated_air_water_convection_ratio"
+        )
+    } else {
+        c(required, hvac__terminal_required_options())
+    }
 }
 
 # Validate the external equipment parameters that DeST does not fully define.
@@ -109,8 +84,8 @@ hvac__validate_options <- function(
     path = c("single_zone_cav", "multizone_cav", "multizone_vav")
 ) {
     path <- match.arg(path)
-    required <- hvac__required_options(path)
     checkmate::assert_list(options, names = "unique")
+    required <- hvac__required_options(path)
     checkmate::assert_names(
         names(options),
         must.include = required
@@ -123,26 +98,19 @@ hvac__validate_options <- function(
         "return_fan_total_efficiency",
         "return_fan_motor_efficiency",
         "return_fan_motor_in_air_fraction",
-        "zone_exhaust_fan_total_efficiency",
-        "boiler_efficiency"
+        "zone_exhaust_fan_total_efficiency"
     )
     positive <- c(
         "supply_fan_total_efficiency",
         "supply_fan_motor_efficiency",
         "return_fan_total_efficiency",
         "return_fan_motor_efficiency",
-        "zone_exhaust_fan_total_efficiency",
-        "chiller_nominal_cop",
-        "boiler_efficiency"
+        "zone_exhaust_fan_total_efficiency"
     )
     character_fields <- c(
-        "chiller_type",
-        "tower_type",
-        "boiler_type",
-        "boiler_fuel_type",
         "cooling_coil_type",
         "preheat_coil_type",
-        "reheat_coil_type"
+        "heating_coil_type"
     )
     structured_fields <- "zone_outdoor_air_flow_m3_s"
     numeric_fields <- setdiff(
@@ -192,6 +160,14 @@ hvac__validate_options <- function(
             options[[field]],
             min.chars = 1L,
             .var.name = paste0("hvac_options$", field)
+        )
+    }
+
+    if (path == "single_zone_cav") {
+        checkmate::assert_choice(
+            options$heating_coil_type,
+            "HotWater",
+            .var.name = "source main heating coil type"
         )
     }
 
@@ -251,17 +227,21 @@ hvac__supply_temperature_source <- function(dest, system) {
         )
     }
 
-    schedule_ids <- as.integer(c(
+    # Source foreign keys must be exact integers before any coercion occurs.
+    schedule_ids <- c(
         system$SUPPLY_T_MIN[[1L]],
         system$SUPPLY_T_MAX[[1L]]
-    ))
+    )
     checkmate::assert_integerish(
         schedule_ids,
+        tol = 0,
         len = 2L,
         lower = 1L,
+        upper = .Machine$integer.max,
         any.missing = FALSE,
         .var.name = "AC_SYS SUPPLY_T_MIN/MAX references"
     )
+    schedule_ids <- as.integer(schedule_ids)
     schedules <- data.table::as.data.table(DBI::dbGetQuery(
         dest,
         sprintf(
@@ -272,6 +252,7 @@ hvac__supply_temperature_source <- function(dest, system) {
             paste(unique(schedule_ids), collapse = ", ")
         )
     ))
+    hvac__assert_unique_key(schedules$SCHEDULE_ID, "SCHEDULE_YEAR.SCHEDULE_ID")
     unresolved <- setdiff(schedule_ids, schedules$SCHEDULE_ID)
     if (length(unresolved) > 0L) {
         abort(
@@ -285,13 +266,15 @@ hvac__supply_temperature_source <- function(dest, system) {
 
     values <- lapply(schedule_ids, function(schedule_id) {
         raw_data <- schedules[SCHEDULE_ID == schedule_id, DATA][[1L]]
-        readBin(raw_data, what = "double", n = 8760L)
+        # Share binary length and endianness checks with all source schedules.
+        schedule__decode(raw_data, as.character(schedule_id))
     })
     for (index in seq_along(values)) {
         checkmate::assert_numeric(
             values[[index]],
             len = 8760L,
             finite = TRUE,
+            any.missing = FALSE,
             .var.name = paste0(
                 "SCHEDULE_YEAR.DATA for supply-temperature schedule ",
                 schedule_ids[[index]]
@@ -349,11 +332,12 @@ hvac__single_zone_cav_source <- function(dest, system_id) {
             "AC_SYS_ID",
             "NAME",
             "AC_SYS_TYPE",
+            "WATER_TYPE",
             "FRESH_AIR_TYPE",
             "MIN_FRESH_AIR_VOLUME",
             "MAX_FRESH_AIR_VOLUME"
         ),
-        AHU = c("AHU_ID", "OF_AC_SYS"),
+        AHU = c("AHU_ID", "OF_AC_SYS", "HEATER"),
         ROOM = c(
             "ID",
             "VOLUME",
@@ -471,11 +455,13 @@ hvac__single_zone_cav_source <- function(dest, system_id) {
         ac_system_id = systems$AC_SYS_ID[[1L]],
         ac_system_name = systems$NAME[[1L]],
         ac_system_type = systems$AC_SYS_TYPE[[1L]],
+        source_water_type = systems$WATER_TYPE[[1L]],
         outdoor_air_control_type = systems$FRESH_AIR_TYPE[[1L]],
         economizer_type = hvac__economizer_type(
             systems$FRESH_AIR_TYPE[[1L]]
         ),
         ahu_id = air_handlers$AHU_ID[[1L]],
+        source_heater_id = air_handlers$HEATER[[1L]],
         room_id = controls$ROOM_ID[[1L]],
         zone_name = controls$ROOM_NAME[[1L]],
         availability_schedule = controls$AC_SCHEDULE_NAME[[1L]],
@@ -488,19 +474,33 @@ hvac__single_zone_cav_source <- function(dest, system_id) {
     )
 }
 
-# List the additional external parameters for a multizone VAV-reheat system.
-hvac__terminal_reheat_required_options <- function() {
-    c(
-        "cooling_coil_type",
-        "preheat_coil_type",
-        "preheat_coil_design_setpoint_c",
-        "reheat_coil_type",
-        "zone_outdoor_air_flow_m3_s"
+# The independent heater field must not decide main water-coil technology.
+# Zero and an unselected product (-1) add no independent heater; selected
+# products need a separate mapping and cannot be silently replaced.
+hvac__assert_heater_source <- function(heater_id, system_id) {
+    checkmate::assert_number(system_id, finite = TRUE)
+    if (!is.na(heater_id) && heater_id <= 0L) {
+        return(invisible(TRUE))
+    }
+    abort(
+        sprintf(
+            "AC_SYS %s has an unresolved independent AHU.HEATER=%s product.",
+            system_id,
+            heater_id
+        ),
+        class = "destep_unsupported_hvac_heater_state"
     )
 }
 
-# Validate terminal-reheat equipment choices and the explicit zone air balance.
-hvac__validate_terminal_reheat_options <- function(options, source) {
+# List remaining temporary-template parameters. Room reheat and zone outdoor
+# air are read or derived from source inputs rather than required user values.
+hvac__terminal_required_options <- function() {
+    c("cooling_coil_type", "preheat_coil_type")
+}
+
+# Validate external equipment values and source-selected reheat topology before
+# temporary EnergyPlus templates can add zone equipment.
+hvac__validate_terminal_options <- function(options, source) {
     checkmate::assert_list(source, names = "unique")
     checkmate::assert_names(
         names(source),
@@ -512,68 +512,41 @@ hvac__validate_terminal_reheat_options <- function(options, source) {
     } else {
         "multizone_vav"
     }
+    hvac__assert_heater_source(
+        source$system$source_heater_id[[1L]],
+        source$system$ac_system_id[[1L]]
+    )
     hvac__validate_options(options, path)
-    checkmate::assert_names(
-        names(options),
-        must.include = hvac__terminal_reheat_required_options()
-    )
-
-    checkmate::assert_choice(
-        options$cooling_coil_type,
-        "ChilledWater",
-        .var.name = "hvac_options$cooling_coil_type"
-    )
-    checkmate::assert_choice(
-        options$preheat_coil_type,
-        "Electric",
-        .var.name = "hvac_options$preheat_coil_type"
-    )
-    checkmate::assert_number(
-        options$preheat_coil_design_setpoint_c,
-        finite = TRUE,
-        .var.name = "hvac_options$preheat_coil_design_setpoint_c"
-    )
-    checkmate::assert_choice(
-        options$reheat_coil_type,
-        "Electric",
-        .var.name = "hvac_options$reheat_coil_type"
-    )
-
-    allocation <- options$zone_outdoor_air_flow_m3_s
-    checkmate::assert_numeric(
-        allocation,
-        min.len = nrow(source$zones),
-        lower = 0,
-        finite = TRUE,
-        any.missing = FALSE,
-        names = "unique",
-        .var.name = "hvac_options$zone_outdoor_air_flow_m3_s"
-    )
-    room_ids <- as.character(source$zones$room_id)
-    checkmate::assert_subset(
-        room_ids,
-        names(allocation),
-        .var.name = paste0(
-            "conditioned DeST ROOM.ID values; include each as a name in ",
-            "hvac_options$zone_outdoor_air_flow_m3_s"
+    checkmate::assert_choice(options$cooling_coil_type, "ChilledWater")
+    checkmate::assert_choice(options$preheat_coil_type, "None")
+    if ("reheat_coil_type" %in% names(options)) {
+        abort(
+            "Do not supply hvac_options$reheat_coil_type; terminal capacity and type belong to source ROOM records.",
+            class = "destep_conflicting_hvac_equipment_option"
         )
-    )
-    # One option vector may cover zones from several independent AC_SYS rows.
-    allocation <- allocation[room_ids]
-    checkmate::assert_true(
-        isTRUE(all.equal(
-            sum(allocation),
-            source$system$outdoor_air_flow_m3_s[[1L]],
-            tolerance = 1e-8
-        )),
-        .var.name = paste0(
-            "sum(hvac_options$zone_outdoor_air_flow_m3_s) equal to ",
-            "AC_SYS minimum outdoor-air flow"
+    }
+    # AHU reheat is a central component, not permission for zone reheat.
+    # Stop until that separate component has an independently verified mapping.
+    reheat_type <- source$system$source_reheat_type[[1L]]
+    if (is.na(reheat_type) || reheat_type != 0L) {
+        abort(
+            sprintf(
+                "AC_SYS %s has AHU.REHEAT_TYPE=%s; central AHU reheat is not yet mapped and cannot be substituted with room terminals.",
+                source$system$ac_system_id[[1L]],
+                reheat_type
+            ),
+            class = "destep_unsupported_hvac_reheat_type"
         )
-    )
-
-    source$zones[, outdoor_air_flow_m3_s := as.numeric(allocation)]
-    source
+    }
+    if (
+        any(source$zones$terminal_has_reheat & source$zones$terminal_type == 2L)
+    ) {
+        abort(
+            "Source ROOM hot-water terminal reheat is not yet connected to a verified water loop.",
+            class = "destep_unsupported_hvac_terminal_type"
+        )
+    }
+    hvac__terminal_outdoor_air(source, options$zone_outdoor_air_flow_m3_s)
 }
 
 # Reconcile a small terminal-flow closure gap against minimum outdoor air.
@@ -651,8 +624,9 @@ hvac__reconcile_minimum_supply_flows <- function(
     reconciled
 }
 
-# Read one supported multizone terminal-reheat ownership and flow graph.
-hvac__multizone_terminal_reheat_source <- function(dest, system_id) {
+# Read one supported multizone airside ownership and flow graph. Central AHU
+# reheat and each ROOM terminal definition are independent source inputs.
+hvac__multizone_airside_source <- function(dest, system_id) {
     checkmate::assert_number(
         system_id,
         finite = TRUE,
@@ -663,18 +637,21 @@ hvac__multizone_terminal_reheat_source <- function(dest, system_id) {
             "AC_SYS_ID",
             "NAME",
             "AC_SYS_TYPE",
+            "WATER_TYPE",
             "FRESH_AIR_TYPE",
             "MIN_FRESH_AIR_VOLUME",
             "MAX_FRESH_AIR_VOLUME",
             "SUPPLY_T_MIN",
             "SUPPLY_T_MAX"
         ),
-        AHU = c("AHU_ID", "OF_AC_SYS"),
+        AHU = c("AHU_ID", "OF_AC_SYS", "HEATER", "REHEAT_TYPE"),
         ROOM = c(
             "ID",
             "VOLUME",
             "SET_AIR_FLOWNUM_MIN",
             "SET_AIR_FLOWNUM_MAX",
+            "SET_TERMINAL_MAX",
+            "MIN_FRESH_FLOW_NUM",
             "OF_ROOM_GROUP"
         )
     )
@@ -759,8 +736,16 @@ hvac__multizone_terminal_reheat_source <- function(dest, system_id) {
         cooling_schedule = controls$COOLING_SCHEDULE_NAME,
         volume_m3 = rooms$VOLUME[room_index],
         minimum_air_changes_per_hour = rooms$SET_AIR_FLOWNUM_MIN[room_index],
-        maximum_air_changes_per_hour = rooms$SET_AIR_FLOWNUM_MAX[room_index]
+        maximum_air_changes_per_hour = rooms$SET_AIR_FLOWNUM_MAX[room_index],
+        source_minimum_outdoor_air_flow_m3_s = rooms$MIN_FRESH_FLOW_NUM[
+            room_index
+        ] /
+            3600
     )
+    terminals <- hvac__room_terminal_source(dest, zones$room_id)
+    for (field in setdiff(names(terminals), "room_id")) {
+        data.table::set(zones, NULL, field, terminals[[field]])
+    }
     data.table::setorderv(zones, "room_id")
     zones[,
         source_minimum_supply_flow_m3_s := minimum_air_changes_per_hour *
@@ -808,7 +793,7 @@ hvac__multizone_terminal_reheat_source <- function(dest, system_id) {
         availability,
         len = 1L,
         min.chars = 1L,
-        .var.name = "one shared terminal-reheat availability schedule"
+        .var.name = "one shared multizone availability schedule"
     )
 
     outdoor_minimum <- systems$MIN_FRESH_AIR_VOLUME[[1L]] / 3600
@@ -855,11 +840,14 @@ hvac__multizone_terminal_reheat_source <- function(dest, system_id) {
             ac_system_id = systems$AC_SYS_ID[[1L]],
             ac_system_name = systems$NAME[[1L]],
             ac_system_type = systems$AC_SYS_TYPE[[1L]],
+            source_water_type = systems$WATER_TYPE[[1L]],
             outdoor_air_control_type = systems$FRESH_AIR_TYPE[[1L]],
             economizer_type = hvac__economizer_type(
                 systems$FRESH_AIR_TYPE[[1L]]
             ),
             ahu_id = air_handlers$AHU_ID[[1L]],
+            source_heater_id = air_handlers$HEATER[[1L]],
+            source_reheat_type = air_handlers$REHEAT_TYPE[[1L]],
             availability_schedule = availability[[1L]],
             minimum_supply_flow_m3_s = supply_minimum,
             maximum_supply_flow_m3_s = supply_maximum,
@@ -908,7 +896,7 @@ hvac__add_single_zone_cav_template <- function(
             cooling_coil_setpoint_control_type = "ControlZone",
             cooling_coil_control_zone_name = source$zone_name[[1L]],
             cooling_coil_design_setpoint_temperature = options$cooling_coil_design_setpoint_c,
-            heating_coil_type = "HotWater",
+            heating_coil_type = options$heating_coil_type,
             heating_coil_availability_schedule_name = availability,
             heating_coil_setpoint_control_type = "ControlZone",
             heating_coil_control_zone_name = source$zone_name[[1L]],
@@ -968,66 +956,16 @@ hvac__add_single_zone_cav_template <- function(
                 day_of_week_for_start_day = "Monday",
                 use_weather_file_daylight_saving_period = "Yes",
                 use_weather_file_rain_and_snow_indicators = "No"
-            ),
-            `HVACTemplate:Plant:ChilledWaterLoop` = list(
-                name = "DeST Chilled Water Loop",
-                pump_control_type = "Intermittent",
-                chiller_plant_operation_scheme_type = "Default",
-                chilled_water_design_setpoint = options$chilled_water_design_setpoint_c,
-                chilled_water_pump_configuration = "ConstantPrimaryNoSecondary",
-                primary_chilled_water_pump_rated_head = 0,
-                secondary_chilled_water_pump_rated_head = 0,
-                condenser_plant_operation_scheme_type = "Default",
-                condenser_water_design_setpoint = options$condenser_water_design_setpoint_c,
-                condenser_water_pump_rated_head = 0,
-                chilled_water_setpoint_reset_type = "None"
-            ),
-            `HVACTemplate:Plant:Chiller` = list(
-                name = "DeST Chiller",
-                chiller_type = options$chiller_type,
-                capacity = "autosize",
-                nominal_cop = options$chiller_nominal_cop,
-                condenser_type = "WaterCooled",
-                sizing_factor = 1
-            ),
-            `HVACTemplate:Plant:Tower` = list(
-                name = "DeST Cooling Tower",
-                tower_type = options$tower_type,
-                high_speed_nominal_capacity = "autosize",
-                high_speed_fan_power = "autosize",
-                low_speed_nominal_capacity = "autosize",
-                low_speed_fan_power = "autosize",
-                free_convection_capacity = "autosize",
-                sizing_factor = 1,
-                template_plant_loop_type = "ChilledWater"
-            ),
-            `HVACTemplate:Plant:HotWaterLoop` = list(
-                name = "DeST Hot Water Loop",
-                pump_control_type = "Intermittent",
-                hot_water_plant_operation_scheme_type = "Default",
-                hot_water_design_setpoint = options$hot_water_design_setpoint_c,
-                hot_water_pump_configuration = "ConstantFlow",
-                hot_water_pump_rated_head = 0,
-                hot_water_setpoint_reset_type = "None"
-            ),
-            `HVACTemplate:Plant:Boiler` = list(
-                name = "DeST Boiler",
-                boiler_type = options$boiler_type,
-                capacity = "autosize",
-                efficiency = options$boiler_efficiency,
-                fuel_type = options$boiler_fuel_type,
-                priority = "1",
-                sizing_factor = 1,
-                template_plant_loop_type = "HotWater"
             )
         )
+        hvac__add_boundary_plants(model, options)
     }
     invisible(model)
 }
 
-# Add temporary VAV templates that produce the shared terminal-reheat graph.
+# Add temporary VAV templates with the source-selected terminal reheat state.
 # Type-0 operation is imposed on the expanded direct objects below.
-hvac__add_multizone_terminal_reheat_template <- function(
+hvac__add_multizone_airside_template <- function(
     model,
     source,
     options,
@@ -1035,7 +973,7 @@ hvac__add_multizone_terminal_reheat_template <- function(
 ) {
     checkmate::assert_class(model, "Idf")
     checkmate::assert_flag(include_common)
-    source <- hvac__validate_terminal_reheat_options(options, source)
+    source <- hvac__validate_terminal_options(options, source)
     system <- source$system
     zones <- source$zones
     system_name <- paste0("DeST AC_SYS ", system$ac_system_id[[1L]])
@@ -1062,10 +1000,12 @@ hvac__add_multizone_terminal_reheat_template <- function(
             cooling_coil_design_setpoint = system$cooling_design_supply_temperature_c[[
                 1L
             ]],
-            heating_coil_type = "None",
-            preheat_coil_type = options$preheat_coil_type,
-            preheat_coil_availability_schedule_name = availability,
-            preheat_coil_design_setpoint = options$preheat_coil_design_setpoint_c,
+            heating_coil_type = "HotWater",
+            heating_coil_availability_schedule_name = availability,
+            heating_coil_setpoint_schedule_name = system$supply_temperature_schedule[[
+                1L
+            ]],
+            preheat_coil_type = "None",
             maximum_outdoor_air_flow_rate = hvac__maximum_outdoor_air_flow(
                 system
             ),
@@ -1119,7 +1059,11 @@ hvac__add_multizone_terminal_reheat_template <- function(
                 outdoor_air_flow_rate_per_zone = zones$outdoor_air_flow_m3_s[[
                     index
                 ]],
-                reheat_coil_type = options$reheat_coil_type,
+                reheat_coil_type = if (zones$terminal_has_reheat[[index]]) {
+                    "Electric"
+                } else {
+                    "None"
+                },
                 reheat_coil_availability_schedule_name = availability,
                 damper_heating_action = "Reverse",
                 baseboard_heating_type = "None",
@@ -1155,40 +1099,9 @@ hvac__add_multizone_terminal_reheat_template <- function(
                 day_of_week_for_start_day = "Monday",
                 use_weather_file_daylight_saving_period = "Yes",
                 use_weather_file_rain_and_snow_indicators = "No"
-            ),
-            `HVACTemplate:Plant:ChilledWaterLoop` = list(
-                name = "DeST Chilled Water Loop",
-                pump_control_type = "Intermittent",
-                chiller_plant_operation_scheme_type = "Default",
-                chilled_water_design_setpoint = options$chilled_water_design_setpoint_c,
-                chilled_water_pump_configuration = "ConstantPrimaryNoSecondary",
-                primary_chilled_water_pump_rated_head = 0,
-                secondary_chilled_water_pump_rated_head = 0,
-                condenser_plant_operation_scheme_type = "Default",
-                condenser_water_design_setpoint = options$condenser_water_design_setpoint_c,
-                condenser_water_pump_rated_head = 0,
-                chilled_water_setpoint_reset_type = "None"
-            ),
-            `HVACTemplate:Plant:Chiller` = list(
-                name = "DeST Chiller",
-                chiller_type = options$chiller_type,
-                capacity = "autosize",
-                nominal_cop = options$chiller_nominal_cop,
-                condenser_type = "WaterCooled",
-                sizing_factor = 1
-            ),
-            `HVACTemplate:Plant:Tower` = list(
-                name = "DeST Cooling Tower",
-                tower_type = options$tower_type,
-                high_speed_nominal_capacity = "autosize",
-                high_speed_fan_power = "autosize",
-                low_speed_nominal_capacity = "autosize",
-                low_speed_fan_power = "autosize",
-                free_convection_capacity = "autosize",
-                sizing_factor = 1,
-                template_plant_loop_type = "ChilledWater"
             )
         )
+        hvac__add_boundary_plants(model, options)
     }
     invisible(model)
 }
@@ -1310,21 +1223,38 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
         nrows = 1L,
         .var.name = paste(zone_name, "equipment list")
     )
+    equipment_type <- equipment_list$`Zone Equipment 1 Object Type`[[1L]]
     checkmate::assert_choice(
-        equipment_list$`Zone Equipment 1 Object Type`[[1L]],
-        "AirTerminal:SingleDuct:Uncontrolled",
+        equipment_type,
+        c(
+            "AirTerminal:SingleDuct:Uncontrolled",
+            "ZoneHVAC:AirDistributionUnit"
+        ),
         .var.name = paste(zone_name, "first equipment type")
     )
     terminal_name <- equipment_list$`Zone Equipment 1 Name`[[1L]]
+    terminal_type <- equipment_type
+    # Newer ExpandObjects wraps the constant-volume terminal in an ADU.
+    # Follow that explicit reference, preserving its inlet/outlet topology.
+    if (equipment_type == "ZoneHVAC:AirDistributionUnit") {
+        unit <- model$object(terminal_name)
+        terminal_type <- unname(unlist(unit$value("air_terminal_object_type")))
+        terminal_name <- unname(unlist(unit$value("air_terminal_name")))
+        checkmate::assert_choice(
+            terminal_type,
+            "AirTerminal:SingleDuct:ConstantVolume:NoReheat",
+            .var.name = paste(zone_name, "constant-volume terminal type")
+        )
+    }
     terminals <- data.table::as.data.table(model$to_table(
-        class = "AirTerminal:SingleDuct:Uncontrolled",
+        class = terminal_type,
         wide = TRUE
     ))
     terminal <- terminals[Name == terminal_name]
     checkmate::assert_data_table(
         terminal,
         nrows = 1L,
-        .var.name = paste(zone_name, "uncontrolled terminal")
+        .var.name = paste(zone_name, "constant-volume terminal")
     )
     equipment_list_id <- equipment_list$id[[1L]]
     terminal_id <- terminal$id[[1L]]
@@ -1367,7 +1297,9 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
         )
     )
 
-    # Fix source-backed flow limits and order heating before cooling.
+    # Fix source-backed flow limits and order the two equivalent water stages.
+    # No independent electric heater is synthesized from AHU.HEATER = -1.
+    heating_coil_class <- "Coil:Heating:Water"
     model$object(system_name)$set(
         design_supply_air_flow_rate = supply_flow
     )
@@ -1378,7 +1310,7 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
     )
     model$object(paste(system_name, "Main Branch"))$set(
         component_1_object_type = "Fan:VariableVolume",
-        component_3_object_type = "Coil:Heating:Water",
+        component_3_object_type = heating_coil_class,
         component_3_name = paste(system_name, "Heating Coil"),
         component_3_inlet_node_name = paste(system_name, "Mixed Air Outlet"),
         component_3_outlet_node_name = paste(
@@ -1394,11 +1326,16 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
         ),
         component_5_inlet_node_name = paste(system_name, "Cooling Coil Outlet")
     )
-    model$object(paste(system_name, "Heating Coil"))$set(
+    heating_coil <- model$object(paste(system_name, "Heating Coil"))
+    heating_coil$set(
         air_inlet_node_name = paste(system_name, "Mixed Air Outlet"),
-        air_outlet_node_name = paste(system_name, "Heating Coil Outlet"),
-        rated_ratio_for_air_and_water_convection = options$heating_coil_rated_air_water_convection_ratio
+        air_outlet_node_name = paste(system_name, "Heating Coil Outlet")
     )
+    if (options$heating_coil_type == "HotWater") {
+        heating_coil$set(
+            rated_ratio_for_air_and_water_convection = options$heating_coil_rated_air_water_convection_ratio
+        )
+    }
     model$object(paste(system_name, "Cooling Coil"))$set(
         design_air_flow_rate = supply_flow,
         air_inlet_node_name = paste(system_name, "Heating Coil Outlet"),
@@ -1421,10 +1358,26 @@ hvac__refine_single_zone_cav <- function(model, source, options) {
         fan_inlet_node_name = paste(system_name, "Cooling Coil Outlet"),
         setpoint_node_or_nodelist_name = paste(system_name, "Mixed Air Nodes")
     )
-    model$object(paste(system_name, "Controllers"))$set(
-        controller_1_name = paste(system_name, "Heating Coil Controller"),
-        controller_2_name = paste(system_name, "Cooling Coil Controller")
-    )
+    if (options$heating_coil_type == "HotWater") {
+        model$object(paste(system_name, "Controllers"))$set(
+            controller_1_name = paste(system_name, "Heating Coil Controller"),
+            controller_2_name = paste(system_name, "Cooling Coil Controller")
+        )
+    }
+    if (isTRUE(options$water_boundary)) {
+        # Both native feedback managers respect the actual source air bounds,
+        # rather than the unrelated template defaults of 12 C and 36 C.
+        for (role in c("Heating", "Cooling")) {
+            model$object(paste(
+                system_name,
+                role,
+                "Supply Air Temp Manager"
+            ))$set(
+                minimum_supply_air_temperature = options$cooling_coil_design_setpoint_c,
+                maximum_supply_air_temperature = options$heating_coil_design_setpoint_c
+            )
+        }
+    }
 
     # Set every source-backed economizer field explicitly after expansion.
     model$object(paste(system_name, "OA Controller"))$set(
@@ -1570,23 +1523,46 @@ hvac__replace_multizone_constant_volume_fans <- function(
             air_outlet_node_name = paste(system_name, "Supply Fan Outlet")
         )
     )
-    model$object(main_branch_name)$set(
+    # Replace both fan type references atomically. Adding a main water heating
+    # stage shifts the supply fan to slot 5; an intermediate stale fan type
+    # would make the whole branch invalid after deleting variable-volume fans.
+    arguments <- list(
         component_1_object_type = "Fan:ConstantVolume",
         component_1_name = return_fan_name,
         component_1_inlet_node_name = paste(system_name, "Air Loop Inlet"),
-        component_1_outlet_node_name = paste(system_name, "Return Fan Outlet"),
-        component_4_object_type = "Fan:ConstantVolume",
-        component_4_name = supply_fan_name,
-        component_4_inlet_node_name = paste(system_name, "Cooling Coil Outlet"),
-        component_4_outlet_node_name = paste(system_name, "Supply Fan Outlet")
+        component_1_outlet_node_name = paste(system_name, "Return Fan Outlet")
     )
+    inlet <- paste(
+        system_name,
+        if (isTRUE(options$water_boundary)) {
+            "Heating Coil Outlet"
+        } else {
+            "Cooling Coil Outlet"
+        }
+    )
+    model$object(supply_fan_name)$set(air_inlet_node_name = inlet)
+    slot <- if (isTRUE(options$water_boundary)) 5L else 4L
+    supply_fields <- stats::setNames(
+        list(
+            "Fan:ConstantVolume",
+            supply_fan_name,
+            inlet,
+            paste(system_name, "Supply Fan Outlet")
+        ),
+        paste0(
+            "component_",
+            slot,
+            c("_object_type", "_name", "_inlet_node_name", "_outlet_node_name")
+        )
+    )
+    do.call(model$object(main_branch_name)$set, c(arguments, supply_fields))
     invisible(model)
 }
 
 # Set source-backed terminal limits, fan semantics, and balanced exhaust paths.
-hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
+hvac__refine_multizone_airside <- function(model, source, options) {
     checkmate::assert_class(model, "Idf")
-    source <- hvac__validate_terminal_reheat_options(options, source)
+    source <- hvac__validate_terminal_options(options, source)
     system <- source$system
     zones <- source$zones
     system_name <- paste0("DeST AC_SYS ", system$ac_system_id[[1L]])
@@ -1601,7 +1577,7 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
     checkmate::assert_string(
         availability,
         min.chars = 1L,
-        .var.name = "normalized terminal-reheat availability schedule"
+        .var.name = "normalized multizone availability schedule"
     )
 
     # Template expansion leaves these source-backed design limits autosized.
@@ -1616,17 +1592,14 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
             availability
         )
     } else {
+        # Return-fan overrides must not change the supply fan's native
+        # InletVaneDampers curve selected by its own HVAC template.
         model$object(supply_fan_name)$set(
             maximum_flow_rate = system$maximum_supply_flow_m3_s[[1L]],
             fan_power_minimum_flow_rate_input_method = "FixedFlowRate",
             fan_power_minimum_air_flow_rate = system$minimum_supply_flow_m3_s[[
                 1L
-            ]],
-            fan_power_coefficient_1 = options$return_fan_power_coefficient_1,
-            fan_power_coefficient_2 = options$return_fan_power_coefficient_2,
-            fan_power_coefficient_3 = options$return_fan_power_coefficient_3,
-            fan_power_coefficient_4 = options$return_fan_power_coefficient_4,
-            fan_power_coefficient_5 = options$return_fan_power_coefficient_5
+            ]]
         )
         model$object(return_fan_name)$set(
             maximum_flow_rate = system$return_air_capacity_m3_s[[1L]],
@@ -1659,15 +1632,32 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
         class = "ZoneHVAC:EquipmentList",
         wide = TRUE
     ))
-    terminals <- data.table::as.data.table(model$to_table(
-        class = "AirTerminal:SingleDuct:VAV:Reheat",
-        wide = TRUE
-    ))
+    # Terminal classes vary per ROOM; an AHU code cannot select one class
+    # for all zones. Resolve both classes before updating each named terminal.
+    terminal_suffixes <- data.table::fifelse(
+        zones$terminal_has_reheat,
+        "VAV Reheat",
+        "VAV"
+    )
+    terminal_classes <- intersect(
+        c(
+            "AirTerminal:SingleDuct:VAV:Reheat",
+            "AirTerminal:SingleDuct:VAV:NoReheat"
+        ),
+        model$class_name()
+    )
+    terminals <- data.table::rbindlist(
+        lapply(
+            terminal_classes,
+            function(class) model$to_table(class = class, wide = TRUE)
+        ),
+        fill = TRUE
+    )
     # Restrict generated objects to this AC_SYS before checking cardinality.
     connections <- connections[`Zone Name` %in% zones$zone_name]
     equipment_names <- connections$`Zone Conditioning Equipment List Name`
     equipment_lists <- equipment_lists[Name %in% equipment_names]
-    terminal_names <- paste(zones$zone_name, "VAV Reheat")
+    terminal_names <- paste(zones$zone_name, terminal_suffixes)
     terminals <- terminals[Name %in% terminal_names]
     checkmate::assert_data_table(connections, nrows = nrow(zones))
     checkmate::assert_data_table(equipment_lists, nrows = nrow(zones))
@@ -1675,7 +1665,7 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
 
     for (index in seq_len(nrow(zones))) {
         zone_name <- zones$zone_name[[index]]
-        terminal_name <- paste(zone_name, "VAV Reheat")
+        terminal_name <- terminal_names[[index]]
         terminal_id <- terminals$id[match(terminal_name, terminals$Name)]
         checkmate::assert_int(
             terminal_id,
@@ -1689,6 +1679,17 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
                 index
             ]]
         )
+
+        if (zones$terminal_has_reheat[[index]]) {
+            # Source watts are the coil's actual nominal ceiling, not an
+            # autosizing hint or a power density multiplied by zone area.
+            terminal_row <- match(terminal_id, terminals$id)
+            coil_name <- terminals$`Reheat Coil Name`[[terminal_row]]
+            checkmate::assert_string(coil_name, min.chars = 1L)
+            model$object(coil_name)$set(
+                nominal_capacity = zones$terminal_capacity_w[[index]]
+            )
+        }
 
         connection <- connections[`Zone Name` == zone_name]
         checkmate::assert_data_table(
@@ -1735,7 +1736,10 @@ hvac__refine_multizone_terminal_reheat <- function(model, source, options) {
 }
 
 # Build one conversion descriptor for every referenced DeST AC_SYS.
-hvac__system_sources <- function(dest, options) {
+hvac__system_sources <- function(dest, options = NULL) {
+    if (!isTRUE(options$water_boundary)) {
+        options <- hvac__boundary_options(dest, options)
+    }
     controls <- hvac__conditioned_controls(dest)
     systems <- data.table::as.data.table(DBI::dbReadTable(dest, "AC_SYS"))
     system_ids <- sort(unique(controls$OF_AC_SYS))
@@ -1758,22 +1762,72 @@ hvac__system_sources <- function(dest, options) {
         if (system_type == 0L && room_count == 1L) {
             path <- "single_zone_cav"
             source <- hvac__single_zone_cav_source(dest, system_id)
+            # The existing one-room refinement assumes an uncontrolled
+            # terminal. Do not silently omit a source room reheater there.
+            terminal <- hvac__room_terminal_source(dest, source$room_id)
+            if (terminal$terminal_has_reheat[[1L]]) {
+                abort(
+                    "Single-zone CAV ROOM terminal reheat is not yet mapped; its source capacity cannot be omitted.",
+                    class = "destep_unsupported_hvac_terminal_type"
+                )
+            }
+            if (!isTRUE(options$water_boundary)) {
+                hvac__assert_heater_source(
+                    source$source_heater_id[[1L]],
+                    system_id
+                )
+            }
         } else {
             path <- if (system_type == 0L) {
                 "multizone_cav"
             } else {
                 "multizone_vav"
             }
-            source <- hvac__multizone_terminal_reheat_source(dest, system_id)
-            source <- hvac__validate_terminal_reheat_options(
-                options,
+            source <- hvac__multizone_airside_source(dest, system_id)
+            effective <- if (isTRUE(options$water_boundary)) {
+                hvac__boundary_system_options(source, path, options$overrides)
+            } else {
+                options
+            }
+            source <- hvac__validate_terminal_options(effective, source)
+        }
+        effective <- if (isTRUE(options$water_boundary)) {
+            hvac__boundary_system_options(source, path, options$overrides)
+        } else {
+            options
+        }
+        water <- NULL
+        if (isTRUE(options$water_boundary)) {
+            system_source <- if (path == "single_zone_cav") {
                 source
+            } else {
+                source$system
+            }
+            if (
+                is.na(system_source$source_heater_id[[1L]]) ||
+                    system_source$source_heater_id[[1L]] > 0L
+            ) {
+                abort(
+                    "Selected independent AHU heater product is not yet mapped.",
+                    class = "destep_unsupported_hvac_heater_state"
+                )
+            }
+            water <- hvac__water_boundary_source(
+                dest,
+                system_source$ahu_id[[1L]]
             )
+            if (path == "single_zone_cav") {
+                bounds <- hvac__single_supply_bounds(dest, system_id)
+                effective$cooling_coil_design_setpoint_c <- bounds[[1L]]
+                effective$heating_coil_design_setpoint_c <- bounds[[2L]]
+            }
         }
         list(
             system_id = system_id,
             path = path,
-            source = source
+            source = source,
+            options = effective,
+            water = water
         )
     })
 
@@ -1783,7 +1837,14 @@ hvac__system_sources <- function(dest, options) {
         function(source) source$path != "single_zone_cav",
         logical(1L)
     )]
-    if (length(terminal_sources) > 0L) {
+    allocation <- options$overrides$zone_outdoor_air_flow_m3_s
+    if (!length(terminal_sources) && !is.null(allocation)) {
+        abort(
+            "Outdoor-air allocation overrides require a multizone HVAC path.",
+            class = "destep_unused_hvac_equipment_options"
+        )
+    }
+    if (length(terminal_sources) > 0L && !is.null(allocation)) {
         room_ids <- unlist(
             lapply(
                 terminal_sources,
@@ -1792,7 +1853,7 @@ hvac__system_sources <- function(dest, options) {
             use.names = FALSE
         )
         checkmate::assert_set_equal(
-            names(options$zone_outdoor_air_flow_m3_s),
+            names(allocation),
             room_ids,
             .var.name = paste0(
                 "names(hvac_options$zone_outdoor_air_flow_m3_s); ",
@@ -1801,8 +1862,8 @@ hvac__system_sources <- function(dest, options) {
         )
     }
 
-    # Put a single-zone path first when present because it also supplies the
-    # shared hot-water plant required by those systems.
+    # Keep stable expansion order; both paths now use equivalent water stages
+    # and prescribed water boundaries rather than a user-selected heating plant.
     priority <- vapply(
         sources,
         function(source) source$path != "single_zone_cav",
@@ -1812,28 +1873,83 @@ hvac__system_sources <- function(dest, options) {
     sources[order(priority, ids)]
 }
 
-# Convert supported DeST air systems into direct EnergyPlus 9.0.1 objects.
-hvac__convert <- function(dest, model, options) {
-    version <- as.character(model$version())
-    if (version != "9.0.1") {
-        stop(
+# Require the target objects used by the selected source paths. Tested release
+# numbers describe evidence, not a compatibility whitelist. Object creation
+# additionally validates every emitted field against this same target IDD.
+hvac__assert_target_capabilities <- function(model, paths) {
+    required <- c(
+        "PlantComponent:TemperatureSource",
+        "HVACTemplate:Thermostat",
+        "HVACTemplate:Plant:ChilledWaterLoop",
+        "HVACTemplate:Plant:Chiller",
+        "HVACTemplate:Plant:HotWaterLoop",
+        "HVACTemplate:Plant:Boiler",
+        if ("single_zone_cav" %in% paths) {
+            c(
+                "HVACTemplate:System:ConstantVolume",
+                "HVACTemplate:Zone:ConstantVolume"
+            )
+        },
+        if (any(paths != "single_zone_cav")) {
+            c("HVACTemplate:System:VAV", "HVACTemplate:Zone:VAV")
+        }
+    )
+    missing <- setdiff(required, model$class_name(all = TRUE))
+    if (length(missing)) {
+        abort(
             paste0(
-                "Physical HVAC conversion currently emits EnergyPlus 9.0.1 ",
-                "objects. Use ver = '9.0.1', then transition the returned ",
-                "model with eplusr when a newer EnergyPlus version is needed."
+                "Physical HVAC requires target IDD classes missing from EnergyPlus ",
+                model$version(),
+                ": ",
+                paste(missing, collapse = ", "),
+                "."
             ),
-            call. = FALSE
+            class = "destep_unsupported_hvac_target_capability"
         )
     }
+    invisible(model)
+}
 
-    # Keep the existing flat option interface while each AC_SYS consumes only
-    # its own named zone outdoor-air allocation.
-    sources <- hvac__system_sources(dest, options)
+# Expand supported DeST air systems using the installed target-version tools.
+hvac__convert <- function(dest, model, options) {
+    # Source schedules control operation; missing target-only inputs receive
+    # per-system defaults instead of requiring a fictitious plant selection.
+    boundary <- hvac__boundary_options(dest, options)
+    sources <- hvac__system_sources(dest, boundary)
+    hvac__assert_target_capabilities(
+        model,
+        vapply(sources, `[[`, character(1L), "path")
+    )
+    water <- data.table::rbindlist(lapply(sources, `[[`, "water"))
+    # Shared template loops are valid only for identical operational boundaries.
+    # Do not attach different AHU water schedules to one shared loop.
+    if (
+        any(
+            vapply(
+                split(water$schedule_id, water$role),
+                function(ids) length(unique(ids)),
+                integer(1L)
+            ) !=
+                1L
+        )
+    ) {
+        abort(
+            "Different AHU water schedules require independent water-loop ownership, which is not yet mapped.",
+            class = "destep_unsupported_hvac_water_loop_mapping"
+        )
+    }
+    water <- water[!duplicated(water$role)]
+    water_ids <- vapply(
+        water$schedule_name,
+        function(name) model$object(name)$id(),
+        integer(1L)
+    )
     zone_ids <- vector("list", length(sources))
 
     for (index in seq_along(sources)) {
         descriptor <- sources[[index]]
         source <- descriptor$source
+        options <- descriptor$options
         include_common <- index == 1L
         if (descriptor$path == "single_zone_cav") {
             hvac__add_single_zone_cav_template(
@@ -1847,7 +1963,7 @@ hvac__convert <- function(dest, model, options) {
                 source$zone_name
             )
         } else {
-            hvac__add_multizone_terminal_reheat_template(
+            hvac__add_multizone_airside_template(
                 model,
                 source,
                 options,
@@ -1861,7 +1977,7 @@ hvac__convert <- function(dest, model, options) {
     }
 
     # Normalize the base model and every HVAC template as one reference graph
-    # before the EnergyPlus 9.0.1 preprocessor expands the objects.
+    # before the target-version preprocessor expands the objects.
     conv__normalize_object_names(model)
     for (index in seq_along(sources)) {
         if (sources[[index]]$path == "single_zone_cav") {
@@ -1879,8 +1995,17 @@ hvac__convert <- function(dest, model, options) {
         }
     }
 
+    data.table::set(
+        water,
+        NULL,
+        "schedule_name",
+        vapply(water_ids, function(id) model$object(id)$name(), character(1L))
+    )
     direct <- hvac__expand_templates(model)
+    hvac__normalize_loop_volumes(direct)
+    hvac__replace_boundary_plants(direct, water)
     for (descriptor in sources) {
+        options <- descriptor$options
         if (descriptor$path == "single_zone_cav") {
             hvac__refine_single_zone_cav(
                 direct,
@@ -1888,7 +2013,7 @@ hvac__convert <- function(dest, model, options) {
                 options
             )
         } else {
-            hvac__refine_multizone_terminal_reheat(
+            hvac__refine_multizone_airside(
                 direct,
                 descriptor$source,
                 options
@@ -1900,5 +2025,57 @@ hvac__convert <- function(dest, model, options) {
         direct$is_valid(),
         .var.name = "direct physical HVAC EnergyPlus model"
     )
+    attr(direct, "hvac_terminals") <- data.table::rbindlist(
+        lapply(
+            sources,
+            function(descriptor) {
+                if (descriptor$path == "single_zone_cav") {
+                    return(NULL)
+                }
+                selected <- data.table::copy(descriptor$source$zones)
+                data.table::set(
+                    selected,
+                    NULL,
+                    "ac_system_id",
+                    rep(descriptor$system_id, nrow(selected))
+                )
+                selected
+            }
+        ),
+        fill = TRUE
+    )
+    attr(direct, "hvac_water") <- water
+    attr(direct, "hvac_effective_options") <- lapply(sources, function(item) {
+        origins <- stats::setNames(
+            rep("target_representation_default", length(item$options)),
+            names(item$options)
+        )
+        origins[intersect(
+            names(boundary$overrides),
+            names(origins)
+        )] <- "user_override"
+        origins[c(
+            "chilled_water_design_setpoint_c",
+            "hot_water_design_setpoint_c"
+        )] <- "converter_sizing_assumption"
+        origins[c(
+            "heating_coil_type",
+            "cooling_coil_type"
+        )] <- "source_water_coil_equivalent_stages"
+        origins["preheat_coil_type"] <- "no_verified_source_preheat"
+        if (item$path == "single_zone_cav") {
+            origins[c(
+                "cooling_coil_design_setpoint_c",
+                "heating_coil_design_setpoint_c"
+            )] <- "source_constant_supply_air_bounds"
+        }
+        list(
+            system_id = item$system_id,
+            options = item$options,
+            origins = origins,
+            water = item$water
+        )
+    })
+    hvac__warn_terminal_defaults(attr(direct, "hvac_terminals"))
     direct
 }

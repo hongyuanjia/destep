@@ -16,7 +16,13 @@ schedule__reference_fields <- function(dest, table) {
 }
 
 # Convert referenced hourly inputs to date-based schedules in either format.
-schedule__convert <- function(dest, ep, format = "compact", directory = NULL) {
+schedule__convert <- function(
+    dest,
+    ep,
+    format = "compact",
+    directory = NULL,
+    extra_ids = integer()
+) {
     checkmate::assert_choice(format, c("compact", "file"))
     # currently, schedules are used in the tables below:
     # - AC_SYS, including the nonstandard SUPPLY_T_MIN/MAX references
@@ -76,7 +82,7 @@ schedule__convert <- function(dest, ep, format = "compact", directory = NULL) {
     # NULL means that the optional reference is not assigned, while zero is
     # DeST's sentinel for a default or unused schedule. Neither value names a
     # SCHEDULE_YEAR row, and retaining NA would emit it as a SQL identifier.
-    ids_ref <- ids_ref[!is.na(ids_ref) & ids_ref != 0L]
+    ids_ref <- union(ids_ref[!is.na(ids_ref) & ids_ref != 0L], extra_ids)
     ids_ref <- union(ids_ref, schedule__relative_humidity_ids(dest))
     if (length(ids_ref) > 0L) {
         schedule <- data.table::setDT(DBI::dbGetQuery(
