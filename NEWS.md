@@ -5,14 +5,14 @@
   wholly inconsistent inputs stop with both diagnostics; successful audits
   retain both candidates and the inferred selection reason. The existing
   default remains `"centered"`, an approximation rather than a confirmed
-  timestamp definition for every DeST weather source.
+  timestamp definition for every DeST weather source (#43).
 
 - `to_epw(radiation_time = "hour_start")` supports hourly interval weather
   imported with zero-based indices, including the ASHRAE 140 TF TMY3 data.
-  The default retains native DeST's centered solar interval. The selected
+  The default retains the existing centered approximation. The selected
   convention is recorded in the EPW header and audit; source GHI/DHI and row
   order are preserved. Radiation inconsistent with sunlight now fails with
-  source hours instead of silently discarding positive beam radiation.
+  source hours instead of silently discarding positive beam radiation (#43).
 
 - Model conversion is now exported as `to_idf()`, paired with `to_epw()`.
   Conversion choices use `destep_opts()`; target terrain, solar distribution
