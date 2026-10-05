@@ -1,5 +1,10 @@
 # destep 0.0.0.9000
 
+- Select relative-humidity schedules only from effective conditioned-room types.
+  Unused catalogue entries and legacy room-group RH fields no longer block
+  conversion or change the units of unrelated schedules. Resolve shared RH
+  names for both bounds in one database pass (#37).
+
 - Use percent-compatible target schedule limits after RH conversion while
   preserving shared fractional schedules and decoded source inputs (#37).
 
