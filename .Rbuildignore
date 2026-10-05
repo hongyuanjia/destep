@@ -14,6 +14,7 @@
 ^data-raw$
 ^[Rr]esearch($|/)
 ^[Tt][Mm][Pp]($|/)
+^inst/validation($|/)
 ^\.uvr$
 
 ^tests/testthat/fixture/.*[.]accdb$
