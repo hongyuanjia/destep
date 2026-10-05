@@ -4,11 +4,20 @@
 \alias{to_epw}
 \title{Convert DeST climate data to an EnergyPlus weather object}
 \usage{
-to_epw(dest)
+to_epw(dest, radiation_time = c("centered", "hour_start", "auto"))
 }
 \arguments{
 \item{dest}{A DBI connection, a path to a SQLite database produced by
 \code{\link[=read_dest]{read_dest()}}, or a path to a DeST Access \code{.accdb}/\code{.mdb} file.}
+
+\item{radiation_time}{Solar interval represented by each source radiation
+record. \code{"centered"} (the existing default approximation) uses
+\verb{[HOUR - 0.5, HOUR + 0.5]}. \code{"hour_start"} uses \verb{[HOUR, HOUR + 1]},
+for hourly interval data imported with zero-based hour indices, such as
+the ASHRAE 140 TF models prepared from TMY3. \code{"auto"} evaluates both
+intervals and selects one only when it alone passes the sunlight and DNI
+checks. If both pass or both fail, conversion stops with both diagnostics.
+Explicit choices should follow source provenance.}
 }
 \value{
 An \code{eplusr::Epw} object. The \code{destep_audit} attribute records input
@@ -18,4 +27,23 @@ repairs and radiation diagnostics.
 \code{to_epw()} converts the selected \code{CLIMATE_DATA} hourly series in a DeST
 model to an eplusr \code{Epw} object. The returned object stays in memory;
 call its \verb{$save()} method to write an EPW file.
+}
+\details{
+DNI is estimated from horizontal beam radiation and the mean positive sine
+of solar altitude over the selected interval. GHI and DHI alone do not
+uniquely recover measured hourly DNI; the estimate assumes constant DNI
+during the sunlit part of the interval. No radiation values are shifted or
+interpolated, and output rows retain the EPW hours 1 through 24.
+The centered convention retains the existing conversion approximation;
+its solar support is half an hour earlier than the EPW record interval.
+Inconsistent positive beam radiation without sunlight and DNI above
+1500 W/m2 are rejected rather than discarded or clipped.
+
+Automatic selection is an inference from physical consistency, not proof of
+the source timestamp definition. It never selects the smaller DNI or the
+candidate with fewer failures. With no discriminating radiation (including
+an all-zero year), both candidates can pass and an explicit choice is needed.
+The audit records the requested and selected conventions, selection reason,
+and candidate diagnostics. Automatic-selection errors inherit from
+\code{destep_radiation_time_error} and expose these diagnostics as \verb{$candidates}.
 }

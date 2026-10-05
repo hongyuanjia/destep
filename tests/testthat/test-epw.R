@@ -47,9 +47,10 @@ epw_test__database <- function(ids = 1L, offsets = 0, latitude = 0) {
 epw_test__humidity <- function(dry_bulb, damp, pressure) {
     humidity_ratio <- damp / 1000
     vapor_pressure <- pressure * humidity_ratio / (0.621945 + humidity_ratio)
-    saturation_pressure <- 611.2 * exp(
-        17.67 * dry_bulb / (dry_bulb + 243.5)
-    )
+    saturation_pressure <- 611.2 *
+        exp(
+            17.67 * dry_bulb / (dry_bulb + 243.5)
+        )
     gamma <- log(vapor_pressure / 611.2)
     list(
         relative_humidity = 100 * vapor_pressure / saturation_pressure,
@@ -104,13 +105,20 @@ test_that("to_epw() derives finite direct normal radiation and source flags", {
     equinox_noon <- (80L - 1L) * 24L + 12L + 1L
 
     expect_true(all(is.finite(data$direct_normal_radiation)))
-    expect_equal(data$direct_normal_radiation[[equinox_noon]], 300, tolerance = 5)
+    expect_equal(
+        data$direct_normal_radiation[[equinox_noon]],
+        300,
+        tolerance = 5
+    )
     expect_equal(nchar(data$data_source[[equinox_noon]]), 44L)
-    expect_equal(substr(
-        data$data_source[[equinox_noon]],
-        13L,
-        14L
-    ), "D9")
+    expect_equal(
+        substr(
+            data$data_source[[equinox_noon]],
+            13L,
+            14L
+        ),
+        "D9"
+    )
     expect_match(data$data_source[[equinox_noon]], "D9", fixed = TRUE)
     expect_true(all(
         data$direct_normal_radiation[data$global_horizontal_radiation == 0] == 0
@@ -122,7 +130,10 @@ test_that("DNI uses centered-hour solar geometry near sunrise", {
     environment <- epw_test__environment(latitude = 39.8, longitude = 116.4667)
     hour <- (80L - 1L) * 24L + 6L
     interval <- epw__solar_interval_sine(
-        hour, environment$LATITUDE, environment$LONGITUDE, 8
+        hour,
+        environment$LATITUDE,
+        environment$LONGITUDE,
+        8
     )
     expected_dni <- 900
     beam_horizontal <- expected_dni * interval$mean_sunlit_sine
@@ -140,6 +151,217 @@ test_that("DNI uses centered-hour solar geometry near sunrise", {
     expect_match(radiation$audit$solar_representative_time, "centered")
 })
 
+test_that("imported TF radiation uses its documented hour-start interval", {
+    environment <- epw_test__environment(39.833, -104.65)
+    environment$PROPERTY <- 25535L
+    # Actual TF600 source rows, independently paired with Denver TMY3 records
+    # ending one hour after HOUR. HOUR 1590 previously produced 7516 W/m2;
+    # HOUR 1158 had positive beam silently discarded by centered geometry.
+    climate <- data.frame(
+        HOUR = c(1590L, 1158L, 0L, 8759L),
+        HORI_TOTAL_RAD = c(17, 1, 0, 0),
+        HORI_SCATTER_RAD = c(9, 0, 0, 0)
+    )
+    source <- climate
+    radiation <- epw__radiation(climate, environment, "hour_start")
+
+    expect_identical(climate, source)
+    expect_equal(radiation$global_horizontal, source$HORI_TOTAL_RAD)
+    expect_equal(radiation$diffuse_horizontal, source$HORI_SCATTER_RAD)
+    expect_true(all(radiation$direct_normal[1:2] > 0))
+    expect_true(all(radiation$direct_normal < 1500))
+    expect_equal(radiation$direct_normal[3:4], c(0, 0))
+    expect_equal(radiation$audit$radiation_time, "hour_start")
+    expect_equal(radiation$audit$solar_interval_start_offset_hours, 0)
+    expect_equal(radiation$audit$solar_interval_end_offset_hours, 1)
+    expect_error(
+        epw__radiation(climate[1L, ], environment),
+        "exceeds 1500 W/m2.*HOUR 1590.*centered"
+    )
+    expect_error(
+        epw__radiation(climate[2L, ], environment),
+        "without sunlight.*HOUR 1158.*centered"
+    )
+})
+
+test_that("to_epw() records an explicit interval without moving source rows", {
+    dest <- epw_test__database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    centered <- to_epw(dest)
+    following <- to_epw(dest, radiation_time = "hour_start")
+    fields <- c(
+        "datetime",
+        "dry_bulb_temperature",
+        "global_horizontal_radiation",
+        "diffuse_horizontal_radiation",
+        "atmospheric_pressure"
+    )
+    expect_equal(
+        following$data()[, fields, with = FALSE],
+        centered$data()[, fields, with = FALSE]
+    )
+    expect_false(identical(
+        following$data()$direct_normal_radiation,
+        centered$data()$direct_normal_radiation
+    ))
+    expect_equal(attr(following, "destep_audit")$radiation_time, "hour_start")
+    expect_match(readLines(following$path(), n = 8L)[[7L]], "hour_start")
+    expect_error(to_epw(dest, radiation_time = "automatic"), "arg.*should be")
+})
+
+test_that("hour-start radiation keeps physical guards at night and noon", {
+    environment <- epw_test__environment()
+    night <- data.frame(HOUR = 0L, HORI_TOTAL_RAD = 1, HORI_SCATTER_RAD = 0)
+    noon <- data.frame(HOUR = 12L, HORI_TOTAL_RAD = 2000, HORI_SCATTER_RAD = 0)
+    expect_error(
+        epw__radiation(night, environment, "hour_start"),
+        "without sunlight.*HOUR 0"
+    )
+    expect_error(
+        epw__radiation(noon, environment, "hour_start"),
+        "exceeds 1500 W/m2.*HOUR 12"
+    )
+})
+
+test_that("automatic radiation selects the only passing source interval", {
+    # Retained TF600 sunrise and Chongqin sunset observations discriminate
+    # opposite conventions without synthesizing data from the solar helper.
+    denver <- epw_test__environment(39.833, -104.65)
+    denver$PROPERTY <- 25535L
+    sunrise <- data.frame(
+        HOUR = 1158L,
+        HORI_TOTAL_RAD = 1,
+        HORI_SCATTER_RAD = 0
+    )
+    following <- epw__radiation(sunrise, denver, "auto")
+    explicit <- epw__radiation(sunrise, denver, "hour_start")
+    expect_equal(following$direct_normal, explicit$direct_normal)
+    expect_equal(following$audit$radiation_time, "hour_start")
+    expect_equal(following$audit$radiation_time_requested, "auto")
+    expect_equal(
+        following$audit$radiation_time_selection_reason,
+        "only_candidate_passing_physical_checks"
+    )
+    candidates <- following$audit$radiation_time_candidates
+    expect_named(candidates, c("centered", "hour_start"))
+    expect_false(candidates$centered$passed)
+    expect_equal(
+        candidates$centered$positive_beam_without_sun_hour_sample,
+        1158L
+    )
+    expect_true(candidates$hour_start$passed)
+
+    chongqin <- epw_test__environment(29.58333, 106.4667)
+    sunset <- data.frame(
+        HOUR = 6139L,
+        HORI_TOTAL_RAD = 0.79,
+        HORI_SCATTER_RAD = 0.28
+    )
+    centered <- epw__radiation(sunset, chongqin, "auto")
+    expect_equal(centered$audit$radiation_time, "centered")
+    expect_equal(
+        centered$direct_normal,
+        epw__radiation(sunset, chongqin, "centered")$direct_normal
+    )
+    expect_false(centered$audit$radiation_time_candidates$hour_start$passed)
+    # An explicit invalid choice must fail, without automatic fallback.
+    expect_error(
+        epw__radiation(sunset, chongqin, "hour_start"),
+        "without sunlight"
+    )
+})
+
+test_that("automatic radiation rejects ambiguous and wholly invalid inputs", {
+    environment <- epw_test__environment()
+    noon <- data.frame(HOUR = 12L, HORI_TOTAL_RAD = 400, HORI_SCATTER_RAD = 100)
+    ambiguous <- tryCatch(
+        epw__radiation(noon, environment, "auto"),
+        destep_radiation_time_error = identity
+    )
+    expect_s3_class(ambiguous, "destep_radiation_time_error")
+    expect_equal(ambiguous$reason, "ambiguous")
+    expect_true(all(vapply(ambiguous$candidates, `[[`, logical(1L), "passed")))
+    expect_match(
+        conditionMessage(ambiguous),
+        "Both radiation-time candidates pass"
+    )
+    expect_match(conditionMessage(ambiguous), "centered:.*hour_start:")
+
+    # A zero-beam series contains no information to distinguish the intervals.
+    noon$HORI_TOTAL_RAD <- noon$HORI_SCATTER_RAD
+    expect_error(epw__radiation(noon, environment, "auto"), "ambiguous")
+    expect_error(
+        epw__radiation(noon[FALSE, ], environment, "auto"),
+        "ambiguous"
+    )
+
+    # Retain both classes of failure rather than stopping at the night row.
+    invalid <- data.frame(
+        HOUR = c(0L, 12L),
+        HORI_TOTAL_RAD = c(1, 2000),
+        HORI_SCATTER_RAD = c(0, 0)
+    )
+    failed <- tryCatch(
+        epw__radiation(invalid, environment, "auto"),
+        destep_radiation_time_error = identity
+    )
+    expect_s3_class(failed, "destep_radiation_time_error")
+    expect_equal(failed$reason, "no_valid_candidate")
+    expect_match(
+        conditionMessage(failed),
+        "Neither radiation-time candidate passes"
+    )
+    for (candidate in failed$candidates) {
+        expect_false(candidate$passed)
+        expect_equal(candidate$positive_beam_without_sun_hours, 1L)
+        expect_equal(candidate$dni_above_1500_hours, 1L)
+        expect_equal(candidate$positive_beam_without_sun_hour_sample, 0L)
+        expect_equal(candidate$dni_above_1500_hour_sample, 12L)
+    }
+})
+
+test_that("to_epw() propagates automatic selection and preserves weather values", {
+    dest <- epw_test__database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    DBI::dbWriteTable(
+        dest,
+        "ENVIRONMENT",
+        transform(
+            epw_test__environment(39.833, -104.65),
+            PROPERTY = 25535L
+        ),
+        overwrite = TRUE
+    )
+    DBI::dbExecute(
+        dest,
+        paste(
+            "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD=1, HORI_SCATTER_RAD=0",
+            "WHERE HOUR=1158"
+        )
+    )
+    automatic <- to_epw(dest, "auto")
+    explicit <- to_epw(dest, "hour_start")
+    expect_equal(automatic$data(), explicit$data())
+    expect_equal(attr(automatic, "destep_audit")$radiation_time, "hour_start")
+    header <- readLines(automatic$path(), n = 8L)[[7L]]
+    expect_match(
+        header,
+        "radiation_time=hour_start; requested=auto",
+        fixed = TRUE
+    )
+    DBI::dbExecute(
+        dest,
+        "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD=0, HORI_SCATTER_RAD=0"
+    )
+    expect_error(to_epw(dest, "auto"), class = "destep_radiation_time_error")
+    # Shared source validation still runs before candidate selection.
+    DBI::dbExecute(
+        dest,
+        "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD=NULL WHERE HOUR=0"
+    )
+    expect_error(to_epw(dest, "auto"), "HORI_TOTAL_RAD contains missing")
+})
+
 test_that("to_epw() writes hour-ending minute 60", {
     dest <- epw_test__database()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
@@ -155,10 +377,13 @@ test_that("to_epw() writes hour-ending minute 60", {
 test_that("to_epw() expands sparse DeST wind observations", {
     dest <- epw_test__database()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
-    DBI::dbExecute(dest, paste(
-        "UPDATE CLIMATE_DATA SET WS = NULL, WD = NULL",
-        "WHERE HOUR IN (0, 1, 3, 4, 5, 6, 7)"
-    ))
+    DBI::dbExecute(
+        dest,
+        paste(
+            "UPDATE CLIMATE_DATA SET WS = NULL, WD = NULL",
+            "WHERE HOUR IN (0, 1, 3, 4, 5, 6, 7)"
+        )
+    )
 
     epw <- to_epw(dest)
     data <- epw$data()
@@ -174,10 +399,14 @@ test_that("to_epw() expands sparse DeST wind observations", {
 test_that("to_epw() selects a city-linked climate series", {
     dest <- epw_test__database(ids = c(1L, 2L), offsets = c(0, 10))
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
-    DBI::dbWriteTable(dest, "SYS_CITY", data.frame(
-        CITY_ID = 10L,
-        CLIMATE_ID = 2L
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "SYS_CITY",
+        data.frame(
+            CITY_ID = 10L,
+            CLIMATE_ID = 2L
+        )
+    )
 
     epw <- to_epw(dest)
 
@@ -205,20 +434,26 @@ test_that("to_epw() rejects ambiguous or incomplete climate series", {
 test_that("to_epw() audits small radiation rounding and rejects larger inversions", {
     rounded <- epw_test__database()
     on.exit(DBI::dbDisconnect(rounded), add = TRUE)
-    DBI::dbExecute(rounded, paste(
-        "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD = 99.5,",
-        "HORI_SCATTER_RAD = 100 WHERE HOUR = 12"
-    ))
+    DBI::dbExecute(
+        rounded,
+        paste(
+            "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD = 99.5,",
+            "HORI_SCATTER_RAD = 100 WHERE HOUR = 12"
+        )
+    )
     epw <- to_epw(rounded)
     expect_equal(attr(epw, "destep_audit")$dhi_above_ghi_rounding_hours, 1L)
     expect_equal(epw$data()$global_horizontal_radiation[[13L]], 100)
 
     invalid <- epw_test__database()
     on.exit(DBI::dbDisconnect(invalid), add = TRUE)
-    DBI::dbExecute(invalid, paste(
-        "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD = 90,",
-        "HORI_SCATTER_RAD = 100 WHERE HOUR = 12"
-    ))
+    DBI::dbExecute(
+        invalid,
+        paste(
+            "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD = 90,",
+            "HORI_SCATTER_RAD = 100 WHERE HOUR = 12"
+        )
+    )
     expect_error(to_epw(invalid), "exceeds HORI_TOTAL_RAD by more than 1")
 })
 
@@ -234,7 +469,10 @@ test_that("to_epw() caps mild supersaturation and rejects larger violations", {
 
     excessive <- epw_test__database()
     on.exit(DBI::dbDisconnect(excessive), add = TRUE)
-    DBI::dbExecute(excessive, "UPDATE CLIMATE_DATA SET DAMP = 20 WHERE HOUR = 0")
+    DBI::dbExecute(
+        excessive,
+        "UPDATE CLIMATE_DATA SET DAMP = 20 WHERE HOUR = 0"
+    )
     expect_error(
         to_epw(excessive),
         "supersaturation exceeds supported rounding bounds"
@@ -247,6 +485,9 @@ test_that("to_epw() converts the real DeST climate series", {
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
     epw <- to_epw(src)
+    automatic <- to_epw(src, "auto")
+    expect_equal(automatic$data(), epw$data())
+    expect_equal(attr(automatic, "destep_audit")$radiation_time, "centered")
     data <- epw$data()
     audit <- attr(epw, "destep_audit")
     raw <- data.table::as.data.table(DBI::dbReadTable(src, "CLIMATE_DATA"))
