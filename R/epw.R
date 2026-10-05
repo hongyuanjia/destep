@@ -6,12 +6,40 @@
 #'
 #' @param dest A DBI connection, a path to a SQLite database produced by
 #'   [read_dest()], or a path to a DeST Access `.accdb`/`.mdb` file.
+#' @param radiation_time Solar interval represented by each source radiation
+#'   record. `"centered"` (the existing default approximation) uses
+#'   `[HOUR - 0.5, HOUR + 0.5]`. `"hour_start"` uses `[HOUR, HOUR + 1]`,
+#'   for hourly interval data imported with zero-based hour indices, such as
+#'   the ASHRAE 140 TF models prepared from TMY3. `"auto"` evaluates both
+#'   intervals and selects one only when it alone passes the sunlight and DNI
+#'   checks. If both pass or both fail, conversion stops with both diagnostics.
+#'   Explicit choices should follow source provenance.
+#'
+#' @details
+#' DNI is estimated from horizontal beam radiation and the mean positive sine
+#' of solar altitude over the selected interval. GHI and DHI alone do not
+#' uniquely recover measured hourly DNI; the estimate assumes constant DNI
+#' during the sunlit part of the interval. No radiation values are shifted or
+#' interpolated, and output rows retain the EPW hours 1 through 24.
+#' The centered convention retains the existing conversion approximation;
+#' its solar support is half an hour earlier than the EPW record interval.
+#' Inconsistent positive beam radiation without sunlight and DNI above
+#' 1500 W/m2 are rejected rather than discarded or clipped.
+#'
+#' Automatic selection is an inference from physical consistency, not proof of
+#' the source timestamp definition. It never selects the smaller DNI or the
+#' candidate with fewer failures. With no discriminating radiation (including
+#' an all-zero year), both candidates can pass and an explicit choice is needed.
+#' The audit records the requested and selected conventions, selection reason,
+#' and candidate diagnostics. Automatic-selection errors inherit from
+#' `destep_radiation_time_error` and expose these diagnostics as `$candidates`.
 #'
 #' @return An `eplusr::Epw` object. The `destep_audit` attribute records input
 #'   repairs and radiation diagnostics.
 #'
 #' @export
-to_epw <- function(dest) {
+to_epw <- function(dest, radiation_time = c("centered", "hour_start", "auto")) {
+    radiation_time <- match.arg(radiation_time)
     connection <- epw__connection(dest)
     con <- connection$con
     if (isTRUE(connection$disconnect)) {
@@ -21,10 +49,16 @@ to_epw <- function(dest) {
     climate <- epw__climate_data(con)
     environment <- epw__environment(con)
     missing <- epw__missing_codes()
-    converted <- epw__data(climate, environment, missing)
+    converted <- epw__data(climate, environment, missing, radiation_time)
 
     path <- tempfile("destep-", fileext = ".epw")
-    epw__write(path, converted$data, environment)
+    epw__write(
+        path,
+        converted$data,
+        environment,
+        converted$audit$radiation_time,
+        radiation_time
+    )
     epw <- suppressWarnings(eplusr::read_epw(path))
     attr(epw, "destep_audit") <- converted$audit
     epw
@@ -459,9 +493,9 @@ epw__solar_sine_altitude <- function(hour, latitude, longitude, time_zone) {
         cos(latitude) * cos(declination) * cos(hour_angle)
 }
 
-# Average positive solar altitude over the hourly support centered on each DeST
-# whole-hour weather timestamp. Sampling minute midpoints avoids the sunrise and
-# sunset singularity produced by dividing hourly radiation by one instant.
+# Average positive solar altitude over the hourly support centered on the
+# supplied local standard hour; the caller resolves its offset from HOUR.
+# Minute midpoints avoid dividing hourly radiation by one sunrise/sunset instant.
 epw__solar_interval_sine <- function(
     hour,
     latitude,
@@ -503,10 +537,95 @@ epw__solar_interval_sine <- function(
     )
 }
 
-# Derive DNI from hourly DeST GHI and DHI using the corresponding centered-hour
-# solar geometry. This preserves the horizontal beam while producing the
-# hourly normal-plane radiation quantity required by EPW.
-epw__radiation <- function(climate, environment) {
+# Evaluate one time interpretation without stopping at its first failure, so
+# automatic selection can retain comparable diagnostics for both candidates.
+epw__radiation_candidate <- function(
+    climate,
+    environment,
+    beam,
+    radiation_time
+) {
+    offset <- if (radiation_time == "hour_start") 0.5 else 0
+    interval <- epw__solar_interval_sine(
+        climate$HOUR + offset,
+        environment$LATITUDE[[1L]],
+        environment$LONGITUDE[[1L]],
+        epw__time_zone(environment)
+    )
+    daylight <- interval$daylight
+    direct_normal <- numeric(nrow(climate))
+    direct_normal[daylight] <- beam[daylight] /
+        interval$mean_sunlit_sine[daylight]
+    without_sun <- beam > 0 & !daylight
+    above_limit <- direct_normal > 1500
+    list(
+        interval = interval,
+        direct_normal = direct_normal,
+        offset = offset,
+        diagnostics = list(
+            radiation_time = radiation_time,
+            passed = !any(without_sun) && !any(above_limit),
+            positive_beam_without_sun_hours = sum(without_sun),
+            positive_beam_without_sun_hour_sample = utils::head(
+                climate$HOUR[without_sun],
+                10L
+            ),
+            maximum_beam_without_sun_w_m2 = max(beam[without_sun], 0),
+            dni_above_1500_hours = sum(above_limit),
+            dni_above_1500_hour_sample = utils::head(
+                climate$HOUR[above_limit],
+                10L
+            ),
+            maximum_derived_dni_w_m2 = max(direct_normal, 0)
+        )
+    )
+}
+
+# Reject ambiguous or wholly inconsistent automatic candidates, keeping their
+# structured evidence on the condition for callers as well as in the message.
+epw__radiation_selection_error <- function(diagnostics, ambiguous) {
+    summary <- vapply(
+        diagnostics,
+        function(x) {
+            sprintf(
+                "%s: beam_without_sun=%i hours, DNI_above_1500=%i hours, max_DNI=%.6f W/m2",
+                x$radiation_time,
+                x$positive_beam_without_sun_hours,
+                x$dni_above_1500_hours,
+                x$maximum_derived_dni_w_m2
+            )
+        },
+        character(1L)
+    )
+    reason <- if (ambiguous) {
+        paste(
+            "Both radiation-time candidates pass; the interval is ambiguous.",
+            "Specify radiation_time='centered' or 'hour_start' from source provenance."
+        )
+    } else {
+        paste(
+            "Neither radiation-time candidate passes.",
+            "Check source weather, site metadata and radiation intervals."
+        )
+    }
+    stop(errorCondition(
+        paste(reason, paste(summary, collapse = "; ")),
+        class = "destep_radiation_time_error",
+        radiation_time_requested = "auto",
+        reason = if (ambiguous) "ambiguous" else "no_valid_candidate",
+        candidates = diagnostics
+    ))
+}
+
+# Derive hourly DNI using an explicit or uniquely passing interval. Dividing by
+# the mean sunlit sine estimates full-hour normal radiation under constant
+# sunlit DNI; it cannot recover the within-hour irradiance distribution.
+epw__radiation <- function(
+    climate,
+    environment,
+    radiation_time = c("centered", "hour_start", "auto")
+) {
+    radiation_time <- match.arg(radiation_time)
     discrepancy <- climate$HORI_SCATTER_RAD - climate$HORI_TOTAL_RAD
     if (any(discrepancy > 1)) {
         stop(
@@ -523,22 +642,58 @@ epw__radiation <- function(climate, environment) {
     }
     global <- pmax(climate$HORI_TOTAL_RAD, climate$HORI_SCATTER_RAD)
     beam_horizontal <- pmax(global - climate$HORI_SCATTER_RAD, 0)
-    time_zone <- epw__time_zone(environment)
-    solar_interval <- epw__solar_interval_sine(
-        climate$HOUR,
-        environment$LATITUDE[[1L]],
-        environment$LONGITUDE[[1L]],
-        time_zone
-    )
+    requested <- radiation_time
+    choices <- if (requested == "auto") {
+        c("centered", "hour_start")
+    } else {
+        requested
+    }
+    # Only two fixed candidates are evaluated. Explicit requests are evaluated
+    # once and never retried under a different interpretation on failure.
+    candidates <- lapply(choices, function(choice) {
+        epw__radiation_candidate(climate, environment, beam_horizontal, choice)
+    })
+    names(candidates) <- choices
+    diagnostics <- lapply(candidates, `[[`, "diagnostics")
+    if (requested == "auto") {
+        passed <- vapply(diagnostics, `[[`, logical(1L), "passed")
+        if (sum(passed) != 1L) {
+            epw__radiation_selection_error(diagnostics, all(passed))
+        }
+        radiation_time <- choices[passed]
+    }
+    selected <- candidates[[radiation_time]]
+    solar_interval <- selected$interval
+    solar_offset <- selected$offset
     daylight <- solar_interval$daylight
-    direct_normal <- numeric(nrow(climate))
-    direct_normal[daylight] <- beam_horizontal[daylight] /
-        solar_interval$mean_sunlit_sine[daylight]
+    unrepresented <- beam_horizontal > 0 & !daylight
+    if (any(unrepresented)) {
+        stop(
+            sprintf(
+                paste(
+                    "Positive horizontal beam radiation without sunlight at",
+                    "%i hour(s), including HOUR %s; radiation_time='%s'.",
+                    "Check source radiation intervals and site metadata."
+                ),
+                sum(unrepresented),
+                fmt_integer_sample(climate$HOUR[unrepresented]),
+                radiation_time
+            ),
+            call. = FALSE
+        )
+    }
+    direct_normal <- selected$direct_normal
     if (any(direct_normal > 1500)) {
         stop(
             sprintf(
-                "Derived direct normal radiation exceeds 1500 W/m2; maximum is %.6f W/m2.",
-                max(direct_normal)
+                paste(
+                    "Derived direct normal radiation exceeds 1500 W/m2;",
+                    "maximum is %.6f W/m2 at HOUR %s; radiation_time='%s'.",
+                    "Check source radiation intervals and site metadata."
+                ),
+                max(direct_normal),
+                climate$HOUR[[which.max(direct_normal)]],
+                radiation_time
             ),
             call. = FALSE
         )
@@ -560,7 +715,21 @@ epw__radiation <- function(climate, environment) {
                 0
             ),
             maximum_derived_dni_w_m2 = max(direct_normal),
-            solar_representative_time = "hourly interval centered on DeST HOUR timestamp",
+            radiation_time = radiation_time,
+            radiation_time_requested = requested,
+            radiation_time_selection_reason = if (requested == "auto") {
+                "only_candidate_passing_physical_checks"
+            } else {
+                "explicit_or_default"
+            },
+            radiation_time_candidates = diagnostics,
+            solar_interval_start_offset_hours = solar_offset - 0.5,
+            solar_interval_end_offset_hours = solar_offset + 0.5,
+            solar_representative_time = if (radiation_time == "centered") {
+                "hourly interval centered on DeST HOUR timestamp"
+            } else {
+                "hourly interval from DeST HOUR to HOUR + 1"
+            },
             solar_interval_samples = solar_interval$samples,
             partial_sunlight_hours = sum(
                 solar_interval$sunlit_fraction > 0 &
@@ -594,13 +763,18 @@ epw__source_flags <- function(daylight) {
 }
 
 # Construct the 35 EPW data fields and attach machine-readable diagnostics.
-epw__data <- function(climate, environment, missing) {
+epw__data <- function(
+    climate,
+    environment,
+    missing,
+    radiation_time = "centered"
+) {
     humidity <- epw__humidity(
         climate$DRY_BULB_T,
         climate$DAMP,
         climate$B
     )
-    radiation <- epw__radiation(climate, environment)
+    radiation <- epw__radiation(climate, environment, radiation_time)
     datetime <- as.POSIXct("2001-01-01 01:00:00", tz = "UTC") +
         climate$HOUR * 3600
     data <- data.table::data.table(
@@ -701,7 +875,13 @@ epw__write_missing_template <- function(path) {
 
 # Serialize a complete EPW file with hour-ending timestamps on the non-leap
 # 2001 calendar. Converted schedules select dates independently of weekdays.
-epw__write <- function(path, weather, environment) {
+epw__write <- function(
+    path,
+    weather,
+    environment,
+    radiation_time = "centered",
+    radiation_time_requested = radiation_time
+) {
     header <- c(
         sprintf(
             "LOCATION,%s,%s,%s,DeST CLIMATE_DATA,%s,%s,%s,%s,%s",
@@ -719,10 +899,13 @@ epw__write <- function(path, weather, environment) {
         "GROUND TEMPERATURES,0",
         "HOLIDAYS/DAYLIGHT SAVINGS,No,0,0,0",
         "COMMENTS 1,Generated by destep from DeST CLIMATE_DATA",
-        paste(
-            "COMMENTS 2,DNI derived from GHI and DHI over the hourly interval",
-            "centered on DeST HOUR; mild supersaturation capped within",
-            "supported bounds"
+        sprintf(
+            paste(
+                "COMMENTS 2,DNI estimated from GHI and DHI; radiation_time=%s;",
+                "requested=%s; mild supersaturation capped within supported bounds"
+            ),
+            radiation_time,
+            radiation_time_requested
         ),
         "DATA PERIODS,1,1,Data,Monday, 1/ 1,12/31"
     )
