@@ -1,5 +1,10 @@
 # destep 0.0.0.9000
 
+- Map supported DeST terminal capacities, airflow bounds, selected products
+  and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve
+  source ownership and linked schedules, retain required moisture inputs, and
+  diagnose unsupported selected equipment explicitly (#38).
+
 - Unified source conversion settings in `to_eplus(options = )` and
   `destep_opts()`. The `"objects"` preset preserves source inputs, with explicit
   schedule, HVAC, surface-convection and target simulation settings (#37).
