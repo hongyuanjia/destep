@@ -202,7 +202,7 @@ MAP_ID_NAME <- list(
 #'
 #' @param options \[string or destep_options\] Conversion configuration.
 #'       Use `"objects"` (default) or [destep_opts()] to configure source
-#'       inputs, HVAC and target simulation settings.
+#'       inputs, time tables and HVAC representation.
 #'
 #' @details Outdoor ventilation retains the source minimum ACH time table.
 #'       A saved `OPTION.VARIANT_VENT = 0` disables the range supplement.
@@ -222,16 +222,26 @@ MAP_ID_NAME <- list(
 #'       the saved IDF glazing comments. This does not establish whole-building
 #'       equivalence.
 #'
+#' @seealso [to_epw()], [destep_opts()] for supported inputs and HVAC limitations.
+#' @section Conversion scope:
+#' Source inputs are mapped to EnergyPlus objects with documented equivalent
+#' representations where needed. Conversion does not reproduce DeST solver
+#' algorithms or guarantee matching annual loads. Unsupported selected HVAC
+#' equipment stops automatic/physical conversion with a diagnostic; it is not
+#' replaced silently by IdealLoads. See [destep_opts()] for supported subsets.
+#' Terrain, solar distribution and shading-update settings retain EnergyPlus
+#' defaults. Edit the returned [eplusr::Idf] to change target simulation settings.
+#'
 #' @examples
 #' \dontrun{
-#' to_eplus(dest, "23.1", options = "objects")
-#' opts <- destep_opts("objects", terrain = "Country")
-#' to_eplus(dest, "23.1", options = opts)
+#' to_idf(dest, "23.1", options = "objects")
+#' opts <- destep_opts("objects", run_period = c(1L, 31L))
+#' to_idf(dest, "23.1", options = opts)
 #' }
 #'
 #' @export
 # TODO: How about STOREY_GROUP?
-to_eplus <- function(
+to_idf <- function(
     dest,
     ver = "latest",
     copy = TRUE,
@@ -243,14 +253,6 @@ to_eplus <- function(
     conversion <- conv__conversion_options(options)
     requested_hvac <- options$hvac
     hvac_options <- options$hvac_options
-    simulation_options <- simulation__options(Filter(
-        Negate(is.null),
-        unclass(options[c(
-            "terrain",
-            "solar_distribution",
-            "shadow_update_days"
-        )])
-    ))
     surface_convection <- conversion$surface_convection
 
     if (is_string(dest) && file.exists(dest)) {
@@ -454,9 +456,6 @@ to_eplus <- function(
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
-    # Apply user-selected target settings after model object assembly.
-    simulation__apply(ep, simulation_options)
-
     # Source K/SC gives an aggregate window approximation. Preserve its input
     # limitations in the conversion audit without adding solver-specific optics.
     window_diagnostics <- attr(conv$const, "windows")
@@ -523,7 +522,7 @@ to_eplus <- function(
         run_period = options$run_period,
         calendar = "365 days; no daylight saving; date-based values"
     )
-    audit$simulation <- simulation__audit(ep, simulation_options)
+    audit$simulation <- simulation__audit(ep)
     attr(ep, "conversion") <- audit
     ep$Version$comment(
         c(

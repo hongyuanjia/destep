@@ -2,7 +2,21 @@
 # converter requires a full non-leap 8760-hour year, so tests vary the data
 # content rather than shortening the table.
 destep_test_ground_temperature_rows <- function(id, monthly) {
-    month_hours <- c(31L, 28L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L) * 24L
+    month_hours <- c(
+        31L,
+        28L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L
+    ) *
+        24L
     data.frame(
         ID = rep(id, sum(month_hours)),
         HOUR = 0:8759,
@@ -13,11 +27,14 @@ destep_test_ground_temperature_rows <- function(id, monthly) {
 # Create an in-memory database with one or more complete GROUND_DATA series.
 destep_test_ground_temperature_db <- function(ids = 2L, monthly = list(1:12)) {
     dest <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-    rows <- do.call(rbind, Map(
-        destep_test_ground_temperature_rows,
-        ids,
-        monthly
-    ))
+    rows <- do.call(
+        rbind,
+        Map(
+            destep_test_ground_temperature_rows,
+            ids,
+            monthly
+        )
+    )
     DBI::dbWriteTable(dest, "GROUND_DATA", rows)
     dest
 }
@@ -40,11 +57,15 @@ test_that("skips missing or empty ground data", {
 
     empty <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
     on.exit(DBI::dbDisconnect(empty), add = TRUE)
-    DBI::dbWriteTable(empty, "GROUND_DATA", data.frame(
-        ID = integer(),
-        HOUR = integer(),
-        T = numeric()
-    ))
+    DBI::dbWriteTable(
+        empty,
+        "GROUND_DATA",
+        data.frame(
+            ID = integer(),
+            HOUR = integer(),
+            T = numeric()
+        )
+    )
 
     expect_null(ground_temperature__convert(empty, ep))
 })
@@ -56,8 +77,14 @@ test_that("can convert hourly ground data to monthly BuildingSurface temperature
 
     ground <- ground_temperature__convert(dest, ep)
 
-    expect_equal(unique(ground$object$class_name), "Site:GroundTemperature:BuildingSurface")
-    expect_equal(destep_test_ground_temperature_values(ground), as.numeric(1:12))
+    expect_equal(
+        unique(ground$object$class_name),
+        "Site:GroundTemperature:BuildingSurface"
+    )
+    expect_equal(
+        destep_test_ground_temperature_values(ground),
+        as.numeric(1:12)
+    )
     expect_equal(attr(ground, "table")$GROUND_TEMPERATURE, as.numeric(1:12))
 })
 
@@ -70,14 +97,21 @@ test_that("uses SYS_CITY.GROUND_ID when multiple ground data IDs exist", {
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     DBI::dbWriteTable(dest, "ENVIRONMENT", data.frame(CITY_ID = 10L))
-    DBI::dbWriteTable(dest, "SYS_CITY", data.frame(
-        CITY_ID = 10L,
-        GROUND_ID = 2L
-    ))
+    DBI::dbWriteTable(
+        dest,
+        "SYS_CITY",
+        data.frame(
+            CITY_ID = 10L,
+            GROUND_ID = 2L
+        )
+    )
 
     ground <- ground_temperature__convert(dest, ep)
 
-    expect_equal(destep_test_ground_temperature_values(ground), as.numeric(101:112))
+    expect_equal(
+        destep_test_ground_temperature_values(ground),
+        as.numeric(101:112)
+    )
     expect_equal(unique(attr(ground, "table")$GROUND_DATA_ID), 2)
 })
 
@@ -88,7 +122,10 @@ test_that("falls back to the unique GROUND_DATA ID", {
 
     ground <- ground_temperature__convert(dest, ep)
 
-    expect_equal(destep_test_ground_temperature_values(ground), as.numeric(11:22))
+    expect_equal(
+        destep_test_ground_temperature_values(ground),
+        as.numeric(11:22)
+    )
     expect_equal(unique(attr(ground, "table")$GROUND_DATA_ID), 8)
 })
 
@@ -119,10 +156,13 @@ test_that("stops on invalid hourly ground data", {
 
     duplicate_hour <- destep_test_ground_temperature_db()
     on.exit(DBI::dbDisconnect(duplicate_hour), add = TRUE)
-    DBI::dbExecute(duplicate_hour, "
+    DBI::dbExecute(
+        duplicate_hour,
+        "
         INSERT INTO GROUND_DATA (ID, HOUR, T)
         VALUES (2, 0, 99)
-    ")
+    "
+    )
     expect_error(
         ground_temperature__convert(duplicate_hour, ep),
         "duplicate HOUR"
@@ -130,11 +170,14 @@ test_that("stops on invalid hourly ground data", {
 
     missing_temperature <- destep_test_ground_temperature_db()
     on.exit(DBI::dbDisconnect(missing_temperature), add = TRUE)
-    DBI::dbExecute(missing_temperature, "
+    DBI::dbExecute(
+        missing_temperature,
+        "
         UPDATE GROUND_DATA
         SET T = NULL
         WHERE HOUR = 0
-    ")
+    "
+    )
     expect_error(
         ground_temperature__convert(missing_temperature, ep),
         "T contains missing values"
@@ -150,33 +193,63 @@ test_that("can convert ground temperatures from a real DeST model", {
 
     ground <- ground_temperature__convert(src, ep)
     table <- attr(ground, "table")
-    raw <- DBI::dbGetQuery(src, "
+    raw <- DBI::dbGetQuery(
+        src,
+        "
         SELECT HOUR, T
         FROM GROUND_DATA
         ORDER BY HOUR
-    ")
-    month_hours <- c(31L, 28L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L) * 24L
-    expected <- as.numeric(tapply(raw$T, rep(seq_along(month_hours), month_hours), mean))
+    "
+    )
+    month_hours <- c(
+        31L,
+        28L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L
+    ) *
+        24L
+    expected <- as.numeric(tapply(
+        raw$T,
+        rep(seq_along(month_hours), month_hours),
+        mean
+    ))
 
-    expect_equal(sum(ground$object$class_name == "Site:GroundTemperature:BuildingSurface"), 1L)
+    expect_equal(
+        sum(
+            ground$object$class_name == "Site:GroundTemperature:BuildingSurface"
+        ),
+        1L
+    )
     expect_equal(table$GROUND_TEMPERATURE, expected)
     expect_equal(destep_test_ground_temperature_values(ground), expected)
 })
 
-test_that("to_eplus() includes valid ground temperatures", {
+test_that("to_idf() includes valid ground temperatures", {
     skip_on_cran()
 
     src <- ensure_dest_sqlite_file()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
-    idf <- to_eplus(src, 23.1)
+    idf <- to_idf(src, 23.1)
     ground <- idf$to_table(
         class = "Site:GroundTemperature:BuildingSurface",
         all = TRUE
     )
 
     expect_equal(
-        length(ground$value[grepl("Ground Temperature", ground$field, fixed = TRUE)]),
+        length(ground$value[grepl(
+            "Ground Temperature",
+            ground$field,
+            fixed = TRUE
+        )]),
         12L
     )
     expect_true(idf$is_valid())

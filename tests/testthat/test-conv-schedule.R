@@ -401,7 +401,7 @@ test_that("real model uses valid date-based schedules in both formats", {
             schedule_directory = if (format == "file") directory else NULL,
             run_period = c(59L, 61L)
         )
-        idf <- to_eplus(src, 23.1, options = opts)
+        idf <- to_idf(src, 23.1, options = opts)
         expect_true(idf$is_valid())
         class <- if (format == "compact") {
             "Schedule:Compact"

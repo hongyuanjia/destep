@@ -156,7 +156,7 @@ test_that("EnergyPlus 9.0.1 object names remain executable", {
     )
 })
 
-test_that("to_eplus() works", {
+test_that("to_idf() works", {
     skip_on_cran()
     eplusr::use_idd(23.1, "auto")
     ep <- eplusr::empty_idf(23.1)
@@ -267,7 +267,7 @@ test_that("to_eplus() works", {
     # can convert a DeST model to a valid EnergyPlus model
     warnings <- character()
     idf <- withCallingHandlers(
-        to_eplus(dest, 23.1),
+        to_idf(dest, 23.1),
         warning = function(condition) {
             warnings <<- c(warnings, conditionMessage(condition))
             invokeRestart("muffleWarning")

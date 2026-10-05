@@ -304,7 +304,7 @@ test_that("real DeST HVAC equipment relations are resolved", {
     expect_equal(inventory$components[TABLE == "FAN", ROW_COUNT], 6L)
     expect_equal(inventory$components[TABLE == "CHILLER", ROW_COUNT], 0L)
     expect_error(
-        to_eplus(complete_model, "9.0.1"),
+        to_idf(complete_model, "9.0.1"),
         regexp = paste0(
             "supports AC_SYS_TYPE values 0 and 1 only: ",
             "17674 \\(NAME=2-1, AC_SYS_TYPE=3\\)"
@@ -396,7 +396,7 @@ test_that("real type-0 and type-1 models can omit unreferenced duct networks", {
         )
         expect_identical(source$system$source_reheat_type[[1L]], 0L)
         expect_error(
-            suppressWarnings(to_eplus(complete_model, "9.0.1")),
+            suppressWarnings(to_idf(complete_model, "9.0.1")),
             regexp = "9.1.0 or newer"
         )
         DBI::dbDisconnect(complete_model)

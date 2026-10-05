@@ -372,7 +372,7 @@ test_that("electric humidity control is connected in the converted model", {
             upper_id
         )
     )
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -466,7 +466,7 @@ test_that("electric humidity control is connected in the converted model", {
         "TemperatureAndHumidityRatio"
     )
     DBI::dbExecute(con, "UPDATE AHU SET HUMIDIFIER=0")
-    without <- suppressWarnings(to_eplus(
+    without <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -526,7 +526,7 @@ test_that("multizone dehumidification preserves room ownership and native contro
     treatment <- hvac__air_treatment_source(con, controls$OF_AC_SYS[[1L]])
     expect_equal(treatment$humidity_control_status, "multizone_room_maximum")
     expect_equal(treatment$dehumidification, "native_cooling_coil")
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -573,7 +573,7 @@ test_that("multizone dehumidification preserves room ownership and native contro
     )
     treatment <- hvac__air_treatment_source(con, controls$OF_AC_SYS[[1L]])
     expect_equal(treatment$humidity_control_status, "multizone_room_range")
-    combined <- suppressWarnings(to_eplus(
+    combined <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -638,7 +638,7 @@ test_that("shared CAV humidification keeps every room's source schedule", {
     }
     treatment <- hvac__air_treatment_source(con, controls$OF_AC_SYS[[1L]])
     expect_equal(treatment$humidity_control_status, "multizone_room_minimum")
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -726,7 +726,7 @@ test_that("supply RH lower bounds use source schedules and existing humidifiers"
     source <- hvac__air_treatment_source(con, system_id)
     expect_identical(source$supply_humidity_control, "ems_minimum_rh")
     expect_identical(source$status, "native_electric_steam")
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -828,7 +828,7 @@ test_that("VAV humidification preserves flow limits and rejects active dehumidif
             )
         }
     }
-    model <- suppressWarnings(to_eplus(
+    model <- suppressWarnings(to_idf(
         con,
         "9.1",
         options = destep_opts(run_period = c(1, 1))
@@ -901,7 +901,7 @@ test_that("VAV humidification preserves flow limits and rejects active dehumidif
         )
     )
     expect_error(
-        suppressWarnings(to_eplus(
+        suppressWarnings(to_idf(
             con,
             "9.1",
             options = destep_opts(run_period = c(1, 1))

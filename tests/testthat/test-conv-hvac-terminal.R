@@ -230,7 +230,7 @@ test_that("single-zone electric reheat preserves source capacity and zone inlet"
         con,
         "UPDATE ROOM_TYPE_DATA SET O_DAMP_PER_PERSON=0,E_MIN_HUM=0,E_MAX_HUM=0"
     )
-    model <- suppressWarnings(to_eplus(con, "9.0.1"))
+    model <- suppressWarnings(to_idf(con, "9.0.1"))
     audit <- attr(model, "conversion")$hvac$terminals
     expect_equal(audit$terminal_capacity_w, 1234)
     expect_identical(audit$terminal_type_origin, "converter_default_electric")

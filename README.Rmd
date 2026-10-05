@@ -41,7 +41,7 @@ models can be inspected, edited, and simulated with
 * Generate load-calculation models and selected physical HVAC configurations.
 * Convert DeST climate data to EnergyPlus EPW weather files.
 
-`destep` is under active development. See `?to_eplus` for supported model
+`destep` is under active development. See `?to_idf` for supported model
 features, conversion options, and EnergyPlus version requirements, and
 [NEWS](NEWS.md) for recent changes.
 
@@ -71,7 +71,7 @@ eplusr::use_idd("23.1", download = "auto")
 ```{r conversion, message=FALSE, warning=FALSE}
 # Convert the model and its weather data
 dest <- read_dest(path)
-idf <- to_eplus(dest, "23.1")
+idf <- to_idf(dest, "23.1")
 idf
 
 epw <- to_epw(dest)

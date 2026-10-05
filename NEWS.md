@@ -1,5 +1,12 @@
 # destep 0.0.0.9000
 
+- Model conversion is now exported as `to_idf()`, paired with `to_epw()`.
+  Conversion choices use `destep_opts()`; target terrain, solar distribution
+  and shadow-update overrides have been removed from that constructor.
+  Their EnergyPlus defaults are retained and users can edit the returned IDF.
+  HVAC help distinguishes supported source mappings, equivalent assumptions
+  and unsupported selected equipment (#42).
+
 - Reject noninteger system property references through the shared source reader,
   identify supply-humidity EMS in conversion audits, and load water changeover
   schedules in batches without changing their hourly values (#41).
