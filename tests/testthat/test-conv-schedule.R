@@ -450,3 +450,53 @@ test_that("real model uses valid date-based schedules in both formats", {
         expect_true(all(file.exists(files)))
     }
 })
+
+# Percent conversion must update the target limits while shared fraction uses
+# retain their original 0--1 values, in both supported schedule formats.
+test_that("fractional RH inputs use percent-compatible target limits", {
+    connections <- list()
+    directories <- character()
+    on.exit(lapply(connections, DBI::dbDisconnect), add = TRUE)
+    on.exit(unlink(directories, recursive = TRUE), add = TRUE)
+    for (shared in c(FALSE, TRUE)) {
+        dest <- destep_test_schedule_db(list(rep(0.4, 8760L)))
+        connections[[length(connections) + 1L]] <- dest
+        DBI::dbExecute(dest, "UPDATE SCHEDULE_YEAR SET TYPE=1")
+        if (!shared) {
+            DBI::dbRemoveTable(dest, "SCHEDULE_USAGE")
+        }
+        DBI::dbWriteTable(
+            dest,
+            "ROOM_TYPE_DATA",
+            data.frame(
+                SET_RH_MIN_SCHEDULE = 1L
+            )
+        )
+        directory <- tempfile("destep-rh-limits-")
+        directories <- c(directories, directory)
+        for (format in c("compact", "file")) {
+            ep <- eplusr::empty_idf("23.1")
+            result <- schedule__convert(dest, ep, format, directory)
+            schedules <- attr(result, "table")
+            name <- schedule__relative_humidity_reference_names(
+                dest,
+                1L,
+                "source 1"
+            )
+            row <- which(schedules$NAME == name)
+            expect_identical(schedules$DATA[[row]], rep(40, 8760L))
+            values <- result$value
+            id <- values$rleid[
+                values$field_index == 1L & values$value_chr == name
+            ]
+            limit <- values$value_chr[
+                values$rleid == id & values$field_index == 2L
+            ]
+            expect_identical(limit, "Any Number")
+            if (shared) {
+                expect_identical(schedules$DATA[[1L]], rep(0.4, 8760L))
+                expect_identical(schedules$TYPE[[1L]], 1L)
+            }
+        }
+    }
+})

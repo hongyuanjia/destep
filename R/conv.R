@@ -456,8 +456,6 @@ to_idf <- function(
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
-    # Apply user-selected target settings after model object assembly.
-
     # Source K/SC gives an aggregate window approximation. Preserve its input
     # limitations in the conversion audit without adding solver-specific optics.
     window_diagnostics <- attr(conv$const, "windows")
@@ -489,6 +487,9 @@ to_idf <- function(
     if (!is.null(conv$ventilation)) {
         attr(ep, "ventilation") <- attr(conv$ventilation, "table")
     }
+    # Audit the actual returned schema. Transition can rename default choices
+    # (for example the ShadowCalculation method) and add or remove objects.
+    ep <- conv__transition(ep, target_version, verbose)
     # Record necessary moisture EMS from the emitted model.
     audit <- conv__mode_audit(ep, conversion)
     audit$versions <- list(
@@ -543,7 +544,7 @@ to_idf <- function(
         ),
         append = NULL
     )
-    conv__transition(ep, target_version, verbose)
+    ep
 }
 
 # Give non-ASCII objects stable names accepted by the EnergyPlus 9.0.1 parser.

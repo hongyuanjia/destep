@@ -78,43 +78,22 @@ hvac__system_property <- function(dest, system_id, name) {
         params = list(system_id)
     )
     checkmate::assert_data_frame(root, nrows = 1L)
-    pointer <- root$EXT_PROPERTY[[1L]]
-    properties <- DBI::dbGetQuery(
-        dest,
-        "SELECT PROPERTY_ID, NEXT_PROPERTY, NAME, DATA_LONG FROM EXT_PROPERTY"
-    )
-    visited <- rep(FALSE, nrow(properties))
-    selected <- integer(nrow(properties))
-    count <- 0L
-    # Traversal follows pointers, so it is sequential and bounded by row count.
-    while (!is.na(pointer) && pointer != 0L) {
-        index <- which(properties$PROPERTY_ID == pointer)
-        if (length(index) != 1L || visited[[index]]) {
-            abort(
-                "Invalid AC_SYS extended-property chain.",
-                class = "destep_unresolved_hvac_property"
-            )
-        }
-        visited[[index]] <- TRUE
-        count <- count + 1L
-        selected[[count]] <- index
-        pointer <- properties$NEXT_PROPERTY[[index]]
-    }
-    if (is.na(pointer)) {
+    if (is.na(root$EXT_PROPERTY[[1L]])) {
         abort(
             "Missing AC_SYS extended-property terminator.",
             class = "destep_unresolved_hvac_property"
         )
     }
-    rows <- properties[selected[seq_len(count)], , drop = FALSE]
-    value <- rows$DATA_LONG[rows$NAME == name]
-    if (length(value) != 1L || is.na(value)) {
+    # Share strict pointer and integer validation with the room source reader;
+    # a fractional DATA_LONG must never be truncated into another schedule ID.
+    value <- hvac__linked_integer_property(dest, root$EXT_PROPERTY, name)
+    if (is.na(value)) {
         abort(
             paste("Cannot resolve AC_SYS", system_id, name),
             class = "destep_unresolved_hvac_property"
         )
     }
-    as.integer(value)
+    value
 }
 
 # Extended properties store schedule IDs in DATA_LONG, outside the generic
