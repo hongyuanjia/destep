@@ -1050,6 +1050,17 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
     for (pattern in expected) {
         expect_true(any(grepl(pattern, warnings, fixed = TRUE)))
     }
+    # The returned 23.1 schema uses Periodic, not the generation baseline's
+    # AverageOverDaysInFrequency spelling, in both audit and persisted header.
+    expect_identical(
+        attr(idf, "conversion")$simulation$effective$shadow_update_method,
+        "Periodic"
+    )
+    expect_true(any(grepl(
+        "shadow_update_method=Periodic",
+        unlist(idf$Version$comment()),
+        fixed = TRUE
+    )))
     # Geometry and reciprocal-construction diagnostics are emitted during
     # input processing, so one simulation day covers them without a full year.
     idf$set(Annual = list(end_month = 1L, end_day_of_month = 1L))
