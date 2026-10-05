@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Added `AGENTS.md` with project conventions for API naming, dependencies,
+  R formatting, data operations and verification of conversion semantics (#40).
+
 - Generate IDF objects against the supported baseline dictionary, then use
   `eplusr` to transition to the requested EnergyPlus version. Coordinate
   prescribed moisture and physical HVAC support with target capabilities (#39).
