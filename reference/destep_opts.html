@@ -130,11 +130,13 @@ with a warning; larger conflicts stop conversion. Multizone paths require
 one shared availability schedule per system and map matching
 <code>AC_SYS.SUPPLY_T_MIN/MAX</code> schedules to the cooling-coil setpoint and use
 their minimum value for cooling sizing; distinct minimum and maximum
-trajectories remain unsupported. Physical paths require the necessary
-target IDD objects and a matching local ExpandObjects installation;
-emitted fields and the expanded graph are validated against that IDD.
-Tested targets are 9.0.1, 9.1.0, 9.6.0 and 23.1.0. This evidence list
-is not a version whitelist or a guarantee for other target versions.
+trajectories remain unsupported. Physical paths generate baseline
+objects with the baseline version's local ExpandObjects installation,
+then use <code><a href="https://hongyuanjia.github.io/eplusr/reference/transition.html" class="external-link">eplusr::transition()</a></code> for higher requested targets. Necessary
+classes, emitted fields and the resulting object graph are validated.
+Baseline syntax is 9.0.1, raised to 9.1 for effective moisture sources;
+targets older than 9.0.1 are not maintained. Tested
+baseline versions and upgraded targets are evidence, not a whitelist.
 Supported models with a selected main water coil and no selected plant
 use source AHU two/four-pipe water temperature schedules without
 required <code>hvac_options</code>. Independent heating and cooling water stages
@@ -147,8 +149,9 @@ Populated <code>LIB_*</code> tables are catalogues; they do not establish that a
 source model selected a chiller, boiler, or cooling tower.
 Nonzero people or equipment moisture requires the target calling point
 <code>BeginZoneTimestepBeforeInitHeatBalance</code>, introduced in 9.1.0. Joint
-physical-system and moisture runs have been checked on 9.1.0, 9.6.0
-and 23.1.0; 9.0.1 lacks that calling point and rejects nonzero sources.</p></dd>
+physical-system and moisture runs have been checked on 9.1.0; higher
+versions are obtained by transition. 9.0.1 lacks that calling point
+and rejects nonzero sources.</p></dd>
 
 
 <dt id="arg-hvac-options">hvac_options<a class="anchor" aria-label="anchor" href="#arg-hvac-options"></a></dt>

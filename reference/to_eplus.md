@@ -26,9 +26,18 @@ to_eplus(
   \[string\] A character string specifying the EnergyPlus version. It
   can be `"latest"`, which is the default, to indicate using the latest
   EnergyPlus version supported by the
-  {[eplusr](https://cran.r-project.org/package=eplusr)} package.
-  Geometry compatibility has been validated against EnergyPlus 23.1;
-  other versions currently reuse that profile with an explicit warning.
+  {[eplusr](https://cran.r-project.org/package=eplusr)} package. Objects
+  are generated using the project's EnergyPlus 9.0.1 baseline. Earlier
+  targets are not maintained. Effective moisture raises the generation
+  baseline to 9.1 and requires a target of at least 9.1. Higher targets
+  are produced with
+  [`eplusr::transition()`](https://hongyuanjia.github.io/eplusr/reference/transition.html),
+  not separate object writers. Physical HVAC requires the generation
+  version's local ExpandObjects; target and intermediate IDDs are
+  resolved by eplusr for transition. The generation/target versions are
+  recorded in the conversion audit. Geometry compatibility has been
+  validated against EnergyPlus 23.1; other versions currently reuse that
+  profile with an explicit warning.
 
 - copy:
 

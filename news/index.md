@@ -2,6 +2,20 @@
 
 ## destep 0.0.0.9000
 
+- Build conversion audit metadata and saved comments after IDF
+  transition so reported object and simulation settings match the
+  requested target (#39).
+
+- Corrected geometry regression expectations for the known pre-9.4
+  SimpleGlazing diagnostic emitted during baseline generation before
+  version transition. Unexpected warnings and severe geometry errors
+  remain failures (#39).
+
+- Generate IDF objects against the supported baseline dictionary, then
+  use `eplusr` to transition to the requested EnergyPlus version.
+  Coordinate prescribed moisture and physical HVAC support with target
+  capabilities (#39).
+
 - Validate supply-temperature schedule IDs before integer coercion and
   use the shared decoder to reject incomplete or oversized annual
   payloads. Missing hourly temperatures and duplicate selected schedule

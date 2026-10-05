@@ -33,7 +33,10 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li><p>Validate supply-temperature schedule IDs before integer coercion and use the shared decoder to reject incomplete or oversized annual payloads. Missing hourly temperatures and duplicate selected schedule IDs now fail at the source reader (#38).</p></li>
+<ul><li><p>Build conversion audit metadata and saved comments after IDF transition so reported object and simulation settings match the requested target (#39).</p></li>
+<li><p>Corrected geometry regression expectations for the known pre-9.4 SimpleGlazing diagnostic emitted during baseline generation before version transition. Unexpected warnings and severe geometry errors remain failures (#39).</p></li>
+<li><p>Generate IDF objects against the supported baseline dictionary, then use <code>eplusr</code> to transition to the requested EnergyPlus version. Coordinate prescribed moisture and physical HVAC support with target capabilities (#39).</p></li>
+<li><p>Validate supply-temperature schedule IDs before integer coercion and use the shared decoder to reject incomplete or oversized annual payloads. Missing hourly temperatures and duplicate selected schedule IDs now fail at the source reader (#38).</p></li>
 <li><p>Enforce source room ventilation minima for explicit outdoor-air allocations, reject unused single-zone allocations, and keep return-fan power overrides independent of the supply-fan curve. Centralize linked integer properties in the source-reader module (#38).</p></li>
 <li><p>Map supported DeST terminal capacities, airflow bounds, selected products and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve source ownership and linked schedules, retain required moisture inputs, and diagnose unsupported selected equipment explicitly (#38).</p></li>
 <li><p>Select relative-humidity schedules only from effective conditioned-room types. Unused catalogue entries and legacy room-group RH fields no longer block conversion or change the units of unrelated schedules. Resolve shared RH names for both bounds in one database pass (#37).</p></li>
