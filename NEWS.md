@@ -12,6 +12,11 @@
   `eplusr` to transition to the requested EnergyPlus version. Coordinate
   prescribed moisture and physical HVAC support with target capabilities (#39).
 
+- Validate supply-temperature schedule IDs before integer coercion and use the
+  shared decoder to reject incomplete or oversized annual payloads. Missing
+  hourly temperatures and duplicate selected schedule IDs now fail at the
+  source reader (#38).
+
 - Enforce source room ventilation minima for explicit outdoor-air allocations,
   reject unused single-zone allocations, and keep return-fan power overrides
   independent of the supply-fan curve. Centralize linked integer properties in
@@ -21,6 +26,11 @@
   and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve
   source ownership and linked schedules, retain required moisture inputs, and
   diagnose unsupported selected equipment explicitly (#38).
+
+- Select relative-humidity schedules only from effective conditioned-room types.
+  Unused catalogue entries and legacy room-group RH fields no longer block
+  conversion or change the units of unrelated schedules. Resolve shared RH
+  names for both bounds in one database pass (#37).
 
 - Use percent-compatible target schedule limits after RH conversion while
   preserving shared fractional schedules and decoded source inputs (#37).
