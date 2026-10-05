@@ -49,8 +49,9 @@ to_eplus(
 ## Value
 
 \[eplusr::Idf\] The converted EnergyPlus model. The `conversion`
-attribute and Version comments record the selected options and necessary
-EMS programs. Its `windows` table records the source K/SC, nominal SHGC,
+attribute and Version comments record the selected options, resolved
+HVAC representation, source component record counts, and necessary EMS
+programs. Its `windows` table records the source K/SC, nominal SHGC,
 face blackness and unresolved optical properties for each window. The
 same aggregate assumptions appear in the saved IDF glazing comments.
 This does not establish whole-building equivalence.

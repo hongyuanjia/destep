@@ -33,7 +33,10 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li><p>Select relative-humidity schedules only from effective conditioned-room types. Unused catalogue entries and legacy room-group RH fields no longer block conversion or change the units of unrelated schedules. Resolve shared RH names for both bounds in one database pass (#37).</p></li>
+<ul><li><p>Validate supply-temperature schedule IDs before integer coercion and use the shared decoder to reject incomplete or oversized annual payloads. Missing hourly temperatures and duplicate selected schedule IDs now fail at the source reader (#38).</p></li>
+<li><p>Enforce source room ventilation minima for explicit outdoor-air allocations, reject unused single-zone allocations, and keep return-fan power overrides independent of the supply-fan curve. Centralize linked integer properties in the source-reader module (#38).</p></li>
+<li><p>Map supported DeST terminal capacities, airflow bounds, selected products and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve source ownership and linked schedules, retain required moisture inputs, and diagnose unsupported selected equipment explicitly (#38).</p></li>
+<li><p>Select relative-humidity schedules only from effective conditioned-room types. Unused catalogue entries and legacy room-group RH fields no longer block conversion or change the units of unrelated schedules. Resolve shared RH names for both bounds in one database pass (#37).</p></li>
 <li><p>Use percent-compatible target schedule limits after RH conversion while preserving shared fractional schedules and decoded source inputs (#37).</p></li>
 <li><p>Keep development validation records local and exclude them from distributed package files (#37).</p></li>
 <li><p>Unified source conversion settings in <code>to_eplus(options = )</code> and <code><a href="../reference/destep_opts.html">destep_opts()</a></code>. The <code>"objects"</code> preset preserves source inputs, with explicit schedule, HVAC, surface-convection and target simulation settings (#37).</p></li>
