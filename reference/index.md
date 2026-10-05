@@ -2,6 +2,8 @@
 
 ## All functions
 
+- [`destep_opts()`](destep_opts.md) : Configure DeST-to-EnergyPlus
+  conversion
 - [`destep_schema_coverage()`](destep_schema_coverage.md) : Summarize
   DeST schema coverage for a SQLite model
 - [`download_dest_model()`](download_dest_model.md) : Download a typical
