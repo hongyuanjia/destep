@@ -1,5 +1,50 @@
 # destep 0.0.0.9000
 
+- Select relative-humidity schedules only from effective conditioned-room types.
+  Unused catalogue entries and legacy room-group RH fields no longer block
+  conversion or change the units of unrelated schedules. Resolve shared RH
+  names for both bounds in one database pass (#37).
+
+- Use percent-compatible target schedule limits after RH conversion while
+  preserving shared fractional schedules and decoded source inputs (#37).
+
+- Keep development validation records local and exclude them from distributed
+  package files (#37).
+
+- Unified source conversion settings in `to_eplus(options = )` and
+  `destep_opts()`. The `"objects"` preset preserves source inputs, with explicit
+  schedule, HVAC, surface-convection and target simulation settings (#37).
+
+- Replaced weekday-dependent source schedules with date-based compact or file
+  schedules that preserve all 8760 hourly values and unit conversions. Added
+  explicit simulation day ranges on a non-leap calendar (#37).
+
+- Split people, lighting, equipment and prescribed moisture conversion into
+  dedicated modules. Retained radiant-fraction precision and represented
+  nominal people sensible heat and moisture independently. Moisture requires
+  EnergyPlus 9.1 or newer and remains incompatible with the current 9.0.1
+  physical HVAC path; rapid temperature changes can leave a one-step residual.
+  Temperature-dependent occupant feedback and humidity caps are not reproduced
+  (#37).
+
+- Retired DeST-specific window angle tables, surface heat/solar distribution,
+  sky-boundary prepasses, occupant feedback and neighbor-air approximations,
+  together with the `"dest"` preset and their options. Conversion uses native
+  EnergyPlus solar and exterior heat-balance calculations, retains coupled
+  interzone constructions and fixed source convection, and records the
+  remaining window, furniture and ground-depth assumptions (#37).
+
+- Diagnose unsupported or invalid window inputs with source identifiers.
+  Aggregate K/SC windows retain the documented SimpleGlazing approximation;
+  unexpressed face emissivities remain visible in conversion metadata. Apply
+  automatic soil per construction and reject unverified non-floor
+  ground-contact stacks (#37).
+
+- Honor saved `VARIANT_VENT = 0` by retaining minimum ventilation and omitting
+  its variable increment. Record the fallback when the saved switch is absent.
+  Preserve opaque `SHADING.ROU` in generated shading reflectance properties;
+  reflection remains controlled by the selected solar-distribution method (#37).
+
 - Fixed exposed-floor outside absorptance conversion to preserve literal zero
   values. The converter no longer substitutes unrelated exterior-wall or
   default material properties, which could introduce ground-reflected solar
@@ -23,9 +68,8 @@
   net receiving areas and window distribution modes are extracted automatically.
   Weather-specific solar prepasses are reused only after checking model, file,
   engine and output identities. Generated time tables retain literal source
-  fractions and deduplicate identical columns. Coupled interzone surfaces remain
-  the default; the installed-DeST neighbor-air representation requires explicit
-  selection. Whole-school equivalence and updated ASHRAE 140 acceptance remain
+  fractions and deduplicate identical columns. Coupled interzone surfaces retain
+  their original surface references. Whole-school equivalence and updated ASHRAE 140 acceptance remain
   separate validation tasks (#36).
 
 - Fixed CI initialization by replacing the removed Homebrew Actions `master`
@@ -56,14 +100,6 @@
   source follows the same minimum/variable schedules and convective/radiant
   fractions. Native zero-source and independent ratio checks confirm the
   multiplication rule; this correction does not require EMS.
-
-- Added `people_heat = "temperature_dependent"` to reproduce the previous-room-
-  temperature sensible-heat rule verified for DeST 0.2.230705. The existing
-  `"constant"` default corresponds to bshell's `--const_occupant` mode.
-  EMS updates the sensible correction before heat-balance initialization,
-  preserving minimum occupancy, per-area counts, and independent moisture.
-  This option requires EnergyPlus 9.1 or newer; radiant surface allocation
-  and whole-building equivalence remain outside the isolated validation.
 
 - Converted effective `ROOM_TYPE_DATA.FURNITURE_COEF` to a two-sided storage
   slab using the area-dependent rule verified against DeST 0.2.230705.

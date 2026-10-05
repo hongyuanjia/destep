@@ -54,17 +54,28 @@ control__room_table <- function(dest) {
         "
     )
     data.table::setDT(control)
-    control[, HUMIDIFYING_SCHEDULE_NAME :=
-        schedule__relative_humidity_reference_names(
-            dest,
-            SET_RH_MIN_SCHEDULE,
-            HUMIDIFYING_SCHEDULE_NAME
-        )]
-    control[, DEHUMIDIFYING_SCHEDULE_NAME :=
-        schedule__relative_humidity_reference_names(
-            dest,
-            SET_RH_MAX_SCHEDULE,
-            DEHUMIDIFYING_SCHEDULE_NAME
-        )]
+    # Resolve shared-unit names once for both bounds. Each resolution scans
+    # source references, so separate calls repeat the same database work.
+    n <- nrow(control)
+    humidity_names <- schedule__relative_humidity_reference_names(
+        dest,
+        c(control$SET_RH_MIN_SCHEDULE, control$SET_RH_MAX_SCHEDULE),
+        c(
+            control$HUMIDIFYING_SCHEDULE_NAME,
+            control$DEHUMIDIFYING_SCHEDULE_NAME
+        )
+    )
+    data.table::set(
+        control,
+        NULL,
+        "HUMIDIFYING_SCHEDULE_NAME",
+        humidity_names[seq_len(n)]
+    )
+    data.table::set(
+        control,
+        NULL,
+        "DEHUMIDIFYING_SCHEDULE_NAME",
+        humidity_names[n + seq_len(n)]
+    )
     control
 }

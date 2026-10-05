@@ -3,17 +3,33 @@
 # condition is Ground, so DeST's hourly user-defined ground temperatures are
 # reduced to the 12 monthly values required by the IDD.
 ground_temperature__convert <- function(dest, ep) {
-    if (!db_has_rows(dest, "GROUND_DATA")) return(NULL)
+    if (!db_has_rows(dest, "GROUND_DATA")) {
+        return(NULL)
+    }
 
     ground <- ground_temperature__table(dest)
     monthly <- ground_temperature__monthly(ground)
 
     out <- conv__add(
-        dest, ep,
-        "Site:GroundTemperature:BuildingSurface" :=
-            ground_temperature__value(monthly)
+        dest,
+        ep,
+        "Site:GroundTemperature:BuildingSurface" := ground_temperature__value(
+            monthly
+        )
     )
     attr(out, "table") <- monthly
+    # The source series has no verified depth metadata. Do not infer that its
+    # reference plane matches the restored 1.2 m soil layer from temperatures.
+    data.table::set(
+        out$object,
+        NULL,
+        "comment",
+        list(c(
+            "Monthly means of the selected DeST GROUND_DATA hourly series.",
+            "The automatic soil thickness is 1.2 m; GROUND_DATA reference depth is not independently established.",
+            "Monthly averaging does not preserve the hourly ground-temperature boundary."
+        ))
+    )
 
     out
 }
@@ -23,7 +39,9 @@ ground_temperature__convert <- function(dest, ep) {
 # and keeps the unique-ID fallback explicit for models like the current fixture.
 ground_temperature__table <- function(dest) {
     ground_id <- ground_temperature__select_data_id(dest)
-    if (is.null(ground_id)) return(data.table::data.table())
+    if (is.null(ground_id)) {
+        return(data.table::data.table())
+    }
 
     ground <- DBI::dbGetQuery(
         dest,
@@ -52,12 +70,17 @@ ground_temperature__table <- function(dest) {
 # GROUND_DATA.ID is safe; multiple IDs need a deliberate selection rule.
 ground_temperature__select_data_id <- function(dest) {
     resolved <- ground_temperature__resolve_city_data_ids(dest)
-    if (length(resolved) == 1L) return(resolved[[1L]])
+    if (length(resolved) == 1L) {
+        return(resolved[[1L]])
+    }
     if (length(resolved) > 1L) {
-        stop(sprintf(
-            "Multiple GROUND_DATA IDs are referenced by ENVIRONMENT/SYS_CITY: %s",
-            paste(resolved, collapse = ", ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Multiple GROUND_DATA IDs are referenced by ENVIRONMENT/SYS_CITY: %s",
+                paste(resolved, collapse = ", ")
+            ),
+            call. = FALSE
+        )
     }
 
     ids <- DBI::dbGetQuery(
@@ -65,26 +88,40 @@ ground_temperature__select_data_id <- function(dest) {
         "SELECT DISTINCT ID FROM GROUND_DATA ORDER BY ID"
     )$ID
     ids <- ids[!is.na(ids)]
-    if (length(ids) == 0L) return(NULL)
-    if (length(ids) == 1L) return(ids[[1L]])
+    if (length(ids) == 0L) {
+        return(NULL)
+    }
+    if (length(ids) == 1L) {
+        return(ids[[1L]])
+    }
 
-    stop(sprintf(
-        paste(
-            "Cannot choose GROUND_DATA ID;",
-            "multiple IDs are present and ENVIRONMENT/SYS_CITY did not select one: %s"
+    stop(
+        sprintf(
+            paste(
+                "Cannot choose GROUND_DATA ID;",
+                "multiple IDs are present and ENVIRONMENT/SYS_CITY did not select one: %s"
+            ),
+            paste(ids, collapse = ", ")
         ),
-        paste(ids, collapse = ", ")
-    ), call. = FALSE)
+        call. = FALSE
+    )
 }
 
 # Keep the ENVIRONMENT/SYS_CITY bridge optional because ad hoc fixtures and some
 # DeST exports may carry GROUND_DATA without a resolvable city-library row.
 ground_temperature__resolve_city_data_ids <- function(dest) {
-    if (!all(c("ENVIRONMENT", "SYS_CITY", "GROUND_DATA") %in% DBI::dbListTables(dest))) {
+    if (
+        !all(
+            c("ENVIRONMENT", "SYS_CITY", "GROUND_DATA") %in%
+                DBI::dbListTables(dest)
+        )
+    ) {
         return(numeric())
     }
-    if (!db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
-        !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))) {
+    if (
+        !db_has_fields(dest, "ENVIRONMENT", "CITY_ID") ||
+            !db_has_fields(dest, "SYS_CITY", c("CITY_ID", "GROUND_ID"))
+    ) {
         return(numeric())
     }
 
@@ -112,10 +149,13 @@ ground_temperature__validate_table <- function(ground, ground_id) {
     hour <- ground$HOUR
 
     if (nrow(ground) != 8760L) {
-        issues <- c(issues, sprintf(
-            "expected 8760 rows but found %i",
-            nrow(ground)
-        ))
+        issues <- c(
+            issues,
+            sprintf(
+                "expected 8760 rows but found %i",
+                nrow(ground)
+            )
+        )
     }
     if (anyNA(hour)) {
         issues <- c(issues, "HOUR contains missing values")
@@ -125,34 +165,48 @@ ground_temperature__validate_table <- function(ground, ground_id) {
         unexpected_hours <- setdiff(hour, 0:8759)
 
         if (length(missing_hours)) {
-            issues <- c(issues, sprintf(
-                "missing HOUR value(s): %s",
-                fmt_integer_sample(missing_hours)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "missing HOUR value(s): %s",
+                    fmt_integer_sample(missing_hours)
+                )
+            )
         }
         if (length(duplicate_hours)) {
-            issues <- c(issues, sprintf(
-                "duplicate HOUR value(s): %s",
-                fmt_integer_sample(duplicate_hours)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "duplicate HOUR value(s): %s",
+                    fmt_integer_sample(duplicate_hours)
+                )
+            )
         }
         if (length(unexpected_hours)) {
-            issues <- c(issues, sprintf(
-                "unexpected HOUR value(s): %s",
-                fmt_integer_sample(unexpected_hours)
-            ))
+            issues <- c(
+                issues,
+                sprintf(
+                    "unexpected HOUR value(s): %s",
+                    fmt_integer_sample(unexpected_hours)
+                )
+            )
         }
     }
     if (anyNA(ground$T)) {
         issues <- c(issues, "T contains missing values")
+    } else if (any(!is.finite(ground$T))) {
+        issues <- c(issues, "T contains non-finite values")
     }
 
     if (length(issues)) {
-        stop(sprintf(
-            "Invalid GROUND_DATA series for ID %s: %s",
-            ground_id,
-            paste(issues, collapse = "; ")
-        ), call. = FALSE)
+        stop(
+            sprintf(
+                "Invalid GROUND_DATA series for ID %s: %s",
+                ground_id,
+                paste(issues, collapse = "; ")
+            ),
+            call. = FALSE
+        )
     }
 
     invisible(ground)
@@ -161,7 +215,21 @@ ground_temperature__validate_table <- function(ground, ground_id) {
 # Aggregate the validated hourly series using the standard non-leap calendar
 # implied by DeST's HOUR = 0:8759 convention.
 ground_temperature__monthly <- function(ground) {
-    month_hours <- c(31L, 28L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L) * 24L
+    month_hours <- c(
+        31L,
+        28L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L,
+        31L,
+        30L,
+        31L,
+        30L,
+        31L
+    ) *
+        24L
     month <- rep(seq_along(month_hours), month_hours)
 
     monthly <- data.table::data.table(
