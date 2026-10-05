@@ -1,82 +1,3 @@
-# Read a named integer property from linked source records. Traversal is
-# sequential by definition; preallocate once and reject cycles or broken keys.
-hvac__linked_integer_property <- function(dest, roots, name) {
-    output <- rep(NA_integer_, length(roots))
-    active <- which(!is.na(roots) & roots != 0L)
-    if (!length(active)) {
-        return(output)
-    }
-    hvac__assert_source_table(
-        dest,
-        "EXT_PROPERTY",
-        c("PROPERTY_ID", "NEXT_PROPERTY", "NAME", "DATA_LONG"),
-        "The DeST model"
-    )
-    properties <- DBI::dbGetQuery(
-        dest,
-        "SELECT PROPERTY_ID, NEXT_PROPERTY, NAME, DATA_LONG FROM EXT_PROPERTY"
-    )
-    duplicate <- unique(properties$PROPERTY_ID[duplicated(
-        properties$PROPERTY_ID
-    )])
-    # Shared roots are visited once; results remain aligned with the caller.
-    distinct_roots <- unique(roots[active])
-    values <- rep(NA_integer_, length(distinct_roots))
-    for (i in seq_along(distinct_roots)) {
-        pointer <- distinct_roots[[i]]
-        visited <- rep(FALSE, nrow(properties))
-        found <- FALSE
-        while (pointer != 0L) {
-            row <- match(pointer, properties$PROPERTY_ID)
-            if (is.na(row) || pointer %in% duplicate || visited[[row]]) {
-                abort(
-                    sprintf(
-                        "Invalid EXT_PROPERTY chain at property %s.",
-                        pointer
-                    ),
-                    class = "destep_unresolved_hvac_property"
-                )
-            }
-            visited[[row]] <- TRUE
-            if (is.na(properties$NAME[[row]])) {
-                abort(
-                    "EXT_PROPERTY.NAME must not be missing in a referenced chain.",
-                    class = "destep_unresolved_hvac_property"
-                )
-            }
-            if (properties$NAME[[row]] == name) {
-                value <- properties$DATA_LONG[[row]]
-                if (
-                    found ||
-                        is.na(value) ||
-                        !is.finite(value) ||
-                        value != trunc(value) ||
-                        abs(value) > .Machine$integer.max
-                ) {
-                    abort(
-                        sprintf(
-                            "Property %s must occur once with a finite integer value.",
-                            name
-                        ),
-                        class = "destep_unresolved_hvac_property"
-                    )
-                }
-                values[[i]] <- as.integer(value)
-                found <- TRUE
-            }
-            pointer <- properties$NEXT_PROPERTY[[row]]
-            if (is.na(pointer)) {
-                abort(
-                    "EXT_PROPERTY.NEXT_PROPERTY must end with zero, not NA.",
-                    class = "destep_unresolved_hvac_property"
-                )
-            }
-        }
-    }
-    output[active] <- values[match(roots[active], distinct_roots)]
-    output
-}
-
 # ROOM.SET_TERMINAL_MAX is total W per room, independent of AHU reheat.
 # Explicit ROOM properties take precedence. An absent type uses a disclosed
 # converter electric default, informed by the audited installation, without
@@ -174,6 +95,17 @@ hvac__terminal_outdoor_air <- function(source, allocation = NULL) {
     room_ids <- as.character(zones$room_id)
     total <- source$system$outdoor_air_flow_m3_s[[1L]]
     checkmate::assert_number(total, finite = TRUE, lower = 0)
+    minimum <- zones$source_minimum_outdoor_air_flow_m3_s
+    if (is.null(minimum)) {
+        minimum <- rep(0, nrow(zones))
+    }
+    checkmate::assert_numeric(
+        minimum,
+        len = nrow(zones),
+        any.missing = FALSE,
+        finite = TRUE,
+        lower = 0
+    )
     if (is.null(allocation)) {
         supply <- zones$maximum_supply_flow_m3_s
         checkmate::assert_numeric(
@@ -188,17 +120,6 @@ hvac__terminal_outdoor_air <- function(source, allocation = NULL) {
                 class = "destep_invalid_hvac_air_balance"
             )
         }
-        minimum <- zones$source_minimum_outdoor_air_flow_m3_s
-        if (is.null(minimum)) {
-            minimum <- rep(0, length(supply))
-        }
-        checkmate::assert_numeric(
-            minimum,
-            len = length(supply),
-            any.missing = FALSE,
-            finite = TRUE,
-            lower = 0
-        )
         if (any(minimum > supply) || sum(minimum) > total + 1e-8) {
             abort(
                 "ROOM minimum outdoor-air requirements conflict with source system or design supply limits.",
@@ -263,6 +184,13 @@ hvac__terminal_outdoor_air <- function(source, allocation = NULL) {
             tolerance = 1e-8
         )))
         origin <- "user_override"
+    }
+    # An override changes allocation, never the source room's ventilation need.
+    if (any(values < minimum - 1e-8)) {
+        abort(
+            "Zone outdoor air is below the source ROOM minimum requirement.",
+            class = "destep_invalid_hvac_air_balance"
+        )
     }
     ceiling <- zones$minimum_supply_flow_m3_s
     if (is.null(ceiling)) {

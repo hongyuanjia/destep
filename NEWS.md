@@ -1,5 +1,10 @@
 # destep 0.0.0.9000
 
+- Enforce source room ventilation minima for explicit outdoor-air allocations,
+  reject unused single-zone allocations, and keep return-fan power overrides
+  independent of the supply-fan curve. Centralize linked integer properties in
+  the source-reader module (#38).
+
 - Map supported DeST terminal capacities, airflow bounds, selected products
   and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve
   source ownership and linked schedules, retain required moisture inputs, and
