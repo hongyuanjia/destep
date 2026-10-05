@@ -1,5 +1,10 @@
 # destep 0.0.0.9000
 
+- Corrected geometry regression expectations for the known pre-9.4
+  SimpleGlazing diagnostic emitted during baseline generation before version
+  transition. Unexpected warnings and severe geometry errors remain failures
+  (#39).
+
 - Generate IDF objects against the supported baseline dictionary, then use
   `eplusr` to transition to the requested EnergyPlus version. Coordinate
   prescribed moisture and physical HVAC support with target capabilities (#39).

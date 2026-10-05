@@ -1036,9 +1036,11 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
         warnings <<- c(warnings, conditionMessage(w))
         invokeRestart("muffleWarning")
     })
-    # Each warning describes a known source input that this geometry fixture
-    # cannot project exactly. Check them all instead of hiding new warnings.
+    # Baseline generation emits the known pre-9.4 glazing warning before the
+    # model is transitioned to 23.1. Keep it distinct from source limitations,
+    # and check every warning instead of hiding unexpected diagnostics.
     expected <- c(
+        "EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem",
         "Skipped 9 ROOM row(s)",
         "DeST window transmitted-solar distribution",
         "nominal SimpleGlazing K/SC approximation",
