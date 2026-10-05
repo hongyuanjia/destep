@@ -44,6 +44,9 @@
   are possible and DeST AHU optimization is not reproduced. No reheat or EMS is
   added for this control. Restrictive supply-RH upper bounds remain unsupported (#41).
 
+- Build conversion audit metadata and saved comments after IDF transition so
+  reported object and simulation settings match the requested target (#39).
+
 - Corrected geometry regression expectations for the known pre-9.4
   SimpleGlazing diagnostic emitted during baseline generation before version
   transition. Unexpected warnings and severe geometry errors remain failures
@@ -53,10 +56,18 @@
   `eplusr` to transition to the requested EnergyPlus version. Coordinate
   prescribed moisture and physical HVAC support with target capabilities (#39).
 
+- Enforce source room ventilation minima for explicit outdoor-air allocations,
+  reject unused single-zone allocations, and keep return-fan power overrides
+  independent of the supply-fan curve. Centralize linked integer properties in
+  the source-reader module (#38).
+
 - Map supported DeST terminal capacities, airflow bounds, selected products
   and prescribed water boundaries to connected EnergyPlus HVAC objects. Resolve
   source ownership and linked schedules, retain required moisture inputs, and
   diagnose unsupported selected equipment explicitly (#38).
+
+- Use percent-compatible target schedule limits after RH conversion while
+  preserving shared fractional schedules and decoded source inputs (#37).
 
 - Keep development validation records local and exclude them from distributed
   package files (#37).

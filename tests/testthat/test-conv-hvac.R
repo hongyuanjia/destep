@@ -71,6 +71,13 @@ test_that("single-room air systems retain source heater and pipe fields", {
     model <- DBI::dbConnect(RSQLite::SQLite(), isolated)
     on.exit(DBI::dbDisconnect(model), add = TRUE)
     sources <- hvac__system_sources(model, list())
+    expect_error(
+        hvac__system_sources(
+            model,
+            list(zone_outdoor_air_flow_m3_s = c("1" = 0.1))
+        ),
+        class = "destep_unused_hvac_equipment_options"
+    )
     expect_length(sources, 1L)
     expect_identical(sources[[1L]]$path, "single_zone_cav")
     expect_identical(sources[[1L]]$source$source_heater_id[[1L]], -1L)
@@ -370,5 +377,47 @@ test_that("unused AHU networks do not change production system descriptors", {
         hvac__system_sources(model),
         "DUCTNET=987656",
         class = "destep_unsupported_hvac_fan_mapping"
+    )
+})
+
+# Compare two actual expanded VAV models: changing the return fan's curve must
+# leave the supply fan's native curve and source flow bounds unchanged.
+test_that("return fan power overrides do not alter the supply fan", {
+    skip_on_cran()
+    path <- Sys.getenv("DESTEP_TEST_HVAC_VAV_SQLITE", unset = "")
+    skip_if(!file.exists(path), "Archived VAV AE source is required")
+    original <- DBI::dbConnect(
+        RSQLite::SQLite(),
+        path,
+        flags = RSQLite::SQLITE_RO
+    )
+    con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+    RSQLite::sqliteCopyDatabase(original, con)
+    DBI::dbDisconnect(original)
+    DBI::dbExecute(
+        con,
+        "UPDATE ROOM_TYPE_DATA SET O_DAMP_PER_PERSON=0, E_MAX_HUM=0, E_MIN_HUM=0"
+    )
+    baseline <- suppressWarnings(to_eplus(con, "9.0.1"))
+    override <- suppressWarnings(to_eplus(
+        con,
+        "9.0.1",
+        options = destep_opts(
+            hvac_options = list(return_fan_power_coefficient_1 = 0.2)
+        )
+    ))
+    expect_true(override$is_valid())
+    before <- baseline$to_table(class = "Fan:VariableVolume", wide = TRUE)
+    after <- override$to_table(class = "Fan:VariableVolume", wide = TRUE)
+    supply <- grepl("Supply Fan$", before$Name)
+    returned <- grepl("Return Fan$", before$Name)
+    expect_true(any(supply))
+    expect_true(any(returned))
+    fields <- c(paste("Fan Power Coefficient", 1:5), "Maximum Flow Rate")
+    expect_equal(after[supply, ..fields], before[supply, ..fields])
+    expect_equal(
+        as.numeric(after$`Fan Power Coefficient 1`[returned]),
+        rep(0.2, sum(returned))
     )
 })

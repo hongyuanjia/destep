@@ -1353,3 +1353,82 @@ utils::globalVariables(c(
     "ac_system_id",
     "ahu_id"
 ))
+
+# Read a named integer property from linked source records. Traversal is
+# sequential by definition; preallocate once and reject cycles or broken keys.
+hvac__linked_integer_property <- function(dest, roots, name) {
+    output <- rep(NA_integer_, length(roots))
+    active <- which(!is.na(roots) & roots != 0L)
+    if (!length(active)) {
+        return(output)
+    }
+    hvac__assert_source_table(
+        dest,
+        "EXT_PROPERTY",
+        c("PROPERTY_ID", "NEXT_PROPERTY", "NAME", "DATA_LONG"),
+        "The DeST model"
+    )
+    properties <- DBI::dbGetQuery(
+        dest,
+        "SELECT PROPERTY_ID, NEXT_PROPERTY, NAME, DATA_LONG FROM EXT_PROPERTY"
+    )
+    duplicate <- unique(properties$PROPERTY_ID[duplicated(
+        properties$PROPERTY_ID
+    )])
+    # Shared roots are visited once; results remain aligned with the caller.
+    distinct_roots <- unique(roots[active])
+    values <- rep(NA_integer_, length(distinct_roots))
+    for (i in seq_along(distinct_roots)) {
+        pointer <- distinct_roots[[i]]
+        visited <- rep(FALSE, nrow(properties))
+        found <- FALSE
+        while (pointer != 0L) {
+            row <- match(pointer, properties$PROPERTY_ID)
+            if (is.na(row) || pointer %in% duplicate || visited[[row]]) {
+                abort(
+                    sprintf(
+                        "Invalid EXT_PROPERTY chain at property %s.",
+                        pointer
+                    ),
+                    class = "destep_unresolved_hvac_property"
+                )
+            }
+            visited[[row]] <- TRUE
+            if (is.na(properties$NAME[[row]])) {
+                abort(
+                    "EXT_PROPERTY.NAME must not be missing in a referenced chain.",
+                    class = "destep_unresolved_hvac_property"
+                )
+            }
+            if (properties$NAME[[row]] == name) {
+                value <- properties$DATA_LONG[[row]]
+                if (
+                    found ||
+                        is.na(value) ||
+                        !is.finite(value) ||
+                        value != trunc(value) ||
+                        abs(value) > .Machine$integer.max
+                ) {
+                    abort(
+                        sprintf(
+                            "Property %s must occur once with a finite integer value.",
+                            name
+                        ),
+                        class = "destep_unresolved_hvac_property"
+                    )
+                }
+                values[[i]] <- as.integer(value)
+                found <- TRUE
+            }
+            pointer <- properties$NEXT_PROPERTY[[row]]
+            if (is.na(pointer)) {
+                abort(
+                    "EXT_PROPERTY.NEXT_PROPERTY must end with zero, not NA.",
+                    class = "destep_unresolved_hvac_property"
+                )
+            }
+        }
+    }
+    output[active] <- values[match(roots[active], distinct_roots)]
+    output
+}

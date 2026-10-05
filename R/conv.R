@@ -488,6 +488,9 @@ to_eplus <- function(
     if (!is.null(conv$ventilation)) {
         attr(ep, "ventilation") <- attr(conv$ventilation, "table")
     }
+    # Audit the actual returned schema. Transition can rename default choices
+    # (for example the ShadowCalculation method) and add or remove objects.
+    ep <- conv__transition(ep, target_version, verbose)
     # Record necessary moisture EMS from the emitted model.
     audit <- conv__mode_audit(ep, conversion)
     audit$versions <- list(
@@ -542,7 +545,7 @@ to_eplus <- function(
         ),
         append = NULL
     )
-    conv__transition(ep, target_version, verbose)
+    ep
 }
 
 # Give non-ASCII objects stable names accepted by the EnergyPlus 9.0.1 parser.
