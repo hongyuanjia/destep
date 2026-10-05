@@ -1589,17 +1589,14 @@ hvac__refine_multizone_airside <- function(model, source, options) {
             availability
         )
     } else {
+        # Return-fan overrides must not change the supply fan's native
+        # InletVaneDampers curve selected by its own HVAC template.
         model$object(supply_fan_name)$set(
             maximum_flow_rate = system$maximum_supply_flow_m3_s[[1L]],
             fan_power_minimum_flow_rate_input_method = "FixedFlowRate",
             fan_power_minimum_air_flow_rate = system$minimum_supply_flow_m3_s[[
                 1L
-            ]],
-            fan_power_coefficient_1 = options$return_fan_power_coefficient_1,
-            fan_power_coefficient_2 = options$return_fan_power_coefficient_2,
-            fan_power_coefficient_3 = options$return_fan_power_coefficient_3,
-            fan_power_coefficient_4 = options$return_fan_power_coefficient_4,
-            fan_power_coefficient_5 = options$return_fan_power_coefficient_5
+            ]]
         )
         model$object(return_fan_name)$set(
             maximum_flow_rate = system$return_air_capacity_m3_s[[1L]],
@@ -1838,6 +1835,12 @@ hvac__system_sources <- function(dest, options = NULL) {
         logical(1L)
     )]
     allocation <- options$overrides$zone_outdoor_air_flow_m3_s
+    if (!length(terminal_sources) && !is.null(allocation)) {
+        abort(
+            "Outdoor-air allocation overrides require a multizone HVAC path.",
+            class = "destep_unused_hvac_equipment_options"
+        )
+    }
     if (length(terminal_sources) > 0L && !is.null(allocation)) {
         room_ids <- unlist(
             lapply(

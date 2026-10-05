@@ -489,14 +489,20 @@ schedule__scale_relative_humidity <- function(dest, schedule) {
     }
 
     schedule__assert_relative_humidity_bounds(dest, schedule)
+    # Scaling changes target units; keep the caller's decoded source untouched.
+    schedule <- data.table::copy(schedule)
     shared_ids <- schedule__shared_relative_humidity_ids(dest)
     direct_rows <- which(
         schedule$SCHEDULE_ID %in% setdiff(humidity_ids, shared_ids)
     )
     for (row in direct_rows) {
         values <- schedule$DATA[[row]]
-        schedule$DATA[[row]] <- values * 100
+        data.table::set(schedule, row, "DATA", list(list(values * 100)))
     }
+
+    # Percent RH must not retain Fraction or On/Off limits of 0--1. Values
+    # have already passed the physical 0--100 percent check above.
+    data.table::set(schedule, direct_rows, "TYPE", 4L)
 
     # A shared DeST schedule has two physical roles with different units.
     # Preserve its original values and add a percent copy for Humidistat.
@@ -506,11 +512,26 @@ schedule__scale_relative_humidity <- function(dest, schedule) {
         duplicate <- data.table::copy(schedule[duplicate_rows])
         first_id <- min(c(0L, schedule$SCHEDULE_ID), na.rm = TRUE) -
             nrow(duplicate)
-        duplicate[, `:=`(
-            SCHEDULE_ID = seq.int(first_id, length.out = .N),
-            NAME = mapping$NAME,
-            DATA = lapply(DATA, function(values) values * 100)
-        )]
+        data.table::set(
+            duplicate,
+            NULL,
+            "SCHEDULE_ID",
+            seq.int(
+                first_id,
+                length.out = nrow(duplicate)
+            )
+        )
+        data.table::set(duplicate, NULL, "NAME", mapping$NAME)
+        data.table::set(
+            duplicate,
+            NULL,
+            "DATA",
+            lapply(
+                duplicate$DATA,
+                function(values) values * 100
+            )
+        )
+        data.table::set(duplicate, NULL, "TYPE", 4L)
         schedule <- data.table::rbindlist(
             list(schedule, duplicate),
             use.names = TRUE,
