@@ -1,5 +1,8 @@
 # destep 0.0.0.9000
 
+- Use percent-compatible target schedule limits after RH conversion while
+  preserving shared fractional schedules and decoded source inputs (#37).
+
 - Keep development validation records local and exclude them from distributed
   package files (#37).
 
