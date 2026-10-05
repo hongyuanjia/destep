@@ -5,7 +5,7 @@
   and shadow-update overrides have been removed from that constructor.
   Their EnergyPlus defaults are retained and users can edit the returned IDF.
   HVAC help distinguishes supported source mappings, equivalent assumptions
-  and unsupported selected equipment.
+  and unsupported selected equipment (#42).
 
 - Duct-network support checks now apply only to converted air systems.
   Unused AHUs no longer block conversion; unsupported selected networks report
