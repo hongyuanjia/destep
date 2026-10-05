@@ -115,6 +115,21 @@ test_that('invalid water input and absent main coil cannot become synthetic plan
     )
 })
 
+# Water boundaries must reject missing hours at the source-reader boundary,
+# before NA extrema can reach sizing or loop ownership checks.
+test_that("water boundaries reject missing hourly temperatures", {
+    con <- hvac__water_fixture()
+    on.exit(DBI::dbDisconnect(con))
+    hours <- rep(7, 8760L)
+    hours[[8760L]] <- NA_real_
+    DBI::dbExecute(
+        con,
+        "UPDATE SCHEDULE_YEAR SET DATA=? WHERE SCHEDULE_ID=50",
+        params = list(list(destep_test_schedule_blob(hours)))
+    )
+    expect_error(hvac__water_boundary_source(con, 10L), "missing")
+})
+
 test_that('missing target parameters receive disclosed per-system defaults', {
     source <- list(system = data.table::data.table(ac_system_id = 1L))
     cav <- hvac__boundary_system_options(source, 'multizone_cav')

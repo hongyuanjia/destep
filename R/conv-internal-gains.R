@@ -97,6 +97,17 @@ internal_gains__split_minimum <- function(
             call. = FALSE
         )
     }
+    # A negative minimum cannot be represented by dropping its constant
+    # component: that would increase every resulting hourly gain.
+    if (min_value < 0 || max_value < 0) {
+        stop(
+            sprintf(
+                "Internal gain '%s' requires nonnegative minimum and maximum values.",
+                name
+            ),
+            call. = FALSE
+        )
+    }
     if (min_value > max_value) {
         stop(
             sprintf(

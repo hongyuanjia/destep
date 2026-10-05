@@ -262,6 +262,36 @@ test_that("can convert internal gains", {
     DBI::dbExecute(dest, "UPDATE ROOM_TYPE_DATA SET E_MAX_HUM=1")
     wet <- equipment__convert(dest, ep)
     expect_true(any(grepl("Moisture", wet$value$value_chr), na.rm = TRUE))
+
+    # Negative source counts/power must not disappear as inactive rows or
+    # become an inflated max-minus-min source with its negative minimum lost.
+    original <- DBI::dbReadTable(dest, "ROOM_TYPE_DATA")
+    converters <- list(
+        O = people__convert,
+        L = light__convert,
+        E = equipment__convert
+    )
+    for (prefix in names(converters)) {
+        fields <- paste0(
+            prefix,
+            if (prefix == "O") {
+                c("_MINNUMBER", "_MAXNUMBER")
+            } else {
+                c("_MINPOWER", "_MAXPOWER")
+            }
+        )
+        for (basis in 0:1) {
+            for (bounds in list(c(-1, 10), c(-2, -1), c(0, -1))) {
+                row <- original
+                row[[fields[[1L]]]] <- bounds[[1L]]
+                row[[fields[[2L]]]] <- bounds[[2L]]
+                row[[paste0(prefix, "_PER_AREA")]] <- basis
+                row$E_MAX_HUM <- 0
+                DBI::dbWriteTable(dest, "ROOM_TYPE_DATA", row, overwrite = TRUE)
+                expect_error(converters[[prefix]](dest, ep), "nonnegative")
+            }
+        }
+    }
 })
 
 test_that("lighting heat ratio preserves electricity and scales minimum and variable heat", {

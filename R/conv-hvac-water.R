@@ -54,16 +54,12 @@ hvac__water_boundary_source <- function(dest, ahu_id) {
                 class = "destep_unresolved_hvac_water_boundary"
             )
         }
-        values <- readBin(
-            schedule$DATA[[1L]],
-            "double",
-            8760L,
-            endian = "little"
-        )
+        values <- schedule__decode(schedule$DATA[[1L]], schedule$NAME[[1L]])
         checkmate::assert_numeric(
             values,
             len = 8760L,
             finite = TRUE,
+            any.missing = FALSE,
             lower = 0.1,
             upper = 99.9,
             .var.name = paste("water temperature", ids)

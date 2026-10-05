@@ -742,24 +742,17 @@ epw__radiation <- function(
 # Mark derived meteorological quantities with E and derived DNI with D, using
 # uncertainty 9 because the source database does not provide uncertainty data.
 epw__source_flags <- function(daylight) {
-    vapply(
+    # Only the seventh pair changes. Construct the two strings once rather
+    # than rebuilding the same 22 pairs for all 8760 hourly records.
+    checkmate::assert_logical(daylight, any.missing = FALSE)
+    suffix <- paste(rep("?9", 15L), collapse = "")
+    flags <- data.table::fifelse(
         daylight,
-        function(is_daylight) {
-            paste0(
-                "?9",
-                "E9",
-                "E9",
-                "?9",
-                "?9",
-                "?9",
-                if (is_daylight) "D9" else "?0",
-                # EPW defines 22 positional source/uncertainty pairs. DNI is pair
-                # seven; the remaining 15 cover DHI through days since snowfall.
-                paste(rep("?9", 15L), collapse = "")
-            )
-        },
-        character(1L)
+        paste0("?9E9E9?9?9?9D9", suffix),
+        paste0("?9E9E9?9?9?9?0", suffix)
     )
+    names(flags) <- names(daylight)
+    flags
 }
 
 # Construct the 35 EPW data fields and attach machine-readable diagnostics.

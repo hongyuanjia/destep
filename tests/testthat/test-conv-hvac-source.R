@@ -110,6 +110,20 @@ test_that("absent AHU property roots remain absent", {
     )
 })
 
+# Near-integer foreign keys must not be truncated onto an existing schedule.
+test_that("AHU water references require exact representable integer IDs", {
+    model <- hvac_test__property_model()
+    on.exit(DBI::dbDisconnect(model))
+    for (id in c(52 + 1e-9, 52.5, Inf, .Machine$integer.max + 1)) {
+        DBI::dbExecute(
+            model,
+            "UPDATE EXT_PROPERTY SET DATA_LONG=? WHERE PROPERTY_ID=4903",
+            params = list(id)
+        )
+        expect_error(hvac__read_ahu_properties(model, 4898L))
+    }
+})
+
 test_that("AHU property values retain explicit failure boundaries", {
     model <- hvac_test__property_model()
     on.exit(DBI::dbDisconnect(model))

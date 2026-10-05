@@ -54,7 +54,7 @@ people__convert <- function(dest, ep) {
             S.NAME             AS SCHEDULE_NAME,
             T.O_DIST_MODE      AS DIST_MODE_ID,
             T.O_PER_AREA       AS CALCULATION_BASIS,
-            CASE WHEN T.O_MAXNUMBER > 0 OR T.O_MINNUMBER > 0
+            CASE WHEN T.O_MAXNUMBER != 0 OR T.O_MINNUMBER != 0
                 THEN 1 ELSE 0 END AS ACTIVE,
             CASE
                 WHEN T.O_PER_AREA = 1 THEN 'People/Area'
