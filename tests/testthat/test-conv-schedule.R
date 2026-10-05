@@ -254,15 +254,7 @@ test_that("relative-humidity schedules convert DeST fractions to percent", {
             ))
         )
     )
-    DBI::dbWriteTable(
-        dest,
-        "ROOM_GROUP",
-        data.frame(
-            ROOM_GROUP_ID = 1L,
-            SET_RH_MIN_SCHEDULE = 10L,
-            SET_RH_MAX_SCHEDULE = 20L
-        )
-    )
+    destep_test_humidity_usage(dest, 10L, 20L)
 
     schedule <- schedule__convert(dest, ep)
     table <- attr(schedule, "table")
@@ -286,16 +278,7 @@ test_that("relative-humidity schedule conversion duplicates shared units", {
             DATA = I(list(destep_test_schedule_blob(rep(0.35, 8760L))))
         )
     )
-    DBI::dbWriteTable(
-        dest,
-        "ROOM_GROUP",
-        data.frame(
-            ROOM_GROUP_ID = 1L,
-            SET_RH_MIN_SCHEDULE = 10L,
-            SET_RH_MAX_SCHEDULE = 10L,
-            AC_SCHEDULE_ID = 10L
-        )
-    )
+    destep_test_humidity_usage(dest, 10L, 10L, 10L)
 
     schedule <- schedule__convert(dest, ep)
     table <- attr(schedule, "table")
@@ -338,15 +321,7 @@ test_that("relative-humidity schedule conversion rejects unsupported units", {
             DATA = I(list(destep_test_schedule_blob(rep(35, 8760L))))
         )
     )
-    DBI::dbWriteTable(
-        dest,
-        "ROOM_GROUP",
-        data.frame(
-            ROOM_GROUP_ID = 1L,
-            SET_RH_MIN_SCHEDULE = 10L,
-            SET_RH_MAX_SCHEDULE = 10L
-        )
-    )
+    destep_test_humidity_usage(dest, 10L, 10L)
 
     expect_error(
         schedule__convert(dest, ep),
@@ -372,15 +347,7 @@ test_that("relative-humidity schedule conversion rejects inverted bounds", {
             ))
         )
     )
-    DBI::dbWriteTable(
-        dest,
-        "ROOM_GROUP",
-        data.frame(
-            ROOM_GROUP_ID = 1L,
-            SET_RH_MIN_SCHEDULE = 10L,
-            SET_RH_MAX_SCHEDULE = 20L
-        )
-    )
+    destep_test_humidity_usage(dest, 10L, 20L)
 
     expect_error(
         schedule__convert(dest, ep),
@@ -465,13 +432,7 @@ test_that("fractional RH inputs use percent-compatible target limits", {
         if (!shared) {
             DBI::dbRemoveTable(dest, "SCHEDULE_USAGE")
         }
-        DBI::dbWriteTable(
-            dest,
-            "ROOM_TYPE_DATA",
-            data.frame(
-                SET_RH_MIN_SCHEDULE = 1L
-            )
-        )
+        destep_test_humidity_usage(dest, 1L, 1L)
         directory <- tempfile("destep-rh-limits-")
         directories <- c(directories, directory)
         for (format in c("compact", "file")) {
@@ -499,4 +460,43 @@ test_that("fractional RH inputs use percent-compatible target limits", {
             }
         }
     }
+})
+
+# Catalogue rows and legacy group controls are not effective room RH inputs.
+# They must neither block conversion nor change the units of another use.
+test_that("only effective room humidity references affect schedules", {
+    dest <- destep_test_schedule_db(list(rep(0.4, 8760L)))
+    on.exit(DBI::dbDisconnect(dest))
+    DBI::dbRemoveTable(dest, "SCHEDULE_USAGE")
+    destep_test_humidity_usage(dest, 1L, 1L)
+    DBI::dbExecute(
+        dest,
+        "ALTER TABLE ROOM_GROUP ADD COLUMN SET_RH_MIN_SCHEDULE INTEGER"
+    )
+    DBI::dbExecute(
+        dest,
+        "ALTER TABLE ROOM_GROUP ADD COLUMN SET_RH_MAX_SCHEDULE INTEGER"
+    )
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_GROUP SET SET_RH_MIN_SCHEDULE=777, SET_RH_MAX_SCHEDULE=778"
+    )
+    DBI::dbExecute(dest, "INSERT INTO ROOM_TYPE_DATA VALUES (2, 99, 888, 889)")
+    ep <- eplusr::empty_idf("23.1")
+    result <- schedule__convert(dest, ep)
+    expect_identical(attr(result, "table")$DATA[[1L]], rep(40, 8760L))
+    # The same unused references become errors when an active room selects them.
+    DBI::dbExecute(dest, "UPDATE ROOM SET TYPE=2")
+    expect_error(
+        schedule__convert(dest, ep),
+        "Cannot resolve relative-humidity"
+    )
+    DBI::dbExecute(dest, "UPDATE ROOM_GROUP SET IS_AC_ROOM=0")
+    expect_null(schedule__convert(dest, ep))
+    DBI::dbExecute(dest, "UPDATE ROOM_GROUP SET IS_AC_ROOM=1")
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET AC_SCHEDULE_ID=0 WHERE ID=2"
+    )
+    expect_null(schedule__convert(dest, ep))
 })

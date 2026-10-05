@@ -96,8 +96,18 @@ hvac__single_supply_bounds <- function(dest, system_id) {
         params = list(system_id)
     )
     checkmate::assert_data_frame(system, nrows = 1L)
-    ids <- as.integer(unlist(system, use.names = FALSE))
-    checkmate::assert_integerish(ids, len = 2L, lower = 1L, any.missing = FALSE)
+    # Validate raw foreign keys before coercion can truncate a fractional ID.
+    ids <- unlist(system, use.names = FALSE)
+    checkmate::assert_integerish(
+        ids,
+        tol = 0,
+        len = 2L,
+        lower = 1L,
+        upper = .Machine$integer.max,
+        any.missing = FALSE,
+        .var.name = "AC_SYS SUPPLY_T_MIN/MAX references"
+    )
+    ids <- as.integer(ids)
     values <- vapply(
         ids,
         function(id) {
@@ -108,7 +118,12 @@ hvac__single_supply_bounds <- function(dest, system_id) {
             )
             checkmate::assert_data_frame(row, nrows = 1L)
             hours <- schedule__decode(row$DATA[[1L]], as.character(id))
-            checkmate::assert_numeric(hours, len = 8760L, finite = TRUE)
+            checkmate::assert_numeric(
+                hours,
+                len = 8760L,
+                finite = TRUE,
+                any.missing = FALSE
+            )
             if (any(hours != hours[[1L]])) {
                 abort(
                     "Varying single-zone supply-air bounds are not yet mapped.",

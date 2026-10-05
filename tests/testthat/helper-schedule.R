@@ -25,6 +25,37 @@ destep_test_schedule_db <- function(values) {
     dest
 }
 
+# Attach RH schedules to one effective conditioned-room type. Availability is
+# only a selection flag in these schedule-component fixtures; its owning
+# converter validates that separate reference in complete-model tests.
+destep_test_humidity_usage <- function(
+    dest,
+    minimum,
+    maximum,
+    availability = 99L
+) {
+    DBI::dbWriteTable(
+        dest,
+        "ROOM",
+        data.frame(ID = 1L, TYPE = 1L, OF_ROOM_GROUP = 1L)
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(ROOM_GROUP_ID = 1L, IS_AC_ROOM = 1L)
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_TYPE_DATA",
+        data.frame(
+            ID = 1L,
+            AC_SCHEDULE_ID = availability,
+            SET_RH_MIN_SCHEDULE = minimum,
+            SET_RH_MAX_SCHEDULE = maximum
+        )
+    )
+}
+
 # Independently interpret the generated Compact tokens onto a 365 x 24 calendar.
 # Parsing is stateful; preallocation avoids growing the reconstructed output.
 destep_test_expand_compact <- function(fields) {

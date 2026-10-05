@@ -57,6 +57,14 @@ schedule__convert <- function(
             if (n > 0L) {
                 # get the column names that reference schedules
                 col_ref <- schedule__reference_fields(dest, tbl)
+                # RH is selected from effective room controls below; legacy
+                # group fields and unused catalogue rows do not own those units.
+                if (tbl %in% c("ROOM_GROUP", "ROOM_TYPE_DATA")) {
+                    col_ref <- setdiff(
+                        col_ref,
+                        c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
+                    )
+                }
                 if (length(col_ref) > 0L) {
                     # get the distinct values of the referenced schedules
                     DBI::dbGetQuery(
@@ -75,6 +83,7 @@ schedule__convert <- function(
     # DeST's sentinel for a default or unused schedule. Neither value names a
     # SCHEDULE_YEAR row, and retaining NA would emit it as a SQL identifier.
     ids_ref <- union(ids_ref[!is.na(ids_ref) & ids_ref != 0L], extra_ids)
+    ids_ref <- union(ids_ref, schedule__relative_humidity_ids(dest))
     if (length(ids_ref) > 0L) {
         schedule <- data.table::setDT(DBI::dbGetQuery(
             dest,
@@ -327,30 +336,46 @@ schedule__run_period <- function(ep, days) {
     invisible(NULL)
 }
 
-# Collect the schedule IDs used specifically as ROOM_GROUP or ROOM_TYPE_DATA
-# relative-humidity limits so their fractional DeST values can be converted.
-schedule__relative_humidity_ids <- function(dest) {
-    tables <- intersect(
-        c("ROOM_GROUP", "ROOM_TYPE_DATA"),
-        DBI::dbListTables(dest)
+# Resolve only humidity boundaries used by conditioned rooms. ROOM.TYPE owns
+# the effective controls; ROOM_GROUP contributes membership and the AC flag.
+# Keep this source query independent of the thermostat/HVAC object writers.
+schedule__relative_humidity_pairs <- function(dest) {
+    required <- list(
+        ROOM = c("TYPE", "OF_ROOM_GROUP"),
+        ROOM_GROUP = c("ROOM_GROUP_ID", "IS_AC_ROOM"),
+        ROOM_TYPE_DATA = c(
+            "ID",
+            "AC_SCHEDULE_ID",
+            "SET_RH_MIN_SCHEDULE",
+            "SET_RH_MAX_SCHEDULE"
+        )
     )
-    columns <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
+    tables <- DBI::dbListTables(dest)
+    present <- vapply(
+        names(required),
+        function(table) {
+            table %in% tables && db_has_fields(dest, table, required[[table]])
+        },
+        logical(1L)
+    )
+    if (!all(present)) {
+        return(data.table::data.table(MIN_ID = integer(), MAX_ID = integer()))
+    }
+    data.table::as.data.table(DBI::dbGetQuery(
+        dest,
+        paste(
+            "SELECT DISTINCT T.SET_RH_MIN_SCHEDULE AS MIN_ID,",
+            "T.SET_RH_MAX_SCHEDULE AS MAX_ID FROM ROOM R",
+            "INNER JOIN ROOM_GROUP G ON R.OF_ROOM_GROUP = G.ROOM_GROUP_ID",
+            "INNER JOIN ROOM_TYPE_DATA T ON R.TYPE = T.ID",
+            "WHERE G.IS_AC_ROOM <> 0 AND T.AC_SCHEDULE_ID <> 0"
+        )
+    ))
+}
 
-    ids <- un_list(lapply(tables, function(table) {
-        fields <- intersect(columns, DBI::dbListFields(dest, table))
-        if (length(fields) == 0L || !db_has_rows(dest, table)) {
-            return(NULL)
-        }
-        un_list(DBI::dbGetQuery(
-            dest,
-            sprintf(
-                "SELECT DISTINCT %s FROM `%s`",
-                paste(sprintf("`%s`", fields), collapse = ", "),
-                table
-            )
-        ))
-    }))
-
+# Share one effective-source selection for scaling, name mapping and bounds.
+schedule__relative_humidity_ids <- function(dest) {
+    ids <- unlist(schedule__relative_humidity_pairs(dest), use.names = FALSE)
     unique(ids[!is.na(ids) & ids != 0L])
 }
 
@@ -429,8 +454,8 @@ schedule__relative_humidity_name_map <- function(dest) {
     )$NAME
     candidates <- paste(source$NAME, "[Relative Humidity Percent]")
     reserved <- make_unique_name(c(existing_names, candidates))
-    source[, NAME := utils::tail(reserved, .N)]
-    source[]
+    data.table::set(source, NULL, "NAME", utils::tail(reserved, nrow(source)))
+    source
 }
 
 # Substitute derived percent-copy names only for shared humidity references.
@@ -542,30 +567,10 @@ schedule__scale_relative_humidity <- function(dest, schedule) {
     schedule
 }
 
-# Check every complete ROOM_GROUP or ROOM_TYPE_DATA humidity pair hour by hour
-# before scaling; an inverted lower/upper bound is invalid in both simulators.
+# Check effective conditioned-room humidity pairs hour by hour before scaling;
+# an inverted lower/upper bound is invalid in both simulators.
 schedule__assert_relative_humidity_bounds <- function(dest, schedule) {
-    required <- c("SET_RH_MIN_SCHEDULE", "SET_RH_MAX_SCHEDULE")
-    tables <- intersect(
-        c("ROOM_GROUP", "ROOM_TYPE_DATA"),
-        DBI::dbListTables(dest)
-    )
-    pairs <- data.table::rbindlist(lapply(tables, function(table) {
-        fields <- DBI::dbListFields(dest, table)
-        if (!all(required %in% fields) || !db_has_rows(dest, table)) {
-            return(NULL)
-        }
-        data.table::as.data.table(DBI::dbGetQuery(
-            dest,
-            sprintf(
-                paste(
-                    "SELECT DISTINCT SET_RH_MIN_SCHEDULE AS MIN_ID,",
-                    "SET_RH_MAX_SCHEDULE AS MAX_ID FROM `%s`"
-                ),
-                table
-            )
-        ))
-    }))
+    pairs <- schedule__relative_humidity_pairs(dest)
     if (nrow(pairs) == 0L) {
         return(invisible(NULL))
     }
