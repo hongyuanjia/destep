@@ -534,3 +534,31 @@ test_that("to_eplus() includes resolvable ideal loads references", {
     ))
     expect_true(idf$is_valid())
 })
+
+# Batched lower/upper name resolution must retain row alignment and empty
+# schemas, including missing controls and one schedule shared by both bounds.
+test_that("batched humidity control names preserve rows and empty tables", {
+    dest <- destep_test_ideal_loads_db()
+    on.exit(DBI::dbDisconnect(dest))
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET AC_SCHEDULE_ID=200, SET_RH_MIN_SCHEDULE=200, SET_RH_MAX_SCHEDULE=200 WHERE ID=1"
+    )
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_TYPE_DATA SET SET_RH_MIN_SCHEDULE=NULL, SET_RH_MAX_SCHEDULE=NULL WHERE ID=3"
+    )
+    controls <- control__room_table(dest)
+    source_name <- DBI::dbGetQuery(
+        dest,
+        "SELECT NAME FROM SCHEDULE_YEAR WHERE SCHEDULE_ID=200"
+    )$NAME
+    expected <- paste(source_name, "[Relative Humidity Percent]")
+    expect_identical(controls$HUMIDIFYING_SCHEDULE_NAME[[1L]], expected)
+    expect_identical(controls$DEHUMIDIFYING_SCHEDULE_NAME[[1L]], expected)
+    expect_true(is.na(controls$HUMIDIFYING_SCHEDULE_NAME[[3L]]))
+    DBI::dbExecute(dest, "DELETE FROM ROOM")
+    empty <- control__room_table(dest)
+    expect_identical(nrow(empty), 0L)
+    expect_identical(names(empty), names(controls))
+})
