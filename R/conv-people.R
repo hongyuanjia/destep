@@ -1,3 +1,20 @@
+# Detect an effective nominal people mass source before choosing IDF syntax.
+# Unreferenced room types and zero-occupancy rows cannot raise the baseline.
+people__has_moisture <- function(dest) {
+    if (!internal_gains__has_room_type_data(dest)) {
+        return(FALSE)
+    }
+    nrow(DBI::dbGetQuery(
+        dest,
+        paste(
+            "SELECT 1 FROM ROOM R JOIN ROOM_TYPE_DATA T ON R.TYPE=T.ID",
+            "WHERE (T.O_MAXNUMBER > 0 OR T.O_MINNUMBER > 0)",
+            "AND T.O_DAMP_PER_PERSON > 0 LIMIT 1"
+        )
+    )) >
+        0L
+}
+
 # Resolve the version-specific People design-level fields from the target IDD.
 people__field_names <- function(ep) {
     stats::setNames(

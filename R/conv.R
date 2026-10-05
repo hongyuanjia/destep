@@ -183,6 +183,13 @@ MAP_ID_NAME <- list(
 #'        It can be `"latest"`, which is the default, to indicate using the
 #'        latest EnergyPlus version supported by the
 #'        \{[eplusr](https://cran.r-project.org/package=eplusr)\} package.
+#'        Objects are generated using the project's EnergyPlus 9.0.1 baseline.
+#'        Earlier targets are not maintained. Effective moisture raises the generation
+#'        baseline to 9.1 and requires a target of at least 9.1. Higher targets
+#'        are produced with [eplusr::transition()], not separate object writers.
+#'        Physical HVAC requires the generation version's local ExpandObjects;
+#'        target and intermediate IDDs are resolved by eplusr for transition.
+#'        The generation/target versions are recorded in the conversion audit.
 #'        Geometry compatibility has been validated against EnergyPlus 23.1;
 #'        other versions currently reuse that profile with an explicit warning.
 #'
@@ -293,11 +300,14 @@ to_eplus <- function(
         )
     }
 
-    # create an empty EnergyPlus model
+    # Resolve the requested output version, then generate common old syntax.
+    # eplusr owns the upward release transitions after all objects are built.
+    target_version <- eplusr::empty_idf(ver)$version()
+    generation_version <- conv__generation_version(tmpdb, target_version)
     if (verbose) {
-        ep <- eplusr::with_verbose(eplusr::empty_idf(ver))
+        ep <- eplusr::with_verbose(eplusr::empty_idf(generation_version))
     } else {
-        ep <- eplusr::empty_idf(ver)
+        ep <- eplusr::empty_idf(generation_version)
     }
 
     # add GlobalGeometryRules
@@ -333,7 +343,7 @@ to_eplus <- function(
 
     # Surface part geometry must be available when an opening crosses a topology
     # split, because each clipped piece references exactly one host part.
-    geometry_profile <- eplus_geom__profile(ep$version())
+    geometry_profile <- eplus_geom__profile(target_version)
     surface <- surface__convert(tmpdb, ep, geometry_profile, surface_convection)
     window <- window__convert(
         tmpdb,
@@ -472,8 +482,20 @@ to_eplus <- function(
     if (!is.null(conv$ventilation)) {
         attr(ep, "ventilation") <- attr(conv$ventilation, "table")
     }
+    # Audit the actual returned schema. Transition can rename default choices
+    # (for example the ShadowCalculation method) and add or remove objects.
+    ep <- conv__transition(ep, target_version, verbose)
     # Record necessary moisture EMS from the emitted model.
     audit <- conv__mode_audit(ep, conversion)
+    audit$versions <- list(
+        generation = as.character(generation_version),
+        target = as.character(target_version),
+        transition = if (generation_version == target_version) {
+            "none"
+        } else {
+            "eplusr"
+        }
+    )
     audit$options <- options
     audit$hvac <- list(
         requested = requested_hvac,
@@ -499,6 +521,12 @@ to_eplus <- function(
     ep$Version$comment(
         c(
             un_list(ver$object$comment),
+            sprintf(
+                "destep IDF syntax: generated with %s; requested %s; transition=%s",
+                audit$versions$generation,
+                audit$versions$target,
+                audit$versions$transition
+            ),
             conv__mode_comments(audit),
             hvac__terminal_comments(audit$hvac$terminals),
             hvac__water_comments(

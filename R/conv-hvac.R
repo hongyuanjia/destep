@@ -1122,7 +1122,9 @@ hvac__expand_templates <- function(model) {
         add = TRUE
     )
     input_path <- file.path(working_directory, "in.idf")
-    model$save(input_path, overwrite = TRUE)
+    # Keep absolute Schedule:File dependencies in their user-owned directory;
+    # copying them into this disposable expansion directory would lose them.
+    model$save(input_path, overwrite = TRUE, copy_external = FALSE)
     writeLines(
         c("[program]", paste0("dir=", installation$dir, "/")),
         file.path(working_directory, "Energy+.ini")
@@ -1145,7 +1147,9 @@ hvac__expand_templates <- function(model) {
     }
     expanded_path <- file.path(working_directory, "expanded.idf")
     checkmate::assert_file_exists(expanded_path, access = "r")
-    eplusr::read_idf(expanded_path, idd = version)
+    # Detach the returned model from the directory removed on function exit.
+    # This also lets a later save/transition resolve external files correctly.
+    conv__detach_temporary_path(eplusr::read_idf(expanded_path, idd = version))
 }
 
 # Replace invalid loop volume tokens emitted by the 9.0.1 template expander.

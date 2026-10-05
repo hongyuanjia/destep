@@ -1,3 +1,19 @@
+# Detect effective equipment moisture independently of its sensible power.
+# Source validation remains in the converter; this only selects IDF syntax.
+equipment__has_moisture <- function(dest) {
+    if (!internal_gains__has_room_type_data(dest)) {
+        return(FALSE)
+    }
+    nrow(DBI::dbGetQuery(
+        dest,
+        paste(
+            "SELECT 1 FROM ROOM R JOIN ROOM_TYPE_DATA T ON R.TYPE=T.ID",
+            "WHERE T.E_MAX_HUM > 0 OR T.E_MIN_HUM > 0 LIMIT 1"
+        )
+    )) >
+        0L
+}
+
 # ROOM.TYPE -> ROOM_TYPE_DATA equipment fields -> sensible and moisture sources.
 equipment__convert <- function(dest, ep) {
     if (!internal_gains__has_room_type_data(dest)) {

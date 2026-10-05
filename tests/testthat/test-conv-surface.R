@@ -1036,9 +1036,11 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
         warnings <<- c(warnings, conditionMessage(w))
         invokeRestart("muffleWarning")
     })
-    # Each warning describes a known source input that this geometry fixture
-    # cannot project exactly. Check them all instead of hiding new warnings.
+    # Baseline generation emits the known pre-9.4 glazing warning before the
+    # model is transitioned to 23.1. Keep it distinct from source limitations,
+    # and check every warning instead of hiding unexpected diagnostics.
     expected <- c(
+        "EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem",
         "Skipped 9 ROOM row(s)",
         "DeST window transmitted-solar distribution",
         "nominal SimpleGlazing K/SC approximation",
@@ -1048,6 +1050,17 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
     for (pattern in expected) {
         expect_true(any(grepl(pattern, warnings, fixed = TRUE)))
     }
+    # The returned 23.1 schema uses Periodic, not the generation baseline's
+    # AverageOverDaysInFrequency spelling, in both audit and persisted header.
+    expect_identical(
+        attr(idf, "conversion")$simulation$effective$shadow_update_method,
+        "Periodic"
+    )
+    expect_true(any(grepl(
+        "shadow_update_method=Periodic",
+        unlist(idf$Version$comment()),
+        fixed = TRUE
+    )))
     # Geometry and reciprocal-construction diagnostics are emitted during
     # input processing, so one simulation day covers them without a full year.
     idf$set(Annual = list(end_month = 1L, end_day_of_month = 1L))
