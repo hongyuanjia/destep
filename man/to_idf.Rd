@@ -40,6 +40,9 @@ inputs, time tables and HVAC representation.}
 \code{conversion} attribute and Version comments record the selected
 options, resolved HVAC representation, source component record counts,
 and necessary EMS programs.
+Its \code{window_bindings} table records the window, side, source surface,
+host enclosure/surface and original/restored ownership and type for
+each restored face. Restoration is also recorded in saved IDF comments.
 Its \code{windows} table records the
 source K/SC, nominal SHGC, face blackness and unresolved optical
 properties for each window. The same aggregate assumptions appear in
@@ -57,6 +60,17 @@ documented outdoor-temperature-band rule and warns about the assumed
 enabled setting. The \code{ventilation} attribute records this selection.
 The rule preserves range inputs
 but does not reproduce DeST's internal ventilation control algorithm.
+
+Window-side surfaces stored with \code{OF_ROOM = -1} are restored from the
+same side of their explicit \code{WINDOW.OF_ENCLOSURE} host. Restoration
+requires unique references, an existing room/outdoor/ground owner and
+no conflicting binding on the other side. Ambiguous or incomplete
+relationships stop conversion. Only \code{OF_ROOM} and \code{TYPE} are restored;
+geometry and thermal properties are retained. The default \code{copy = TRUE}
+leaves the input database unchanged. A
+\code{destep_restored_window_bindings} warning carries the affected records
+in its \code{bindings} field. This restores redundant input relationships,
+not missing geometry or DeST solver behavior.
 }
 \section{Conversion scope}{
 

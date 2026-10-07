@@ -43,6 +43,16 @@ install.packages("destep",
 
 ## Get started
 
+Window faces with the saved unbound marker `OF_ROOM = -1` are restored
+from the matching side of their explicit host enclosure when that
+relationship is unique and its room, outdoor or ground owner exists.
+Conflicting or ambiguous bindings stop conversion. Only ownership and
+type are restored; geometry and thermal inputs are retained. The default
+conversion works on a copy and leaves the source database unchanged.
+Restorations produce a `destep_restored_window_bindings` warning and are
+recorded in `attr(idf, "conversion")$window_bindings` and saved IDF
+comments.
+
 ``` r
 library(destep)
 
@@ -73,7 +83,7 @@ idf
 #>
 #> Group: <Schedules>
 #> ├─ [004<O>] Class: <ScheduleTypeLimits>
-#> │─ [178<O>] Class: <Schedule:Compact>
+#> │─ [130<O>] Class: <Schedule:Compact>
 #> └─ [058<O>] Class: <Schedule:Constant>
 #>
 #> Group: <Surface Construction Elements>

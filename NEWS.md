@@ -1,5 +1,11 @@
 # destep 0.0.0.9000
 
+- Restore window-side ownership stored as `OF_ROOM = -1` from the corresponding
+  explicit host side during conversion. Unique, valid source relationships are
+  required; ambiguous references and conflicting bindings stop conversion.
+  Geometry and thermal inputs are retained. The warning, conversion audit and
+  saved IDF comments record every restoration; the default input copy is preserved.
+
 - Reject negative source people counts and lighting/equipment power bounds
   instead of dropping them or changing their hourly profiles. AHU water
   schedule references must be exact integers, and water temperatures use the

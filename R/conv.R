@@ -212,10 +212,24 @@ MAP_ID_NAME <- list(
 #'       The rule preserves range inputs
 #'       but does not reproduce DeST's internal ventilation control algorithm.
 #'
+#' Window-side surfaces stored with `OF_ROOM = -1` are restored from the
+#' same side of their explicit `WINDOW.OF_ENCLOSURE` host. Restoration
+#' requires unique references, an existing room/outdoor/ground owner and
+#' no conflicting binding on the other side. Ambiguous or incomplete
+#' relationships stop conversion. Only `OF_ROOM` and `TYPE` are restored;
+#' geometry and thermal properties are retained. The default `copy = TRUE`
+#' leaves the input database unchanged. A
+#' `destep_restored_window_bindings` warning carries the affected records
+#' in its `bindings` field. This restores redundant input relationships,
+#' not missing geometry or DeST solver behavior.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model. The
 #'       `conversion` attribute and Version comments record the selected
 #'       options, resolved HVAC representation, source component record counts,
 #'       and necessary EMS programs.
+#'       Its `window_bindings` table records the window, side, source surface,
+#'       host enclosure/surface and original/restored ownership and type for
+#'       each restored face. Restoration is also recorded in saved IDF comments.
 #'       Its `windows` table records the
 #'       source K/SC, nominal SHGC, face blackness and unresolved optical
 #'       properties for each window. The same aggregate assumptions appear in
@@ -335,6 +349,10 @@ to_idf <- function(
     )
     # Use calendar dates so both schedule formats retain source hour positions.
     schedule__run_period(ep, options$run_period)
+
+    # Restore only explicit, uniquely hosted window-side ownership before names
+    # or surface geometry are derived. The input connection is copied by default.
+    window_bindings <- window__restore_bindings(tmpdb)
 
     # update object names and make sure all names are unique
     conv__update_names(tmpdb)
@@ -502,6 +520,7 @@ to_idf <- function(
         }
     )
     audit$options <- options
+    audit$window_bindings <- window_bindings
     audit$hvac <- list(
         requested = requested_hvac,
         resolved = hvac,
@@ -534,6 +553,7 @@ to_idf <- function(
                 audit$versions$transition
             ),
             conv__mode_comments(audit),
+            window__binding_comments(audit$window_bindings),
             hvac__air_treatment_comments(audit$hvac$air_treatment),
             hvac__terminal_comments(audit$hvac$terminals),
             hvac__water_comments(
