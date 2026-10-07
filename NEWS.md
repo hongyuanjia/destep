@@ -4,7 +4,7 @@
   explicit host side during conversion. Unique, valid source relationships are
   required; ambiguous references and conflicting bindings stop conversion.
   Geometry and thermal inputs are retained. The warning, conversion audit and
-  saved IDF comments record every restoration; the default input copy is preserved.
+  saved IDF comments record every restoration; the default input copy is preserved (#45).
 
 - Reject negative source people counts and lighting/equipment power bounds
   instead of dropping them or changing their hourly profiles. AHU water
