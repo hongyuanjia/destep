@@ -103,3 +103,50 @@ test_that("upward transition preserves file dependencies and conversion metadata
     )))
     expect_identical(list.files(directory), "schedule.csv")
 })
+
+# A dry-gain model starts at 9.0.1. Upgrading its four-field equipment group
+# introduces optional fraction schedules; their blank default is constant one.
+test_that("9.0 equipment transitions retain full sequential load fractions", {
+    model <- eplusr::empty_idf("9.0.1")
+    model$add(
+        Building = list(name = "Dry gain fixture"),
+        GlobalGeometryRules = list(
+            starting_vertex_position = "UpperLeftCorner",
+            vertex_entry_direction = "Counterclockwise",
+            coordinate_system = "Relative"
+        ),
+        `ZoneHVAC:IdealLoadsAirSystem` = list(
+            name = "Ideal loads",
+            zone_supply_air_node_name = "Supply node"
+        ),
+        `ZoneHVAC:EquipmentList` = list(
+            name = "Equipment",
+            load_distribution_scheme = "SequentialLoad",
+            zone_equipment_1_object_type = "ZoneHVAC:IdealLoadsAirSystem",
+            zone_equipment_1_name = "Ideal loads",
+            zone_equipment_1_cooling_sequence = 1,
+            zone_equipment_1_heating_or_no_load_sequence = 1
+        )
+    )
+    before <- model$to_table()
+    target <- conv__transition(model, numeric_version("23.1.0"))
+    expect_true(target$is_valid())
+    fields <- target$to_table(class = "ZoneHVAC:EquipmentList")
+    fractions <- fields$value[grepl("Fraction Schedule Name$", fields$field)]
+    expect_length(fractions, 2L)
+    expect_false(anyNA(fractions))
+    expect_length(unique(fractions), 1L)
+    schedule <- target$to_table(which = unique(fractions))
+    expect_equal(schedule$value[schedule$field == "Hourly Value"], "1")
+    expect_equal(
+        fields$value[
+            fields$field %in%
+                c(
+                    "Zone Equipment 1 Cooling Sequence",
+                    "Zone Equipment 1 Heating or No-Load Sequence"
+                )
+        ],
+        c("1", "1")
+    )
+    expect_identical(model$to_table(), before)
+})

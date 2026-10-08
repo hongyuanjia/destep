@@ -112,7 +112,10 @@ test_that("can convert internal gains", {
         )
     )
 
-    gains <- internal_gains__convert(dest, ep)
+    expect_warning(
+        gains <- internal_gains__convert(dest, ep),
+        class = "destep_unsupported_gain_distribution"
+    )
 
     expect_type(gains, "list")
     expect_named(gains, c("object", "value"))
@@ -697,7 +700,10 @@ test_that("can convert internal gains from a real DeST model", {
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
-    gains <- internal_gains__convert(dest, ep)
+    expect_warning(
+        gains <- internal_gains__convert(dest, ep),
+        class = "destep_unsupported_gain_distribution"
+    )
     expected <- DBI::dbGetQuery(
         dest,
         "

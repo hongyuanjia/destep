@@ -9,8 +9,14 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
         data.frame(
             ID = c(1L, 2L),
             NAME = c("Room 101", "Room 102"),
+            OF_ROOM_GROUP = c(11L, 12L),
             TYPE = c(1L, 2L)
         )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(ROOM_GROUP_ID = c(11L, 12L), IS_AC_ROOM = c(1L, 0L))
     )
     DBI::dbWriteTable(
         dest,
@@ -143,6 +149,57 @@ test_that("can convert ROOM_RELATION outdoor ventilation", {
         ]$DATA[[1L]]),
         1
     )
+
+    # A non-AC zone keeps the minimum even when its maximum and temperature
+    # schedules would otherwise allow the supplement. Fixed ventilation is
+    # independent of this flag and must remain present for the second room.
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_GROUP SET IS_AC_ROOM = 0 WHERE ROOM_GROUP_ID = 11"
+    )
+    non_ac_ep <- eplusr::empty_idf(23.1)
+    non_ac_schedules <- schedule__convert(dest, non_ac_ep)
+    expect_no_warning(non_ac <- ventilation__convert(dest, non_ac_ep))
+    expect_equal(nrow(non_ac$object), 2L)
+    expect_equal(
+        non_ac$value$value_chr[non_ac$value$field_name == "Schedule Name"],
+        rep("Ventilation 0.5 ACH", 2L)
+    )
+    expect_equal(
+        attr(non_ac, "table")$RANGE_CONTROL_METHOD,
+        c("non_air_conditioned_minimum_only", "fixed_schedule")
+    )
+    expect_false(any(grepl(
+        "DeST Derived Ventilation",
+        attr(non_ac_schedules, "table")$NAME
+    )))
+    expect_false(any(attr(non_ac, "table")$HVAC_AVAILABILITY_GATED))
+
+    # A shared min/max pair must still yield a derived schedule when its first
+    # room is non-AC and a later room is AC-enabled.
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_GROUP SET IS_AC_ROOM = 1 WHERE ROOM_GROUP_ID = 12"
+    )
+    DBI::dbExecute(
+        dest,
+        "UPDATE ROOM_RELATION SET VENT_TYPE = 1, VENT_SET_MAX = 22 WHERE ID = 101"
+    )
+    mixed_ep <- eplusr::empty_idf(23.1)
+    mixed_schedules <- schedule__convert(dest, mixed_ep)
+    expect_warning(mixed <- ventilation__convert(dest, mixed_ep), "in AC zones")
+    expect_equal(nrow(mixed$object), 3L)
+    expect_equal(
+        sum(grepl(
+            "DeST Derived Ventilation",
+            attr(mixed_schedules, "table")$NAME
+        )),
+        1L
+    )
+
+    # An unresolved flag is not evidence that the room is unconditioned.
+    DBI::dbExecute(dest, "DELETE FROM ROOM_GROUP WHERE ROOM_GROUP_ID = 11")
+    expect_error(ventilation__range_controls(dest), "Cannot resolve")
 })
 
 test_that("ventilation resolves the target zone-reference field", {
@@ -171,8 +228,14 @@ test_that("normalizes a varying DeST ventilation range increment", {
         data.frame(
             ID = 1L,
             NAME = "Room",
+            OF_ROOM_GROUP = 11L,
             TYPE = 1L
         )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(ROOM_GROUP_ID = 11L, IS_AC_ROOM = 1L)
     )
     DBI::dbWriteTable(
         dest,
@@ -327,8 +390,14 @@ test_that("rejects an inverted DeST ventilation range", {
         data.frame(
             ID = 1L,
             NAME = "Room",
+            OF_ROOM_GROUP = 11L,
             TYPE = 1L
         )
+    )
+    DBI::dbWriteTable(
+        dest,
+        "ROOM_GROUP",
+        data.frame(ROOM_GROUP_ID = 11L, IS_AC_ROOM = 1L)
     )
     DBI::dbWriteTable(
         dest,
@@ -468,14 +537,14 @@ test_that("can convert ROOM_RELATION from a real DeST model", {
         unique(ventilation$object$class_name),
         "ZoneVentilation:DesignFlowRate"
     )
+    # This source fixture has 28 outdoor relations, of which five belong to
+    # non-AC room groups. All 28 minima survive, with 23 range supplements.
     expect_equal(
-        nrow(ventilation$object),
-        2L *
-            DBI::dbGetQuery(
-                dest,
-                "SELECT COUNT(*) AS N FROM ROOM_RELATION"
-            )$N
+        DBI::dbGetQuery(dest, "SELECT COUNT(*) AS N FROM ROOM_RELATION")$N,
+        28L
     )
+    expect_equal(sum(tab$IS_AC_ROOM == 0L), 5L)
+    expect_equal(nrow(ventilation$object), 51L)
     expect_true(all(tab$IS_OUTDOOR_RELATION))
     expect_true(all(tab$VENT_TYPE == 1L))
     expect_equal(unique(tab$SCHEDULE_NAME), "通风全0.5")
@@ -484,10 +553,20 @@ test_that("can convert ROOM_RELATION from a real DeST model", {
         "房间与外界最大通风能力"
     )
     expect_true(all(tab$RANGE_CONTROL_CONVERTED))
-    expect_equal(unique(tab$INCREMENT_AIR_CHANGES_PER_HOUR), 9.5)
     expect_equal(
+        unique(tab$INCREMENT_AIR_CHANGES_PER_HOUR[tab$IS_AC_ROOM != 0]),
+        9.5
+    )
+    expect_equal(
+        unique(tab$INCREMENT_AIR_CHANGES_PER_HOUR[tab$IS_AC_ROOM == 0]),
+        0
+    )
+    expect_setequal(
         unique(tab$RANGE_CONTROL_FIDELITY),
-        "documented_rule_not_solver_equivalent"
+        c(
+            "documented_rule_not_solver_equivalent",
+            "source_non_ac_zone_minimum_only"
+        )
     )
     expect_false(any(tab$HVAC_AVAILABILITY_GATED))
     expect_equal(unique(tab$AIR_CHANGES_PER_HOUR), 1)

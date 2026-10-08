@@ -5,6 +5,8 @@
 # VENT_TYPE=1, VENT_SET_MAX is a second SCHEDULE_YEAR foreign key containing the
 # maximum ACH. The documented rule is represented by a base minimum object and
 # a max-minus-min supplement gated by outdoor-temperature setpoint schedules.
+# Native controlled runs also require ROOM_GROUP.IS_AC_ROOM to be nonzero;
+# the AC availability schedule does not gate this ventilation increment.
 ventilation__convert <- function(dest, ep) {
     if (!db_has_rows(dest, "ROOM_RELATION")) {
         return(NULL)
@@ -56,6 +58,7 @@ ventilation__convert <- function(dest, ep) {
     range <- ventilation__range_controls(dest)
     range_index <- match(relation$ID, range$RELATION_ID)
     range_fields <- c(
+        "IS_AC_ROOM",
         "INCREMENT_SCHEDULE_NAME",
         "INCREMENT_AIR_CHANGES_PER_HOUR",
         "HEATING_SCHEDULE_NAME",
@@ -64,7 +67,9 @@ ventilation__convert <- function(dest, ep) {
     for (field in range_fields) {
         value <- if (field %in% names(range)) {
             range[[field]][range_index]
-        } else if (identical(field, "INCREMENT_AIR_CHANGES_PER_HOUR")) {
+        } else if (
+            field %in% c("IS_AC_ROOM", "INCREMENT_AIR_CHANGES_PER_HOUR")
+        ) {
             rep(NA_real_, nrow(relation))
         } else {
             rep(NA_character_, nrow(relation))
@@ -96,28 +101,26 @@ ventilation__convert <- function(dest, ep) {
         relation,
         NULL,
         "RANGE_CONTROL_METHOD",
-        ifelse(
-            relation$VENT_TYPE == 1L,
-            if (selection$enabled) {
-                "documented_outdoor_temperature_band"
-            } else {
-                "saved_switch_minimum_only"
-            },
-            "fixed_schedule"
+        data.table::fcase(
+            relation$VENT_TYPE != 1L                             , "fixed_schedule" ,
+            relation$VENT_TYPE == 1L & !selection$enabled        ,
+            "saved_switch_minimum_only"                          ,
+            relation$VENT_TYPE == 1L & relation$IS_AC_ROOM == 0L ,
+            "non_air_conditioned_minimum_only"                   ,
+            default = "documented_outdoor_temperature_band"
         )
     )
     data.table::set(
         relation,
         NULL,
         "RANGE_CONTROL_FIDELITY",
-        ifelse(
-            relation$VENT_TYPE == 1L,
-            if (selection$enabled) {
-                "documented_rule_not_solver_equivalent"
-            } else {
-                "source_disabled_range"
-            },
-            "source_schedule"
+        data.table::fcase(
+            relation$VENT_TYPE != 1L                             , "source_schedule" ,
+            relation$VENT_TYPE == 1L & !selection$enabled        ,
+            "source_disabled_range"                              ,
+            relation$VENT_TYPE == 1L & relation$IS_AC_ROOM == 0L ,
+            "source_non_ac_zone_minimum_only"                    ,
+            default = "documented_rule_not_solver_equivalent"
         )
     )
     data.table::set(relation, NULL, "HVAC_AVAILABILITY_GATED", FALSE)
@@ -169,12 +172,14 @@ ventilation__convert <- function(dest, ep) {
     range_converted <- selection$enabled &
         relation$CAN_CONVERT &
         relation$VENT_TYPE == 1L &
+        !is.na(relation$IS_AC_ROOM) &
+        relation$IS_AC_ROOM != 0L &
         relation$RANGE_CONTROL_CONVERTED
     if (any(range_converted)) {
         warn(sprintf(
             paste0(
                 "Mapped %i DeST ventilation-range ROOM_RELATION row(s) using ",
-                "the documented outdoor-temperature-band rule. This preserves ",
+                "the documented outdoor-temperature-band rule in AC zones. This preserves ",
                 "the declared minimum/maximum ACH schedules but does not claim ",
                 "equivalence to DeST's undocumented solver-state coupling.",
                 if (selection$source == "legacy_missing_option") {
@@ -202,6 +207,8 @@ ventilation__convert <- function(dest, ep) {
     supplement <- ventilation[
         selection$enabled &
             ventilation$VENT_TYPE == 1L &
+            !is.na(ventilation$IS_AC_ROOM) &
+            ventilation$IS_AC_ROOM != 0L &
             ventilation$INCREMENT_AIR_CHANGES_PER_HOUR > 0
     ]
     supplement_values <- lapply(seq_len(nrow(supplement)), function(i) {
@@ -304,7 +311,9 @@ ventilation__schedule_values <- function(blob, schedule_id, role) {
 
 # Resolve the published DeST range-control inputs and derive a fractional
 # max-minus-min schedule for every unique schedule pair. This reproduces the
-# manual rule only; no HVAC-availability gate is inferred here.
+# manual rule for AC-enabled room groups only. Native flag/schedule controls
+# show that an AC-zone flag is required even when the AC schedule stays zero;
+# no HVAC-availability gate is inferred here.
 ventilation__range_controls <- function(dest) {
     # Disabled ranges do not consume the maximum or temperature limits. Do not
     # validate unused foreign keys or emit an unused derived increment schedule.
@@ -314,6 +323,7 @@ ventilation__range_controls <- function(dest) {
     required_tables <- c(
         "ROOM_RELATION",
         "ROOM",
+        "ROOM_GROUP",
         "OUTSIDE",
         "ROOM_TYPE_DATA",
         "SCHEDULE_YEAR"
@@ -332,6 +342,7 @@ ventilation__range_controls <- function(dest) {
             RR.ID AS RELATION_ID,
             RR.NAME AS RELATION_NAME,
             R.NAME AS ROOM_NAME,
+            G.IS_AC_ROOM,
             RR.VENT_SCHEDULE_ID AS MIN_SCHEDULE_ID,
             VMIN.NAME AS MIN_SCHEDULE_NAME,
             VMIN.DATA AS MIN_SCHEDULE_DATA,
@@ -349,6 +360,8 @@ ventilation__range_controls <- function(dest) {
         FROM ROOM_RELATION RR
         INNER JOIN ROOM R
         ON RR.ROOM_ID = R.ID
+        LEFT JOIN ROOM_GROUP G
+        ON R.OF_ROOM_GROUP = G.ROOM_GROUP_ID
         INNER JOIN OUTSIDE O
         ON RR.RELA_ROOM_ID = O.OUTSIDE_ID
         LEFT JOIN SCHEDULE_YEAR VMIN
@@ -369,14 +382,19 @@ ventilation__range_controls <- function(dest) {
         return(control)
     }
 
+    # Every range needs a known room flag and minimum. Non-AC rooms never
+    # consume a maximum or temperature gate, so unused references cannot make
+    # their valid minimum-only ventilation fail conversion.
     required <- c(
-        "MIN_SCHEDULE_NAME",
         "MAX_SCHEDULE_NAME",
         "ROOM_TYPE_DATA_ID",
         "HEATING_SCHEDULE_NAME",
         "COOLING_SCHEDULE_NAME"
     )
-    unresolved <- apply(is.na(control[, ..required]), 1L, any)
+    active <- !is.na(control$IS_AC_ROOM) & control$IS_AC_ROOM != 0L
+    unresolved <- is.na(control$IS_AC_ROOM) |
+        is.na(control$MIN_SCHEDULE_NAME) |
+        (active & rowSums(is.na(control[, ..required])) > 0L)
     if (any(unresolved)) {
         rows <- control[unresolved]
         abort(sprintf(
@@ -397,7 +415,7 @@ ventilation__range_controls <- function(dest) {
         "MAX_SCHEDULE_DATA"
     )
     pairs <- unique(
-        control[, ..pair_columns],
+        control[active, ..pair_columns],
         by = c(
             "MIN_SCHEDULE_ID",
             "MAX_SCHEDULE_ID"
@@ -467,7 +485,9 @@ ventilation__range_controls <- function(dest) {
         "INCREMENT_AIR_CHANGES_PER_HOUR",
         increment_ach
     )
-    data.table::set(pairs, NULL, "INCREMENT_FRACTION", increment_fraction)
+    if (nrow(pairs)) {
+        data.table::set(pairs, NULL, "INCREMENT_FRACTION", increment_fraction)
+    }
 
     pair_key <- paste(pairs$MIN_SCHEDULE_ID, pairs$MAX_SCHEDULE_ID)
     control_key <- paste(control$MIN_SCHEDULE_ID, control$MAX_SCHEDULE_ID)
@@ -477,12 +497,43 @@ ventilation__range_controls <- function(dest) {
         "INCREMENT_AIR_CHANGES_PER_HOUR",
         "INCREMENT_FRACTION"
     )) {
+        if (field == "INCREMENT_FRACTION" && nrow(pairs) == 0L) {
+            # No fractional schedule is consumed when every room is non-AC.
+            # Passing an empty list to set() would request column removal.
+            next
+        }
         data.table::set(control, NULL, field, pairs[[field]][pair_index])
+    }
+    data.table::set(
+        control,
+        which(!active),
+        "INCREMENT_AIR_CHANGES_PER_HOUR",
+        0
+    )
+
+    # Validate the consumed minima even when no range supplement is active.
+    # This prevents a negative ACH from slipping through the minimum-only path.
+    minimum_rows <- which(!active)
+    for (i in minimum_rows) {
+        minimum <- ventilation__schedule_values(
+            control$MIN_SCHEDULE_DATA[[i]],
+            control$MIN_SCHEDULE_ID[[i]],
+            "Minimum ventilation"
+        )
+        negative <- which(minimum < 0)
+        if (length(negative)) {
+            abort(sprintf(
+                "Minimum ventilation schedule %s contains a negative ACH at DeST hour index %i for ROOM_RELATION %s.",
+                control$MIN_SCHEDULE_ID[[i]],
+                negative[[1L]] - 1L,
+                control$RELATION_ID[[i]]
+            ))
+        }
     }
 
     # The temperature pair can vary independently of the ACH schedule pair.
-    # Validate every relation because these schedules form the actual gate.
-    for (i in seq_len(nrow(control))) {
+    # Only AC relations consume these schedules as an actual ventilation gate.
+    for (i in which(active)) {
         heating <- ventilation__schedule_values(
             control$HEATING_SCHEDULE_DATA[[i]],
             control$HEATING_SCHEDULE_ID[[i]],
@@ -523,7 +574,10 @@ ventilation__range_schedule_rows <- function(dest) {
         return(data.table::data.table())
     }
 
-    keep <- control$INCREMENT_AIR_CHANGES_PER_HOUR > 0
+    # Do not emit an unused derived schedule for a non-AC room; mixed groups
+    # sharing the same min/max pair still retain the active room's schedule.
+    keep <- control$IS_AC_ROOM != 0L &
+        control$INCREMENT_AIR_CHANGES_PER_HOUR > 0
     pairs <- unique(
         control[keep],
         by = c(

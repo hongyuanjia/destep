@@ -1052,9 +1052,10 @@ test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
     expected <- c(
         "EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem",
         "Skipped 9 ROOM row(s)",
+        "DeST internal-gain surface distribution",
         "DeST window transmitted-solar distribution",
         "nominal SimpleGlazing K/SC approximation",
-        "Mapped 28 DeST ventilation-range ROOM_RELATION row(s)"
+        "Mapped 23 DeST ventilation-range ROOM_RELATION row(s)"
     )
     expect_length(warnings, length(expected))
     for (pattern in expected) {
@@ -1075,15 +1076,67 @@ test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
     # input processing, so one simulation day covers them without a full year.
     idf$set(Annual = list(end_month = 1L, end_day_of_month = 1L))
     idf$add("Output:Diagnostics" := list(key_1 = "DisplayExtraWarnings"))
-    idf$save(tempfile(fileext = ".idf"))
+    # Isolate this run's outputs so source databases cannot enter cleanup.
+    # The check runner supplies a persistent evidence directory; ordinary test
+    # runs retain the same logs for the duration of their temporary session.
+    evidence_root <- Sys.getenv(
+        "DESTEP_TEST_ENGINE_EVIDENCE",
+        unset = file.path(tempdir(), "destep-engine-evidence")
+    )
+    run_root <- file.path(evidence_root, "runs")
+    dir.create(run_root, recursive = TRUE, showWarnings = FALSE)
+    run_dir <- tempfile(pattern = "destep-geometry-", tmpdir = run_root)
+    dir.create(run_dir)
+    idf$save(file.path(run_dir, "geometry.idf"))
     job <- idf$run(
         eplusr::path_eplus_weather(
             23.1,
             "USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw"
         ),
-        dir = tempdir()
+        dir = run_dir
     )
     errors <- job$errors()
+
+    # The blocking job has ended and errors() reads text logs, not SQLite.
+    # Save the input/error/end evidence before deleting this run's unneeded
+    # result databases. These exact paths and sizes remain in the receipt.
+    evidence <- file.path(
+        evidence_root,
+        basename(run_dir)
+    )
+    dir.create(evidence, recursive = TRUE, showWarnings = FALSE)
+    logs <- list.files(
+        run_dir,
+        pattern = "[.](idf|err|end)$",
+        full.names = TRUE
+    )
+    # A failed expectation would let the test continue into deletion. Use a
+    # hard gate instead and retain the run directory if required evidence is
+    # absent or cannot be saved; do not register unconditional exit cleanup.
+    stopifnot(all(c("idf", "err", "end") %in% tools::file_ext(logs)))
+    stopifnot(all(file.copy(logs, evidence)))
+    outputs <- list.files(
+        run_dir,
+        pattern = "[.](sql|sqlite|eso)$",
+        full.names = TRUE
+    )
+    stopifnot(all(Sys.readlink(outputs) == ""))
+    cleanup <- data.frame(
+        case = rep("unmultiplied fixture geometry", length(outputs)),
+        path = outputs,
+        bytes = file.info(outputs)$size,
+        reason = rep(
+            "Only IDF, error and end logs are required for geometry checks",
+            length(outputs)
+        ),
+        evidence = rep(evidence, length(outputs)),
+        status = rep("planned", length(outputs))
+    )
+    write.csv(cleanup, file.path(evidence, "cleanup.csv"), row.names = FALSE)
+    stopifnot(all(unlink(outputs) == 0L), !any(file.exists(outputs)))
+    cleanup$status <- rep("deleted", nrow(cleanup))
+    write.csv(cleanup, file.path(evidence, "cleanup.csv"), row.names = FALSE)
+    stopifnot(unlink(run_dir, recursive = TRUE) == 0L)
 
     expect_false(any(errors$level %in% c("Severe", "Fatal")))
     # Intact convex faces may contain harmless collinear vertices that the

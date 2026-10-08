@@ -14,9 +14,110 @@ internal_gains__convert <- function(dest, ep) {
         return(NULL)
     }
 
+    internal_gains__warn_surface_distribution(dest)
+
     # All three object families are projections of the same room-type record.
     data.table::set(attr(out, "table"), NULL, "SOURCE_TABLE", "ROOM_TYPE_DATA")
     out
+}
+
+# Only the air/total-radiant split has an established target projection. Warn
+# once for effective sensible sources whose surface-family shares are omitted;
+# unused room types, pure latent sources and all-convective modes do not qualify.
+internal_gains__warn_surface_distribution <- function(dest) {
+    distribution_fields <- c(
+        "DIST_MODE_ID",
+        "DIST_AIR",
+        "DIST_AROUND",
+        "DIST_FLOOR",
+        "DIST_ROOF"
+    )
+    if (
+        !db_has_rows(dest, "ROOM") ||
+            !db_has_rows(dest, "ROOM_TYPE_DATA") ||
+            !db_has_rows(dest, "DIST_MODE") ||
+            !db_has_fields(dest, "DIST_MODE", distribution_fields)
+    ) {
+        return(invisible(FALSE))
+    }
+
+    # These three fixed schema branches allow reduced input schemas without
+    # querying absent gain-family columns. The UNION removes repeated room types.
+    branches <- character(3L)
+    families <- c("O", "L", "E")
+    for (i in seq_along(families)) {
+        prefix <- families[[i]]
+        bounds <- if (prefix == "O") {
+            c("MINNUMBER", "MAXNUMBER")
+        } else {
+            c("MINPOWER", "MAXPOWER")
+        }
+        fields <- paste0(prefix, "_", c("DIST_MODE", bounds))
+        factor <- c(
+            O = "O_HEAT_PER_PERSON",
+            L = "L_HEAT_RATE",
+            E = ""
+        )[[prefix]]
+        if (
+            !db_has_fields(
+                dest,
+                "ROOM_TYPE_DATA",
+                c(fields, factor[nzchar(factor)])
+            )
+        ) {
+            next
+        }
+        sensible <- if (nzchar(factor)) {
+            paste0(" AND T.", factor, " > 0")
+        } else {
+            ""
+        }
+        branches[[i]] <- sprintf(
+            paste(
+                "SELECT '%s' AS GAIN_TYPE, D.DIST_MODE_ID, D.DIST_AIR,",
+                "D.DIST_AROUND, D.DIST_FLOOR, D.DIST_ROOF",
+                "FROM ROOM R JOIN ROOM_TYPE_DATA T ON R.TYPE=T.ID",
+                "JOIN DIST_MODE D ON T.%s=D.DIST_MODE_ID",
+                "WHERE (T.%s > 0 OR T.%s > 0)%s",
+                "AND D.DIST_AIR < 1",
+                "AND (D.DIST_AROUND > 0 OR D.DIST_FLOOR > 0 OR D.DIST_ROOF > 0)"
+            ),
+            prefix,
+            fields[[1L]],
+            fields[[2L]],
+            fields[[3L]],
+            sensible
+        )
+    }
+    branches <- branches[nzchar(branches)]
+    if (!length(branches)) {
+        return(invisible(FALSE))
+    }
+    modes <- DBI::dbGetQuery(
+        dest,
+        paste0(
+            paste(branches, collapse = " UNION "),
+            " ORDER BY GAIN_TYPE, DIST_MODE_ID"
+        )
+    )
+    if (!nrow(modes)) {
+        return(invisible(FALSE))
+    }
+    warn(
+        sprintf(
+            paste(
+                "DeST internal-gain surface distribution mode(s) [%s] are not",
+                "fully converted. Air and total radiant fractions are retained,",
+                "but DIST_AROUND, DIST_FLOOR and DIST_ROOF are not mapped",
+                "separately; EnergyPlus determines the receiving-surface",
+                "distribution of radiant internal gains."
+            ),
+            fmt_integer_sample(unique(modes$DIST_MODE_ID))
+        ),
+        class = "destep_unsupported_gain_distribution",
+        distributions = modes
+    )
+    invisible(TRUE)
 }
 
 # Internal gains used by Calload exist only when rooms can select a room-type

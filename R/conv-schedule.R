@@ -130,6 +130,8 @@ schedule__convert <- function(
     }
 
     schedule__validate(schedule)
+    temperature_conflicts <- schedule__temperature_conflicts(dest, schedule)
+    schedule__warn_temperature_conflicts(temperature_conflicts)
     type_limits <- schedule__convert_type_limits(dest, ep, schedule)
     data.table::set(
         type_limits,
@@ -195,7 +197,146 @@ schedule__convert <- function(
         table = schedule
     )
     attr(out, "files") <- files
+    attr(out, "temperature_conflicts") <- temperature_conflicts
     out
+}
+
+# Diagnose effective conditioned-room temperature pairs using the decoded
+# hourly data already needed for conversion. Shared control triples are compared once;
+# neither source schedules nor target values are changed to repair conflicts.
+schedule__temperature_conflicts <- function(dest, schedule) {
+    empty <- data.table::data.table(
+        HEATING_ID = integer(),
+        COOLING_ID = integer(),
+        AC_SCHEDULE_ID = integer(),
+        ROOM_IDS = list(),
+        ROOM_NAMES = list(),
+        HOURS = integer(),
+        FIRST_HOUR_INDEX = integer(),
+        HEATING_C = double(),
+        COOLING_C = double()
+    )
+    required <- list(
+        ROOM = c("ID", "NAME", "TYPE", "OF_ROOM_GROUP"),
+        ROOM_GROUP = c("ROOM_GROUP_ID", "IS_AC_ROOM"),
+        ROOM_TYPE_DATA = c(
+            "ID",
+            "AC_SCHEDULE_ID",
+            "SET_T_MIN_SCHEDULE",
+            "SET_T_MAX_SCHEDULE"
+        )
+    )
+    tables <- DBI::dbListTables(dest)
+    available <- vapply(
+        names(required),
+        function(table) {
+            table %in% tables && db_has_fields(dest, table, required[[table]])
+        },
+        logical(1L)
+    )
+    if (!all(available) || nrow(schedule) == 0L) {
+        return(empty)
+    }
+    rooms <- DBI::dbGetQuery(
+        dest,
+        paste(
+            "SELECT R.ID AS ROOM_ID, R.NAME AS ROOM_NAME,",
+            "T.SET_T_MIN_SCHEDULE AS HEATING_ID,",
+            "T.SET_T_MAX_SCHEDULE AS COOLING_ID, T.AC_SCHEDULE_ID FROM ROOM R",
+            "INNER JOIN ROOM_GROUP G ON R.OF_ROOM_GROUP = G.ROOM_GROUP_ID",
+            "INNER JOIN ROOM_TYPE_DATA T ON R.TYPE = T.ID",
+            "WHERE G.IS_AC_ROOM <> 0 AND T.AC_SCHEDULE_ID <> 0",
+            "AND T.SET_T_MIN_SCHEDULE <> 0 AND T.SET_T_MAX_SCHEDULE <> 0",
+            "ORDER BY R.ID"
+        )
+    )
+    pairs <- unique(rooms[c("HEATING_ID", "COOLING_ID", "AC_SCHEDULE_ID")])
+    heat_index <- match(pairs$HEATING_ID, schedule$SCHEDULE_ID)
+    cool_index <- match(pairs$COOLING_ID, schedule$SCHEDULE_ID)
+    ac_index <- match(pairs$AC_SCHEDULE_ID, schedule$SCHEDULE_ID)
+    records <- vector("list", nrow(pairs))
+    # Shared bounds can serve rooms with different availability. Compare each
+    # distinct triple once so inactive hours and rooms are never reported as
+    # effective conflicts. This diagnostic does not repair target setpoints.
+    # Missing references remain the owning thermostat converter's error, not
+    # an invented numeric value in this supplementary diagnostic.
+    for (i in seq_len(nrow(pairs))) {
+        if (anyNA(c(heat_index[[i]], cool_index[[i]], ac_index[[i]]))) {
+            next
+        }
+        heat <- schedule$DATA[[heat_index[[i]]]]
+        cool <- schedule$DATA[[cool_index[[i]]]]
+        availability <- schedule$DATA[[ac_index[[i]]]]
+        inverted <- which(availability > 0 & heat > cool)
+        if (!length(inverted)) {
+            next
+        }
+        first <- inverted[[1L]]
+        selected <- rooms$HEATING_ID == pairs$HEATING_ID[[i]] &
+            rooms$COOLING_ID == pairs$COOLING_ID[[i]] &
+            rooms$AC_SCHEDULE_ID == pairs$AC_SCHEDULE_ID[[i]]
+        records[[i]] <- data.table::data.table(
+            HEATING_ID = pairs$HEATING_ID[[i]],
+            COOLING_ID = pairs$COOLING_ID[[i]],
+            AC_SCHEDULE_ID = pairs$AC_SCHEDULE_ID[[i]],
+            ROOM_IDS = list(rooms$ROOM_ID[selected]),
+            ROOM_NAMES = list(rooms$ROOM_NAME[selected]),
+            HOURS = length(inverted),
+            FIRST_HOUR_INDEX = first - 1L,
+            HEATING_C = heat[[first]],
+            COOLING_C = cool[[first]]
+        )
+    }
+    data.table::rbindlist(c(list(empty), records))
+}
+
+# Warn before EnergyPlus is run, including a bounded readable sample and the
+# complete structured pair diagnostics on the condition for batch callers.
+schedule__warn_temperature_conflicts <- function(conflicts) {
+    if (!nrow(conflicts)) {
+        return(invisible(NULL))
+    }
+    sample <- seq_len(min(nrow(conflicts), 8L))
+    details <- vapply(
+        sample,
+        function(i) {
+            index <- conflicts$FIRST_HOUR_INDEX[[i]]
+            date <- format(as.Date("2001-01-01") + index %/% 24L, "%m-%d")
+            sprintf(
+                paste0(
+                    "H%s/C%s/A%s: heating %g C > cooling %g C at %s %02d:00-%02d:00",
+                    " (DeST hour index %i; %i conflicting hour(s)); rooms: %s"
+                ),
+                conflicts$HEATING_ID[[i]],
+                conflicts$COOLING_ID[[i]],
+                conflicts$AC_SCHEDULE_ID[[i]],
+                conflicts$HEATING_C[[i]],
+                conflicts$COOLING_C[[i]],
+                date,
+                index %% 24L,
+                index %% 24L + 1L,
+                index,
+                conflicts$HOURS[[i]],
+                paste(
+                    utils::head(conflicts$ROOM_NAMES[[i]], 5L),
+                    collapse = ", "
+                )
+            )
+        },
+        character(1L)
+    )
+    warn(
+        paste0(
+            "Heating setpoint exceeds cooling setpoint in ",
+            nrow(conflicts),
+            " effective temperature control schedule group(s) during AC availability > 0. ",
+            "Source values are preserved; EnergyPlus may reject these controls. ",
+            paste(details, collapse = "; ")
+        ),
+        class = "destep_thermostat_conflict",
+        conflicts = conflicts
+    )
+    invisible(NULL)
 }
 
 # Access stores a non-leap year's 8760 IEEE doubles in little-endian order.
