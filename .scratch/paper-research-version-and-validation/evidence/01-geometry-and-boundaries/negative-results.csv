@@ -1,3 +1,0 @@
-"case","rejected","caller_unchanged","diagnostic"
-"missing_peer",TRUE,TRUE,"MAIN_ENCLOSURE 531 has missing SIDE2 reference (-987654321)."
-"missing_geometry",TRUE,TRUE,"MAIN_ENCLOSURE 531 has missing MIDDLE_PLANE reference (-987654321)."
