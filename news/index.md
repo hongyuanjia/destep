@@ -2,6 +2,11 @@
 
 ## destep 0.0.0.9000
 
+- Preserve constant-one sequential load fractions when upgrading
+  dry-gain models from EnergyPlus 9.0.1. Explicit default schedules
+  prevent false incomplete-equipment-group errors with released eplusr
+  0.17.0 (#48).
+
 - Restore window-side ownership stored as `OF_ROOM = -1` from the
   corresponding explicit host side during conversion. Unique, valid
   source relationships are required; ambiguous references and
@@ -13,6 +18,19 @@
   source enclosure ID, field and saved reference before processing
   surface geometry. The structured error preserves these records without
   changing the input (#47).
+
+- Warn when effective internal gains use separate surrounding-surface,
+  floor and roof radiant fractions that are not projected to EnergyPlus.
+  The source air/total-radiant split and existing target inputs are
+  preserved; the warning records the affected gain families and
+  distribution modes (#48).
+
+- Warn before simulation when conditioned-room heating setpoints exceed
+  cooling setpoints during positive AC availability hours. Diagnostics
+  identify heating, cooling and availability schedules, affected rooms,
+  the first conflicting hour and total conflicting hours. Preserve all
+  schedule values and retain the diagnostics in
+  `conversion$schedules$temperature_conflicts` (#48).
 
 - Prefer direct diagonal partitions for concave faces and required
   room-shell junctions before triangulation. Preserve every boundary
@@ -194,6 +212,14 @@
   switch is absent. Preserve opaque `SHADING.ROU` in generated shading
   reflectance properties; reflection remains controlled by the selected
   solar-distribution method (#37).
+
+- Keep minimum outdoor ventilation for `ROOM_GROUP.IS_AC_ROOM = 0`
+  instead of adding the variable ventilation increment to unconditioned
+  rooms. Retain the increment for AC-enabled room groups independently
+  of the AC availability schedule, following controlled native DeST
+  checks. Record the source flag and the minimum-only rule in the
+  ventilation audit. Non-AC rooms validate the consumed minimum without
+  requiring unused maximum or temperature-range inputs (#48).
 
 - Fixed exposed-floor outside absorptance conversion to preserve literal
   zero values. The converter no longer substitutes unrelated
