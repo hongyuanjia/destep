@@ -69,6 +69,16 @@ setting. The `ventilation` attribute records this selection. The rule
 preserves range inputs but does not reproduce DeST's internal
 ventilation control algorithm.
 
+Storey multipliers are mapped to ZoneGroup independently of source
+surface boundaries. Outdoor, ground and interzone relationships are
+retained. Interzone pairs with unequal multipliers produce a warning and
+are listed in `conversion$surface_boundaries`: weighted outputs must not
+be interpreted as a physically balanced whole-building model. Successful
+conversion does not establish DeST thermal equivalence. Missing
+enclosure-side or middle-plane references produce a
+`destep_invalid_surface_references` error whose `references` table
+identifies the source enclosure, field and saved reference.
+
 ## Conversion scope
 
 Source inputs are mapped to EnergyPlus objects with documented

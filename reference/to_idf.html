@@ -104,6 +104,15 @@ documented outdoor-temperature-band rule and warns about the assumed
 enabled setting. The <code>ventilation</code> attribute records this selection.
 The rule preserves range inputs
 but does not reproduce DeST's internal ventilation control algorithm.</p>
+<p>Storey multipliers are mapped to ZoneGroup independently of source
+surface boundaries. Outdoor, ground and interzone relationships are
+retained. Interzone pairs with unequal multipliers produce a warning
+and are listed in <code>conversion$surface_boundaries</code>: weighted outputs
+must not be interpreted as a physically balanced whole-building model.
+Successful conversion does not establish DeST thermal equivalence.
+Missing enclosure-side or middle-plane references produce a
+<code>destep_invalid_surface_references</code> error whose <code>references</code> table identifies
+the source enclosure, field and saved reference.</p>
     </div>
     <div class="section level2">
     <h2 id="conversion-scope">Conversion scope<a class="anchor" aria-label="anchor" href="#conversion-scope"></a></h2>
