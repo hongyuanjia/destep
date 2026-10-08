@@ -1,5 +1,11 @@
 # destep 0.0.0.9000
 
+- Restore window-side ownership stored as `OF_ROOM = -1` from the corresponding
+  explicit host side during conversion. Unique, valid source relationships are
+  required; ambiguous references and conflicting bindings stop conversion.
+  Geometry and thermal inputs are retained. The warning, conversion audit and
+  saved IDF comments record every restoration; the default input copy is preserved (#45).
+
 - Report missing enclosure-side and middle-plane references with the source
   enclosure ID, field and saved reference before processing surface geometry.
   The structured error preserves these records without changing the input (#47).
