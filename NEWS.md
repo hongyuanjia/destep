@@ -1,5 +1,9 @@
 # destep 0.0.0.9000
 
+- Preserve constant-one sequential load fractions when upgrading dry-gain
+  models from EnergyPlus 9.0.1. Explicit default schedules prevent false
+  incomplete-equipment-group errors with released eplusr 0.17.0 (#48).
+
 - Report missing enclosure-side and middle-plane references with the source
   enclosure ID, field and saved reference before processing surface geometry.
   The structured error preserves these records without changing the input (#47).
