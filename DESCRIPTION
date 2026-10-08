@@ -18,7 +18,6 @@ Imports:
     DBI,
     eplusr,
     odbc,
-    polyclip,
     processx,
     RSQLite
 Suggests: 

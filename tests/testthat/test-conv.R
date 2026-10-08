@@ -162,7 +162,7 @@ test_that("to_idf() works", {
     ep <- eplusr::empty_idf(23.1)
 
     path <- ensure_dest_test_file()
-    dest <- read_dest(path)
+    dest <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
 
     # can insert a comment about the original DeST version in `Version` comment

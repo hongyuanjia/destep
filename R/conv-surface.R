@@ -1,6 +1,7 @@
 # Read the two room-side copies of every DeST enclosure on their shared middle
 # plane, then put the coordinates on the EnergyPlus geometry tolerance grid.
 surface__source_table <- function(dest, geometry_profile) {
+    surface__validate_source_references(dest)
     # NOTE: In DeST, the main enclosure table is used to store the relationship
     # between surfaces and the rooms they belong to. Different from EnergyPlus,
     # 'adjacent' surfaces in DeST have different locations. The distance between
@@ -485,13 +486,13 @@ surface__convert <- function(
     surface <- surface__source_table(dest, geometry_profile)
     window <- surface__window_table(dest)
 
-    # Normalize each shared middle-plane polygon once before the two room-side
-    # copies are oriented. Vertices used by another plane are topological
-    # junctions and must survive collinear-point cleanup.
+    # Normalize shared middle planes once, preserving convex source polygons.
+    # Repair only junctions that fail closure when
+    # removable vertices are cleaned as part of target geometry processing.
     surface <- surface__normalize_topology(surface, window, geometry_profile)
     # remove the surface indicating outside environment and grounds
     surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
-    surface <- surface__apply_typical_storey_boundaries(
+    surface <- surface__preserve_boundaries(
         surface,
         window,
         geometry_profile
@@ -535,518 +536,51 @@ surface__convert <- function(
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- surface
+    pairs <- surface__multiplier_pairs(surface)
+    attr(out, "boundary_diagnostics") <- pairs
+    if (nrow(pairs) > 0L) {
+        warning(
+            sprintf(
+                paste(
+                    "Preserved %d source interzone surface pair(s) joining unequal",
+                    "storey multipliers. Representative-zone boundaries are unchanged;",
+                    "multiplier-weighted whole-building heat transfer cannot be assumed",
+                    "physically balanced. See attr(idf, 'conversion')$surface_boundaries."
+                ),
+                nrow(pairs)
+            ),
+            call. = FALSE
+        )
+    }
 
     out
 }
 
-# Replace every horizontal boundary of a multiplied storey with a cyclic
-# floor-to-ceiling pair. The common overlay is built for the complete storey,
-# rather than per room, because the zones above and below a repeated floor can
-# partition the same footprint differently. Source faces remain traceable by
-# ID and plane, while cut faces in adjacent non-multiplied storeys become
-# self-referenced adiabatic surfaces.
-# Prepare the source metadata and select the horizontal faces that participate
-# in typical-storey rewiring.
-surface__prepare_typical_storey <- function(
-    surface,
-    window = data.table::data.table(),
-    profile = eplus_geom__profile()
-) {
-    surface <- data.table::copy(surface)
-    surface[, `:=`(
-        SOURCE_TYPE = TYPE,
-        SOURCE_SIDE = SIDE,
-        SOURCE_CONSTRUCTION = CONSTRUCTION,
-        SOURCE_BOUNDARY = BOUNDARY,
-        SOURCE_BOUNDARY_OBJECT = BOUNDARY_OBJECT,
-        BOUNDARY_MODE = "source"
-    )]
-
-    # DeST's horizontal direction sentinels identify the two complete faces of
-    # a repeated floor even when part of one face was originally an exterior
-    # roof or exposed floor.
-    target <- surface[
-        STOREY_MULTIPLIER > 1L & AZIMUTH %in% c(-999.0, 999.0)
-    ]
-    if (nrow(target) == 0L) {
-        return(list(surface = surface, target = target))
-    }
-
-    if (nrow(window) > 0L && any(target$PLANE %in% window$PLANE)) {
-        stop(paste(
-            "Typical-storey approximation does not support a window on a",
-            "rewired horizontal surface."
-        ))
-    }
-
-    list(surface = surface, target = target)
-}
-
-# Return the construction name without the explicit reverse-stack suffix.
-surface__construction_base <- function(value) {
-    sub(" \\[Reverse\\]$", "", value)
-}
-
-# Reconstruct one source face from the exterior edges of any triangles or
-# convex parts created by the earlier EnergyPlus topology normalization. Each
-# internal mesh edge occurs twice, so one-occurrence edges remove diagonals.
-surface__polygon_region <- function(value) {
-    edge <- data.table::rbindlist(lapply(
-        unique(value$OUTPUT_ID),
-        function(output_id) {
-            part <- value[OUTPUT_ID == output_id]
-            following <- seq_len(nrow(part)) %% nrow(part) + 1L
-            data.table::data.table(
-                START = sprintf("%.12f|%.12f", part$POINT_X, part$POINT_Y),
-                END = sprintf(
-                    "%.12f|%.12f",
-                    part$POINT_X[following],
-                    part$POINT_Y[following]
-                ),
-                START_X = part$POINT_X,
-                START_Y = part$POINT_Y,
-                END_X = part$POINT_X[following],
-                END_Y = part$POINT_Y[following]
-            )
-        }
-    ))
-    edge[, EDGE := geom__edge_key(START, END)]
-    count <- edge[, .N, by = "EDGE"]
-    boundary <- edge[count[N == 1L], on = "EDGE", nomatch = 0L]
-    coordinate <- unique(
-        data.table::rbindlist(list(
-            boundary[, .(KEY = START, X = START_X, Y = START_Y)],
-            boundary[, .(KEY = END, X = END_X, Y = END_Y)]
-        )),
-        by = "KEY"
-    )
-
-    region <- list()
-    while (nrow(boundary) > 0L) {
-        start <- boundary$START[[1L]]
-        current <- boundary$END[[1L]]
-        path <- c(start, current)
-        boundary <- boundary[-1L]
-        while (current != start) {
-            incident <- which(
-                boundary$START == current | boundary$END == current
-            )
-            if (length(incident) != 1L) {
-                stop(
-                    "A normalized DeST surface does not have a simple boundary cycle."
-                )
-            }
-            selected <- incident[[1L]]
-            following <- if (boundary$START[[selected]] == current) {
-                boundary$END[[selected]]
-            } else {
-                boundary$START[[selected]]
-            }
-            boundary <- boundary[-selected]
-            current <- following
-            if (current != start) path <- c(path, current)
-        }
-        point <- coordinate[match(path, coordinate$KEY)]
-        region[[length(region) + 1L]] <- list(x = point$X, y = point$Y)
-    }
-    region
-}
-
-# Build paired floor and ceiling polygons from the complete planar overlap of
-# each multiplied storey's horizontal faces.
-surface__rebuild_typical_storeys <- function(target, profile) {
-    tolerance <- profile$plane_distance
-    coordinate_columns <- geom__coordinate_columns()
-    rebuilt <- list()
-    pair_index <- 0L
-    storey_ids <- sort(unique(target$STOREY_ID))
-    for (storey_id in storey_ids) {
-        storey <- target[STOREY_ID == storey_id]
-        down_ids <- unique(storey[AZIMUTH == 999.0, ID])
-        up_ids <- unique(storey[AZIMUTH == -999.0, ID])
-        if (length(down_ids) == 0L || length(up_ids) == 0L) {
-            stop(sprintf(
-                "Multiplied DeST storey '%s' needs both floor and ceiling faces.",
-                storey$STOREY_NAME[[1L]]
-            ))
-        }
-
-        # A unique middle-floor construction is the only defensible fallback
-        # for portions whose source boundary was Roof or exposed Floor. Local
-        # middle-floor faces still take precedence when they are available.
-        default_construction <- unique(surface__construction_base(
-            storey[KIND_ENCLOSURE == 5L, CONSTRUCTION]
-        ))
-        default_construction <- default_construction[
-            !is.na(default_construction)
-        ]
-        if (length(default_construction) != 1L) {
-            stop(sprintf(
-                paste(
-                    "Multiplied DeST storey '%s' must have exactly one",
-                    "middle-floor construction for typical-storey approximation."
-                ),
-                storey$STOREY_NAME[[1L]]
-            ))
-        }
-
-        for (down_id in down_ids) {
-            down <- storey[ID == down_id]
-            if (diff(range(down$POINT_Z)) > tolerance) {
-                stop("A typical-storey floor surface is not horizontal.")
-            }
-            for (up_id in up_ids) {
-                up <- storey[ID == up_id]
-                if (diff(range(up$POINT_Z)) > tolerance) {
-                    stop("A typical-storey ceiling surface is not horizontal.")
-                }
-
-                # Intersect the original face regions in plan after discarding
-                # all auxiliary triangulation diagonals. Keeping those diagonals
-                # would create millimetre-scale slivers at their crossings.
-                overlap <- polyclip::polyclip(
-                    surface__polygon_region(down),
-                    surface__polygon_region(up),
-                    op = "intersection",
-                    eps = profile$intersection
-                )
-                if (length(overlap) == 0L) {
-                    next
-                }
-
-                local_construction <- unique(surface__construction_base(c(
-                    down[KIND_ENCLOSURE == 5L, CONSTRUCTION],
-                    up[KIND_ENCLOSURE == 5L, CONSTRUCTION]
-                )))
-                local_construction <- local_construction[
-                    !is.na(local_construction)
-                ]
-                if (length(local_construction) > 1L) {
-                    stop(
-                        "Overlapping typical-storey faces use different floor constructions."
-                    )
-                }
-                construction <- if (length(local_construction) == 1L) {
-                    local_construction[[1L]]
-                } else {
-                    default_construction[[1L]]
-                }
-
-                down_metadata <- down[
-                    1L,
-                    setdiff(names(down), coordinate_columns),
-                    with = FALSE
-                ]
-                up_metadata <- up[
-                    1L,
-                    setdiff(names(up), coordinate_columns),
-                    with = FALSE
-                ]
-                down_metadata[, `:=`(
-                    SOURCE_ID = ID,
-                    SOURCE_NAME = ORIGINAL_NAME,
-                    TYPE = "Floor",
-                    SIDE = 1L,
-                    CONSTRUCTION = sprintf("%s [Reverse]", construction),
-                    BOUNDARY = "Surface",
-                    BOUNDARY_OBJECT = NA_character_,
-                    AZIMUTH = 999.0,
-                    TILT = 0.0,
-                    BOUNDARY_MODE = "typical_cycle"
-                )]
-                up_metadata[, `:=`(
-                    SOURCE_ID = ID,
-                    SOURCE_NAME = ORIGINAL_NAME,
-                    TYPE = "Ceiling",
-                    SIDE = 2L,
-                    CONSTRUCTION = construction,
-                    BOUNDARY = "Surface",
-                    BOUNDARY_OBJECT = NA_character_,
-                    AZIMUTH = -999.0,
-                    TILT = 0.0,
-                    BOUNDARY_MODE = "typical_cycle"
-                )]
-
-                for (contour in overlap) {
-                    polygon <- data.table::data.table(
-                        POINT_X = contour$x,
-                        POINT_Y = contour$y,
-                        POINT_Z = up$POINT_Z[[1L]]
-                    )
-                    polygon[, POINT_NO := seq_len(.N) - 1L]
-                    polygon <- surface__simplify_polygon(polygon, profile)
-                    if (
-                        nrow(polygon) < 3L ||
-                            geom__polygon_area(polygon) <= profile$area
-                    ) {
-                        next
-                    }
-                    # A convex overlap is already a valid synchronized part on
-                    # both sides. Preserve it intact and triangulate only a
-                    # concave overlap that EnergyPlus cannot use reliably for
-                    # shadow receiving or casting.
-                    triangle <- if (
-                        nrow(polygon) == 3L ||
-                            geom__polygon_is_convex(polygon, profile$angle)
-                    ) {
-                        polygon[, PART := 1L]
-                    } else {
-                        tryCatch(
-                            surface__triangulate_polygon(
-                                polygon,
-                                profile = profile
-                            ),
-                            error = function(error) {
-                                stop(sprintf(
-                                    paste(
-                                        "Could not triangulate typical-storey",
-                                        "overlap between source surfaces %s and %s: %s"
-                                    ),
-                                    down_id,
-                                    up_id,
-                                    conditionMessage(error)
-                                ))
-                            }
-                        )
-                    }
-                    triangle <- surface__merge_convex_parts(triangle, profile)
-                    for (part in unique(triangle$PART)) {
-                        up_geometry <- triangle[PART == part]
-                        up_geometry[, c("PART") := NULL]
-                        up_geometry[, POINT_NO := seq_len(.N) - 1L]
-                        down_geometry <- data.table::copy(up_geometry)
-                        down_geometry[, POINT_Z := down$POINT_Z[[1L]]]
-
-                        pair_index <- pair_index + 1L
-                        pair_id <- sprintf("%s-%05d", storey_id, pair_index)
-                        down_part <- data.table::copy(down_metadata)
-                        up_part <- data.table::copy(up_metadata)
-                        down_part[, TYPICAL_PAIR_ID := pair_id]
-                        up_part[, TYPICAL_PAIR_ID := pair_id]
-                        rebuilt[[length(rebuilt) + 1L]] <- cbind(
-                            down_part[rep(1L, nrow(down_geometry))],
-                            down_geometry
-                        )
-                        rebuilt[[length(rebuilt) + 1L]] <- cbind(
-                            up_part[rep(1L, nrow(up_geometry))],
-                            up_geometry
-                        )
-                    }
-                }
-            }
-        }
-    }
-    rebuilt <- data.table::rbindlist(rebuilt, fill = TRUE)
-    if (nrow(rebuilt) == 0L) {
-        stop("Typical-storey floor and ceiling footprints do not overlap.")
-    }
-    rebuilt
-}
-
-# Check that the common overlay covers every original source face exactly once.
-surface__validate_typical_storey_area <- function(target, rebuilt, profile) {
-    tolerance <- profile$plane_distance
-    source_area <- target[,
-        .(
-            PART_AREA = geom__polygon_area(.SD)
-        ),
-        by = .(ID, OUTPUT_ID)
-    ][,
-        .(
-            SOURCE_AREA = sum(PART_AREA)
-        ),
-        by = "ID"
-    ]
-    rebuilt_area <- rebuilt[,
-        .(
-            REBUILT_AREA = geom__polygon_area(.SD)
-        ),
-        by = .(ID = SOURCE_ID, TYPICAL_PAIR_ID)
-    ]
-    rebuilt_area <- rebuilt_area[,
-        .(
-            REBUILT_AREA = sum(REBUILT_AREA)
-        ),
-        by = "ID"
-    ][source_area, on = "ID"]
-    rebuilt_area[, ERROR := REBUILT_AREA - SOURCE_AREA]
-    area_tolerance <- pmax(
-        profile$area,
-        tolerance * abs(rebuilt_area$SOURCE_AREA)
-    )
-    if (
-        anyNA(rebuilt_area$REBUILT_AREA) ||
-            any(abs(rebuilt_area$ERROR) > area_tolerance)
-    ) {
-        failure <- rebuilt_area[
-            is.na(REBUILT_AREA) | abs(ERROR) > area_tolerance
-        ][1L]
-        stop(sprintf(
-            paste(
-                "Typical-storey overlay does not preserve source surface %s area:",
-                "source %.12g m2, rebuilt %.12g m2, error %.12g m2."
-            ),
-            failure$ID,
-            failure$SOURCE_AREA,
-            failure$REBUILT_AREA,
-            failure$ERROR
-        ))
-    }
-    invisible(rebuilt)
-}
-
-# Assign deterministic part identifiers, names, and reciprocal pair references
-# to source faces split by the typical-storey overlay.
-surface__name_typical_storey_parts <- function(rebuilt) {
-    data.table::setorderv(
-        rebuilt,
-        c(
-            "STOREY_ID",
-            "SOURCE_ID",
-            "TYPICAL_PAIR_ID",
-            "POINT_NO"
-        )
-    )
-    rebuilt[,
-        TYPICAL_PART := data.table::rleid(TYPICAL_PAIR_ID),
-        by = "SOURCE_ID"
-    ]
-    rebuilt[,
-        TYPICAL_PART_COUNT := data.table::uniqueN(TYPICAL_PAIR_ID),
-        by = "SOURCE_ID"
-    ]
-    rebuilt[,
-        NAME := ifelse(
-            TYPICAL_PART_COUNT == 1L,
-            SOURCE_NAME,
-            sprintf("%s [Typical %d]", SOURCE_NAME, TYPICAL_PART)
-        )
-    ]
-    rebuilt[, PART := data.table::rleid(TYPICAL_PAIR_ID), by = "ID"]
-    rebuilt[, PART_COUNT := data.table::uniqueN(PART), by = "ID"]
-    rebuilt[, OUTPUT_ID := sprintf("%s-T%d", ID, PART)]
-    pair_name <- unique(rebuilt[, .(
-        TYPICAL_PAIR_ID,
-        TYPE,
-        NAME
-    )])
-    floor_name <- pair_name[
-        TYPE == "Floor",
-        .(
-            TYPICAL_PAIR_ID,
-            FLOOR_NAME = NAME
-        )
-    ]
-    ceiling_name <- pair_name[
-        TYPE == "Ceiling",
-        .(
-            TYPICAL_PAIR_ID,
-            CEILING_NAME = NAME
-        )
-    ]
-    pair_name <- merge(floor_name, ceiling_name, by = "TYPICAL_PAIR_ID")
-    rebuilt[
-        pair_name,
-        on = "TYPICAL_PAIR_ID",
-        BOUNDARY_OBJECT := ifelse(
-            TYPE == "Floor",
-            i.CEILING_NAME,
-            i.FLOOR_NAME
-        )
-    ]
-    rebuilt
-}
-
-# Replace every multiplied-storey horizontal boundary with a cyclic paired
-# floor and ceiling overlay while keeping adjacent cut faces adiabatic.
-surface__apply_typical_storey_boundaries <- function(
-    surface,
-    window = data.table::data.table(),
-    profile = eplus_geom__profile()
-) {
-    prepared <- surface__prepare_typical_storey(surface, window, profile)
-    surface <- prepared$surface
-    target <- prepared$target
-    if (nrow(target) == 0L) {
-        return(surface)
-    }
-
-    target_output <- unique(target$OUTPUT_ID)
-    counterpart <- unique(target[
-        BOUNDARY == "Surface" & !is.na(BOUNDARY_OBJECT),
-        BOUNDARY_OBJECT
-    ])
-    # A neighboring first/top-storey face cannot reference a source face that
-    # is repurposed as a cyclic typical boundary; self-reference makes it
-    # adiabatic while retaining its thermal mass.
-    cut <- surface[
-        NAME %in% counterpart & !OUTPUT_ID %in% target_output,
-        unique(OUTPUT_ID)
-    ]
-    surface[
-        OUTPUT_ID %in% cut,
-        `:=`(
-            BOUNDARY = "Surface",
-            BOUNDARY_OBJECT = NAME,
-            BOUNDARY_MODE = "typical_cut_adiabatic"
-        )
-    ]
-
-    rebuilt <- surface__rebuild_typical_storeys(target, profile)
-    surface__validate_typical_storey_area(target, rebuilt, profile)
-    rebuilt <- surface__name_typical_storey_parts(rebuilt)
-
-    surface <- data.table::rbindlist(
-        list(
-            surface[!OUTPUT_ID %in% target_output],
-            rebuilt
-        ),
-        fill = TRUE
-    )
-    data.table::setorderv(surface, c("ID", "PART", "POINT_NO"))
-    surface <- surface__normalize_room_junctions(
-        surface,
-        window,
-        profile
-    )
-
-    # All non-adiabatic Surface references must be reciprocal after rewiring.
-    reference <- unique(surface[, .(NAME, BOUNDARY_OBJECT)])
-    peer_index <- match(reference$BOUNDARY_OBJECT, reference$NAME)
-    unresolved <- reference[
-        !is.na(BOUNDARY_OBJECT) & is.na(peer_index)
-    ]
-    nonmutual <- reference[
-        !is.na(BOUNDARY_OBJECT) &
-            NAME != BOUNDARY_OBJECT &
-            reference$BOUNDARY_OBJECT[peer_index] != NAME
-    ]
-    if (nrow(unresolved) > 0L || nrow(nonmutual) > 0L) {
-        stop(
-            "Typical-storey rewiring produced a non-reciprocal surface reference."
-        )
-    }
-
-    surface
-}
-
-# Return rooms that fail the profile's EnergyPlus two-pass closure test.
-# The second pass inserts missing collinear points, so harmless T-junction edge
-# segmentation does not trigger expensive exported-surface normalization.
+# Check room closure on a cleaned geometry copy using the compatibility profile.
+# EnergyPlus removes coincident/collinear vertices before volume calculation;
+# checking the uncleaned shell can miss a break exposed by that preprocessing.
+# Its second closure pass accepts harmless T-junctions without exported splits.
+# This profile-based check is supplemented by actual engine regression runs.
 surface__energyplus_unclosed_rooms <- function(
     surface,
     profile = eplus_geom__profile()
 ) {
     vertex_tolerance <- profile$closure_vertex_distance
+    # Private copies keep source junction vertices available to the later repair.
+    # A face that collapses during cleanup must make its room fail this check,
+    # rather than disappearing from the room's inventory without a diagnostic.
     room_is_closed <- function(room) {
         output_ids <- unique(room$OUTPUT_ID)
         faces <- lapply(output_ids, function(output_id) {
-            as.matrix(room[
+            face <- data.table::copy(room[
                 OUTPUT_ID == output_id,
                 .(POINT_X, POINT_Y, POINT_Z)
             ])
+            as.matrix(surface__simplify_polygon(face, profile)[,
+                .(POINT_X, POINT_Y, POINT_Z)
+            ])
         })
-        if (length(faces) == 0L) {
+        if (length(faces) == 0L || any(vapply(faces, nrow, integer(1L)) < 3L)) {
             return(FALSE)
         }
 
@@ -1207,36 +741,6 @@ surface__junction_context <- function(
         ROOM %in% repair_member_rooms,
         .(ROOM, POINT_X, POINT_Y, POINT_Z)
     ])
-    # A cyclic face can acquire a junction by projecting a room-shell vertex
-    # onto its horizontal plane. Precompute the same projections so incident
-    # walls see those vertices regardless of group traversal order.
-    typical_object <- object[
-        GROUP %in% repair_groups & BOUNDARY_MODE == "typical_cycle"
-    ]
-    projected_point <- lapply(seq_len(nrow(typical_object)), function(index) {
-        typical_id <- typical_object$OUTPUT_ID[[index]]
-        typical_room <- typical_object$ROOM[[index]]
-        typical <- surface[OUTPUT_ID == typical_id]
-        candidate <- room_point[ROOM == typical_room]
-        normal <- geom__unit_normal(typical)
-        origin <- as.numeric(typical[1L, .(POINT_X, POINT_Y, POINT_Z)])
-        coordinate <- as.matrix(candidate[, .(POINT_X, POINT_Y, POINT_Z)])
-        plane_distance <- as.vector(
-            sweep(coordinate, 2L, origin, "-") %*% normal
-        )
-        coordinate <- coordinate -
-            plane_distance * rep(normal, each = nrow(coordinate))
-        data.table::data.table(
-            ROOM = typical_room,
-            POINT_X = coordinate[, 1L],
-            POINT_Y = coordinate[, 2L],
-            POINT_Z = coordinate[, 3L]
-        )
-    })
-    room_point <- unique(data.table::rbindlist(
-        c(list(room_point), projected_point),
-        fill = TRUE
-    ))
 
     list(
         object = object,
@@ -1280,8 +784,6 @@ surface__normalize_junction_groups <- function(
         }
 
         rooms <- unique(member$ROOM)
-        project_parallel <- paired &&
-            any(member$BOUNDARY_MODE == "typical_cycle")
         candidate <- room_point[ROOM %in% rooms]
         normal <- geom__unit_normal(base)
         origin <- as.numeric(base[1L, .(POINT_X, POINT_Y, POINT_Z)])
@@ -1289,16 +791,11 @@ surface__normalize_junction_groups <- function(
         plane_distance <- as.vector(
             sweep(coordinate, 2L, origin, "-") %*% normal
         )
-        if (project_parallel) {
-            coordinate <- coordinate -
-                plane_distance * rep(normal, each = nrow(coordinate))
-        } else {
-            coordinate <- coordinate[
-                abs(plane_distance) <= tolerance,
-                ,
-                drop = FALSE
-            ]
-        }
+        coordinate <- coordinate[
+            abs(plane_distance) <= tolerance,
+            ,
+            drop = FALSE
+        ]
         candidate <- unique(data.table::data.table(
             POINT_X = coordinate[, 1L],
             POINT_Y = coordinate[, 2L],
@@ -1318,7 +815,11 @@ surface__normalize_junction_groups <- function(
         split_profile$coordinate_distance <-
             distance_tolerance * (1.0 + 1e-6)
         split <- surface__split_edges(base, candidate, split_profile)
-        changed <- nrow(split) > nrow(base)
+        # A junction already present in the source can be removed by EnergyPlus.
+        # Once this group is marked for repair, preserving that junction may
+        # require a real part edge even if split_edges inserted no new vertex.
+        changed <- nrow(split) > nrow(base) ||
+            any(surface__redundant_vertices(split, profile))
         if (!changed) {
             output[[length(output) + 1L]] <- base
             if (paired) {
@@ -1332,10 +833,13 @@ surface__normalize_junction_groups <- function(
         } else {
             data.table::data.table()
         }
-        # A center fan preserves every newly inserted boundary segment. Ordinary
-        # ear clipping may legally bypass a collinear junction with one longer
-        # diagonal, which reopens the room shell even though total area matches.
-        triangle <- if (
+        # Direct diagonals often preserve required junctions with fewer parts.
+        # A center fan remains the convex fallback; ordinary ear clipping can
+        # bypass a collinear junction and reopen the room shell after cleanup.
+        direct <- surface__partition_by_diagonals(split, avoid_points, profile)
+        triangle <- if (!is.null(direct)) {
+            direct
+        } else if (
             nrow(avoid_points) == 0L &&
                 geom__polygon_is_convex(split, profile$angle)
         ) {
@@ -1443,15 +947,7 @@ surface__normalize_junction_groups <- function(
                     BOUNDARY_OBJECT
                 }
             )]
-            if (!is.na(base_part$TYPICAL_PAIR_ID[[1L]])) {
-                base_part[,
-                    TYPICAL_PAIR_ID := sprintf(
-                        "%s-J%d",
-                        TYPICAL_PAIR_ID,
-                        index
-                    )
-                ]
-            }
+
             output[[length(output) + 1L]] <- cbind(
                 base_part[rep(1L, nrow(geometry))],
                 geometry
@@ -1470,15 +966,7 @@ surface__normalize_junction_groups <- function(
                     OUTPUT_ID = sprintf("%s-J%d", peer$OUTPUT_ID[[1L]], index),
                     BOUNDARY_OBJECT = base_names[[index]]
                 )]
-                if (!is.na(peer_part$TYPICAL_PAIR_ID[[1L]])) {
-                    peer_part[,
-                        TYPICAL_PAIR_ID := sprintf(
-                            "%s-J%d",
-                            TYPICAL_PAIR_ID,
-                            index
-                        )
-                    ]
-                }
+
                 output[[length(output) + 1L]] <- cbind(
                     peer_part[rep(1L, nrow(peer_geometry))],
                     peer_geometry
@@ -1494,8 +982,8 @@ surface__normalize_junction_groups <- function(
     surface
 }
 
-# Split edges at every coplanar room-shell junction introduced by the
-# typical-storey overlay while preserving reciprocal boundary references.
+# Repair necessary coplanar room-shell junctions while preserving original
+# reciprocal boundary references.
 surface__normalize_room_junctions <- function(
     surface,
     window = data.table::data.table(),
@@ -1801,9 +1289,9 @@ surface__merge_convex_parts <- function(
     }))
 }
 
-# Build one canonical vertex sequence per MAIN_ENCLOSURE middle plane. Planar
-# DeST faces remain intact unless a true topology junction or concavity requires
-# a part boundary that EnergyPlus can preserve.
+# Build one canonical vertex sequence per MAIN_ENCLOSURE middle plane. Convex
+# source polygons remain intact here, including protected collinear junctions.
+# Cleanup-aware room closure decides later whether a junction needs splitting.
 surface__normalize_topology <- function(
     surface,
     window = data.table::data.table(),
@@ -1875,30 +1363,13 @@ surface__normalize_topology <- function(
     ]
     point <- point[,
         {
-            # EnergyPlus does not rewrite the IDF, but its GetSurfaceData path copies
-            # input vertices into an in-memory SurfaceTmp and CheckConvexity removes
-            # collinear vertices from that working copy. With reversed peer winding,
-            # The reference EnergyPlus profile removed different counts from some
-            # complex peer faces,
-            # causing a vertex-size-mismatch fatal error. Encode each protected
-            # junction as a true part boundary before export: selectively partition
-            # window hosts, and triangulate other polygons with identical part IDs
-            # on both sides of an interzone construction.
-            split <- any(surface__redundant_vertices(.SD, profile) & PROTECTED)
             concave <- !geom__polygon_is_convex(.SD, profile$angle)
-            avoid_points <- window[PLANE == .BY$PLANE]
-            if (split) {
-                # A protected straight-through junction must become an actual edge.
-                # Triangles also prevent EnergyPlus from independently flattening a
-                # slightly non-planar remainder and deleting different peer points.
-                # This path is limited to affected planes; ordinary DeST faces keep
-                # their original polygon, while windows are clipped to these parts.
-                surface__triangulate_polygon(.SD, avoid_points, profile)
-            } else if (concave) {
-                # Concave heat-transfer surfaces are legal, but EnergyPlus cannot
-                # reliably use them as shadow receivers or casters. This condition
-                # independently justifies complete triangulation.
-                surface__triangulate_polygon(.SD, avoid_points, profile)
+            if (concave) {
+                # Prefer direct convex regions for shadow geometry. A protected
+                # point alone does not require this split: the later closure
+                # check decides which convex faces need junction repair.
+                avoid_points <- window[PLANE == .BY$PLANE]
+                surface__partition_polygon(.SD, avoid_points, profile)
             } else {
                 copy <- data.table::copy(.SD)
                 copy[, `:=`(PART = 1L, POINT_NO = seq_len(.N) - 1L)]
@@ -2040,8 +1511,8 @@ surface__redundant_vertices <- function(
 }
 
 # Triangulate a simple planar polygon with ear clipping while retaining every
-# protected boundary junction. It is called only for planes that still contain
-# required collinear junctions after simplification, not for every surface.
+# protected boundary junction. Concave polygons and selected local junction
+# repairs use this helper; ordinary convex source faces remain intact.
 # Ordinary ear clipping is cubic; the window-clearance search may explore more
 # states, so it is capped by the versioned geometry profile before falling back
 # to deterministic ordinary clipping. Peer faces reuse identical part numbering.

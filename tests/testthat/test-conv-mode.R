@@ -105,7 +105,7 @@ test_that("conversion audit labels necessary moisture EMS", {
 # presets and custom settings into generated objects, not just audit metadata.
 test_that("preset strings and options objects produce equivalent real conversions", {
     skip_on_cran()
-    src <- ensure_dest_sqlite_file()
+    src <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
     from_string <- suppressWarnings(to_idf(src, "23.1", options = "objects"))
     opts <- destep_opts()

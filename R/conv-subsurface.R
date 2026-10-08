@@ -460,6 +460,8 @@ window__source_table <- function(dest) {
 }
 
 # Read DeST door geometry and resolve default construction references.
+# Keep host references for placement, but read heat-transfer properties from
+# the door's own faces. Native DeST uses these independently of the host wall.
 door__source_table <- function(dest) {
     door <- DBI::dbGetQuery(
         dest,
@@ -487,17 +489,17 @@ door__source_table <- function(dest) {
             H1.TYPE        AS SIDE1_SURFACE_TYPE,
             H1.AZIMUTH     AS SIDE1_AZIMUTH,
             H1.TILT        AS SIDE1_TILT,
-            H1.ABSORB_COEF AS SIDE1_SOLAR_ABSORPTANCE,
-            H1.BLACKNESS   AS SIDE1_THERMAL_ABSORPTANCE,
-            H1.VENTILATION_COEF AS SIDE1_CONVECTION_COEFFICIENT,
+            S1.ABSORB_COEF AS SIDE1_SOLAR_ABSORPTANCE,
+            S1.BLACKNESS   AS SIDE1_THERMAL_ABSORPTANCE,
+            S1.VENTILATION_COEF AS SIDE1_CONVECTION_COEFFICIENT,
             E.SIDE2        AS SIDE2_SURFACE_ID,
             H2.NAME        AS SIDE2_SURFACE_NAME,
             H2.TYPE        AS SIDE2_SURFACE_TYPE,
             H2.AZIMUTH     AS SIDE2_AZIMUTH,
             H2.TILT        AS SIDE2_TILT,
-            H2.ABSORB_COEF AS SIDE2_SOLAR_ABSORPTANCE,
-            H2.BLACKNESS   AS SIDE2_THERMAL_ABSORPTANCE,
-            H2.VENTILATION_COEF AS SIDE2_CONVECTION_COEFFICIENT,
+            S2.ABSORB_COEF AS SIDE2_SOLAR_ABSORPTANCE,
+            S2.BLACKNESS   AS SIDE2_THERMAL_ABSORPTANCE,
+            S2.VENTILATION_COEF AS SIDE2_CONVECTION_COEFFICIENT,
             L.POINT_NO     AS POINT_NO,
             ROUND(P.X, 3)  AS POINT_X,
             ROUND(P.Y, 3)  AS POINT_Y,
@@ -505,6 +507,10 @@ door__source_table <- function(dest) {
         FROM DOOR DR
         LEFT JOIN MAIN_ENCLOSURE E
         ON DR.OF_ENCLOSURE = E.ID
+        LEFT JOIN SURFACE S1
+        ON DR.SIDE1 = S1.SURFACE_ID
+        LEFT JOIN SURFACE S2
+        ON DR.SIDE2 = S2.SURFACE_ID
         LEFT JOIN SURFACE H1
         ON E.SIDE1 = H1.SURFACE_ID
         LEFT JOIN SURFACE H2
