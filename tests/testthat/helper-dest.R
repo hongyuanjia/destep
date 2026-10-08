@@ -1,9 +1,16 @@
 ensure_dest_test_file <- function(clean = FALSE) {
-    p <- destep_test_fixture_file("CoA_Chongqin_2015.accdb", "DESTEP_TEST_ACCDB")
+    p <- destep_test_fixture_file(
+        "CoA_Chongqin_2015.accdb",
+        "DESTEP_TEST_ACCDB"
+    )
 
     # directly return the path if the file exists
-    if (!clean && file.exists(p)) return(p)
-    if (file.exists(p)) return(p)
+    if (!clean && file.exists(p)) {
+        return(p)
+    }
+    if (file.exists(p)) {
+        return(p)
+    }
 
     testthat::skip(
         paste(
@@ -14,8 +21,14 @@ ensure_dest_test_file <- function(clean = FALSE) {
 }
 
 ensure_dest_sqlite_file <- function(clean = FALSE) {
-    path_sql <- destep_test_fixture_file("CoA_Chongqin_2015.sql", "DESTEP_TEST_SQLITE")
-    path_accdb <- destep_test_fixture_file("CoA_Chongqin_2015.accdb", "DESTEP_TEST_ACCDB")
+    path_sql <- destep_test_fixture_file(
+        "CoA_Chongqin_2015.sql",
+        "DESTEP_TEST_SQLITE"
+    )
+    path_accdb <- destep_test_fixture_file(
+        "CoA_Chongqin_2015.accdb",
+        "DESTEP_TEST_ACCDB"
+    )
     if (!clean && file.exists(path_sql)) {
         DBI::dbConnect(RSQLite::SQLite(), path_sql)
     } else {
@@ -42,10 +55,26 @@ ensure_dest_sqlite_file <- function(clean = FALSE) {
 
 destep_test_fixture_file <- function(file, envvar) {
     path <- Sys.getenv(envvar, unset = "")
-    if (nzchar(path)) return(path)
+    if (nzchar(path)) {
+        return(path)
+    }
 
     dir <- Sys.getenv("DESTEP_TEST_FIXTURE_DIR", unset = "")
-    if (nzchar(dir)) return(file.path(dir, file))
+    if (nzchar(dir)) {
+        return(file.path(dir, file))
+    }
 
     testthat::test_path("fixture", file)
+}
+
+# Return an explicitly unmultiplied in-memory variant for integration tests of
+# unrelated subsystems. This avoids unequal-multiplier diagnostics in tests
+# that do not exercise source boundary handling; retain the original database.
+destep_test__unmultiplied_fixture <- function() {
+    source <- ensure_dest_sqlite_file()
+    on.exit(DBI::dbDisconnect(source))
+    copy <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    RSQLite::sqliteCopyDatabase(source, copy)
+    DBI::dbExecute(copy, "UPDATE STOREY SET MULTIPLE = 1")
+    copy
 }

@@ -235,7 +235,7 @@ test_that("can convert ground temperatures from a real DeST model", {
 test_that("to_idf() includes valid ground temperatures", {
     skip_on_cran()
 
-    src <- ensure_dest_sqlite_file()
+    src <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
     idf <- to_idf(src, 23.1)

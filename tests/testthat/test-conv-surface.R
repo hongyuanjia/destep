@@ -2,7 +2,8 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     skip_on_cran()
 
     ep <- eplusr::empty_idf(23.1)
-    dest <- ensure_dest_sqlite_file(TRUE)
+    dest <- destep_test__unmultiplied_fixture()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
     conv__update_names(dest)
 
     # can convert 'BuildingSurface:Detailed'
@@ -794,9 +795,9 @@ test_that("window-clear triangulation search has a deterministic state cap", {
     )
 })
 
-test_that("typical-storey overlap preserves an already convex polygon", {
+test_that("source boundary handling preserves an already convex polygon", {
     # Build one reciprocal floor/ceiling pair whose common footprint is a
-    # rectangle. The typical-storey transformation should retain that exact
+    # rectangle. Source boundary handling should retain that exact
     # four-vertex polygon instead of introducing two unnecessary triangles.
     make_face <- function(
         id,
@@ -858,7 +859,7 @@ test_that("typical-storey overlap preserves an already convex polygon", {
         )
     ))
 
-    converted <- surface__apply_typical_storey_boundaries(surface)
+    converted <- surface__preserve_boundaries(surface)
     object <- converted[,
         .(
             N_VERTEX = .N,
@@ -871,11 +872,11 @@ test_that("typical-storey overlap preserves an already convex polygon", {
 
     expect_equal(object$N_VERTEX, c(4L, 4L))
     expect_equal(object$AREA, c(12.0, 12.0))
-    expect_equal(object$BOUNDARY_MODE, rep("typical_cycle", 2L))
+    expect_equal(object$BOUNDARY_MODE, rep("source", 2L))
     expect_equal(object$BOUNDARY_OBJECT, c("Ceiling", "Floor"))
 })
 
-test_that("real DeST surfaces preserve orientation, adjacency, area, and closure", {
+test_that("unmultiplied fixture preserves source boundaries, geometry, and closure", {
     skip_on_cran()
 
     src <- ensure_dest_sqlite_file()
@@ -892,6 +893,21 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     RSQLite::sqliteCopyDatabase(src, dest)
     conv__update_names(dest)
 
+    # Multipliers must not change source boundaries or require synthetic peers.
+    expect_warning(
+        multiplied <- surface__convert(dest, eplusr::empty_idf(23.1)),
+        "joining unequal storey multipliers"
+    )
+    original_table <- attr(multiplied, "table")
+    expect_identical(original_table$BOUNDARY, original_table$SOURCE_BOUNDARY)
+    # Material-property variants append an optical-property suffix to the
+    # source construction name; they must retain the original layer assembly.
+    expect_true(all(startsWith(
+        original_table$CONSTRUCTION,
+        original_table$SOURCE_CONSTRUCTION
+    )))
+    expect_gt(nrow(attr(multiplied, "boundary_diagnostics")), 0L)
+    DBI::dbExecute(dest, "UPDATE STOREY SET MULTIPLE = 1")
     surface <- attr(surface__convert(dest, eplusr::empty_idf(23.1)), "table")
     # Keep the fixture close to DeST's 560 SURFACE rows while allowing the
     # separate room-side objects required by EnergyPlus interzone boundaries.
@@ -914,8 +930,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
             BOUNDARY_MODE,
             SOURCE_TYPE,
             SOURCE_BOUNDARY,
-            STOREY_MULTIPLIER,
-            TYPICAL_PAIR_ID
+            STOREY_MULTIPLIER
         )
     ]
     metric[,
@@ -935,8 +950,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     expect_true(all(metric$ALIGNMENT > 1.0 - 1e-6))
 
     original <- unique(metric, by = "ID")
-    # Trace metadata preserves DeST's source classification even when a middle
-    # storey's roof or exposed floor becomes part of the cyclic typical layer.
+    # With no repetition, all source exterior boundaries must remain exterior.
     expect_equal(
         data.table::uniqueN(
             metric[
@@ -959,7 +973,7 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
                 TYPE == "Roof" & BOUNDARY == "Outdoors"
             ]$ID
         ),
-        11L
+        18L
     )
     expect_equal(
         data.table::uniqueN(
@@ -967,13 +981,12 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
                 TYPE == "Floor" & BOUNDARY == "Outdoors"
             ]$ID
         ),
-        0L
+        2L
     )
     expect_true(all(original[KIND_ENCLOSURE == 6L]$NZ < 0.0))
 
     self <- metric[BOUNDARY == "Surface" & NAME == BOUNDARY_OBJECT]
-    expect_true(nrow(self) > 0L)
-    expect_true(all(self$BOUNDARY_MODE == "typical_cut_adiabatic"))
+    expect_equal(nrow(self), 0L)
 
     paired <- metric[BOUNDARY == "Surface" & NAME != BOUNDARY_OBJECT]
     peer <- match(paired$BOUNDARY_OBJECT, metric$NAME)
@@ -987,17 +1000,14 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
             paired$NZ * metric$NZ[peer] <
             -1.0 + 1e-6
     ))
-    # EnergyPlus applies zone multipliers after solving the representative
-    # zones, so every non-adiabatic peer pair must conserve A * multiplier.
+    # This unit-multiplier fixture has equal weights on both sides. Unequal
+    # source multipliers are diagnosed separately without rewriting boundaries.
     expect_equal(
         paired$AREA * paired$STOREY_MULTIPLIER,
         metric$AREA[peer] * metric$STOREY_MULTIPLIER[peer],
         tolerance = 1e-8
     )
-    typical <- paired[BOUNDARY_MODE == "typical_cycle"]
-    expect_true(nrow(typical) > 0L)
-    expect_true(all(typical$STOREY_MULTIPLIER == 5L))
-    expect_true(all(!is.na(typical$TYPICAL_PAIR_ID)))
+    expect_true(all(paired$BOUNDARY_MODE == "source"))
 
     # Match EnergyPlus's own two-pass closure test instead of requiring every
     # harmless T-junction to be physically inserted into exported polygons.
@@ -1026,10 +1036,10 @@ test_that("real DeST surfaces preserve orientation, adjacency, area, and closure
     expect_lt(max(abs(area$CONVERTED_AREA - area$SOURCE_AREA)), 1e-6)
 })
 
-test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
+test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
     skip_on_cran()
 
-    dest <- ensure_dest_sqlite_file()
+    dest <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(dest), add = TRUE)
     warnings <- character()
     idf <- withCallingHandlers(to_idf(dest, 23.1), warning = function(w) {
@@ -1076,7 +1086,10 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
     errors <- job$errors()
 
     expect_false(any(errors$level %in% c("Severe", "Fatal")))
-    expect_false(any(grepl(
+    # Intact convex faces may contain harmless collinear vertices that the
+    # engine removes. Reject enclosure/area/degeneracy failures after cleanup;
+    # the deletion notice alone no longer implies invalid geometry.
+    geometry_problem <- grepl(
         paste(
             c(
                 "not fully enclosed",
@@ -1087,7 +1100,6 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
                 "degenerate",
                 "non-?convex",
                 "possibly coincident",
-                "collinear",
                 "InterZone Surface Areas do not match as expected",
                 "Base surface does not surround subsurface",
                 "Distance between two vertices < \\.01",
@@ -1097,5 +1109,12 @@ test_that("converted real geometry passes EnergyPlus detailed diagnostics", {
         ),
         errors$message,
         ignore.case = TRUE
-    )))
+    )
+    expect_false(
+        any(geometry_problem),
+        info = paste(
+            errors$message[geometry_problem],
+            collapse = "\n"
+        )
+    )
 })

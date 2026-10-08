@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/hongyuanjia/Library/CloudStorage/SynologyDrive-Personal/repos/destep/research/ticket-01-geometry-20261008/audit.py", line 20, in <module>
+    raise RuntimeError("Historical auditor reuse requires unoptimized Python")
+RuntimeError: Historical auditor reuse requires unoptimized Python

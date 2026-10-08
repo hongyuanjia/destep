@@ -392,7 +392,7 @@ test_that("schedule conversion returns null without valid references", {
 
 test_that("real model uses valid date-based schedules in both formats", {
     skip_on_cran()
-    src <- ensure_dest_sqlite_file()
+    src <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
     directory <- withr::local_tempdir()
     for (format in c("compact", "file")) {

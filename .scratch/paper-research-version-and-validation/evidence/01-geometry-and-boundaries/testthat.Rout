@@ -1,0 +1,358 @@
+
+R version 4.6.0 (2026-04-24) -- "Because it was There"
+Copyright (C) 2026 The R Foundation for Statistical Computing
+Platform: aarch64-apple-darwin23
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library(testthat)
+> library(destep)
+>
+> test_check("destep")
+IDD v23.1.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+i Using ODBC driver: 'MDBTools Driver'
+i Connecting to the Access database
+x Connecting to the Access database [192ms]
+
+! ODBC connection failed with error: Failed to list tables from Access database: nanodbc/nanodbc.cpp:3210: 00000
+[unixODBC][Driver Manager]Invalid attribute/option identifier
+i Falling back to MDBTools command-line utilities...
+Listing tables from Microsoft Access database...
+\ Converting Microsoft Access database to SQLite [0/141 tables]: `AC_SYS`
+| Converting Microsoft Access database to SQLite [53/141 tables]: `LIB_SOLAR_...
+/ Converting Microsoft Access database to SQLite [72/141 tables]: `SHADING`
+- Converting Microsoft Access database to SQLite [98/141 tables]: `SYS_WINDOW...
+\ Converting Microsoft Access database to SQLite [141/141 tables]: `Conversio...
+v Converting Microsoft Access database to SQLite [141/141 tables] [11.8s]
+
+Listing tables from Microsoft Access database...IDD v9.0.1 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v9.0.1 installation folder '/Applications/EnergyPlus-9-0-1'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-9-0-1/Energy+.idd'.
+Start parsing...
+Parsing completed.
+IDD v9.3.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v9.3.0 installation folder '/Applications/EnergyPlus-9-3-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-9-3-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+IDD v9.4.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v9.4.0 installation folder '/Applications/EnergyPlus-9-4-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-9-4-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+i Using ODBC driver: 'MDBTools Driver'
+i Connecting to the Access database
+x Connecting to the Access database [65ms]
+
+! ODBC connection failed with error: Failed to list tables from Access database: nanodbc/nanodbc.cpp:3210: 00000
+[unixODBC][Driver Manager]Invalid attribute/option identifier
+i Falling back to MDBTools command-line utilities...
+Listing tables from Microsoft Access database...
+\ Converting Microsoft Access database to SQLite [0/141 tables]: `AC_SYS`
+| Converting Microsoft Access database to SQLite [30/141 tables]: `GROUND`
+/ Converting Microsoft Access database to SQLite [72/141 tables]: `SHADING`
+- Converting Microsoft Access database to SQLite [89/141 tables]: `SYS_MIDDLE...
+\ Converting Microsoft Access database to SQLite [135/141 tables]: `ENERGY_HO...
+v Converting Microsoft Access database to SQLite [141/141 tables] [11.5s]
+
+Listing tables from Microsoft Access database...IDD v9.1.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v9.1.0 installation folder '/Applications/EnergyPlus-9-1-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-9-1-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+i Using ODBC driver: 'MDBTools Driver'
+i Connecting to the Access database
+x Connecting to the Access database [77ms]
+
+! ODBC connection failed with error: Failed to list tables from Access database: nanodbc/nanodbc.cpp:3210: 00000
+[unixODBC][Driver Manager]Invalid attribute/option identifier
+i Falling back to MDBTools command-line utilities...
+Listing tables from Microsoft Access database...
+\ Converting Microsoft Access database to SQLite [0/141 tables]: `AC_SYS`
+| Converting Microsoft Access database to SQLite [4/141 tables]: `BOILER`
+/ Converting Microsoft Access database to SQLite [49/141 tables]: `LIB_HEATEX...
+- Converting Microsoft Access database to SQLite [72/141 tables]: `SHADING`
+\ Converting Microsoft Access database to SQLite [115/141 tables]: `LIB_BOILER`
+v Converting Microsoft Access database to SQLite [141/141 tables] [11s]
+
+Listing tables from Microsoft Access database...Adding an object in class 'Output:SQLite' and setting its 'Option Type' to 'SimpleAndTabular' in order to create SQLite output file.
+Adding an object in class 'Output:VariableDictionary' and setting its 'Key Field' to 'IDF' in order to create RDD and MDD output file.
+ExpandObjects Started.
+No expanded file generated.
+ExpandObjects Finished. Time:     0.324
+EnergyPlus Starting
+EnergyPlus, Version 23.1.0-87ed9199d4, YMD=2026.10.08 23:37
+Adjusting Air System Sizing
+Adjusting Standard 62.1 Ventilation Sizing
+Initializing Simulation
+Reporting Surfaces
+Beginning Primary Simulation
+Initializing New Environment Parameters
+Warming up {1}
+Warming up {2}
+Warming up {3}
+Warming up {4}
+Warming up {5}
+Warming up {6}
+Warming up {7}
+Starting Simulation at 01/01/2001 for ANNUAL
+Writing final SQL reports
+EnergyPlus Run Time=00hr 00min  1.37sec
+EnergyPlus Completed Successfully.
+
+Superclass Idd has cloneable=FALSE, but subclass EpwIdd has cloneable=TRUE. A subclass cannot be cloneable when its superclass is not cloneable, so cloning will be disabled for EpwIdd.
+i Connecting to the Access database
+x Connecting to the Access database [33ms]
+
+! ODBC connection failed with error: Failed to list tables from Access database: nanodbc/nanodbc.cpp:3210: 00000
+[unixODBC][Driver Manager]Invalid attribute/option identifier
+i Falling back to MDBTools command-line utilities...
+Listing tables from Microsoft Access database...
+\ Converting Microsoft Access database to SQLite [0/141 tables]: `AC_SYS`
+| Converting Microsoft Access database to SQLite [21/141 tables]: `DUCT_JOINT`
+/ Converting Microsoft Access database to SQLite [72/141 tables]: `SHADING`
+v Converting Microsoft Access database to SQLite [141/141 tables] [6.6s]
+
+Listing tables from Microsoft Access database...i Using ODBC driver: 'MDBTools Driver'
+i Connecting to the Access database
+x Connecting to the Access database [31ms]
+
+! ODBC connection failed with error: Failed to list tables from Access database: nanodbc/nanodbc.cpp:3210: 00000
+[unixODBC][Driver Manager]Invalid attribute/option identifier
+i Falling back to MDBTools command-line utilities...
+Listing tables from Microsoft Access database...
+\ Converting Microsoft Access database to SQLite [0/141 tables]: `AC_SYS`
+| Converting Microsoft Access database to SQLite [67/141 tables]: `PUMP`
+/ Converting Microsoft Access database to SQLite [109/141 tables]: `DN_FCU`
+v Converting Microsoft Access database to SQLite [141/141 tables] [6.7s]
+
+Listing tables from Microsoft Access database...[ FAIL 0 | WARN 27 | SKIP 19 | PASS 1830 ]
+
+══ Skipped tests (19) ══════════════════════════════════════════════════════════
+• A DeST model with selected plant products is required. (1):
+  'test-conv-hvac-source.R:453:9'
+• Archived multizone AE source is required (2):
+  'test-conv-hvac-treatment.R:505:5', 'test-conv-hvac-treatment.R:602:5'
+• Archived single-zone AE source is required (5):
+  'test-conv-hvac-terminal.R:217:5', 'test-conv-hvac-treatment.R:138:5',
+  'test-conv-hvac-treatment.R:249:5', 'test-conv-hvac-treatment.R:346:5',
+  'test-conv-hvac-treatment.R:690:5'
+• Archived single-zone source is required (1): 'test-conv-hvac-recovery.R:88:5'
+• Archived VAV AE source is required (2): 'test-conv-hvac-treatment.R:784:5',
+  'test-conv-hvac.R:388:5'
+• Real DeST HVAC fixtures are not available. Set DESTEP_TEST_HVAC_ACCDB and
+  DESTEP_TEST_EQUIPMENT_ACCDB. (1): 'test-conv-hvac-source.R:227:9'
+• Real type-0/type-1 DeST models and equipment library are required. (1):
+  'test-conv-hvac-source.R:351:9'
+• The archived AE101 DeST source database is required. (2):
+  'test-conv-hvac.R:65:9', 'test-conv-hvac.R:355:9'
+• The real AE201 DeST model is required. (1): 'test-conv-hvac-source.R:167:9'
+• The real AE201 model is required. (2): 'test-conv-hvac.R:104:9',
+  'test-conv-hvac.R:151:9'
+• The real AE401 DeST model is required. (1): 'test-conv-hvac.R:235:9'
+
+══ Warnings ════════════════════════════════════════════════════════════════════
+── Warning ('test-conv-ground-temperature.R:241:5'): to_idf() includes valid ground temperatures ──
+DeST window transmitted-solar distribution mode(s) [1] are not converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof, floor, and surrounding-surface fractions have no established direct EnergyPlus projection; the converted model uses the EnergyPlus building-level solar-distribution algorithm.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ground-temperature.R:241:5
+ 2.   └─destep:::window__convert(...)
+ 3.     └─destep:::window__warn_transmitted_solar_distribution(dest)
+ 4.       └─destep:::warn(...)
+── Warning ('test-conv-ground-temperature.R:241:5'): to_idf() includes valid ground temperatures ──
+EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ground-temperature.R:241:5
+ 2.   └─destep:::const__convert(...)
+ 3.     └─destep:::const__assemble_objects(...)
+ 4.       └─destep:::const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+── Warning ('test-conv-ground-temperature.R:241:5'): to_idf() includes valid ground temperatures ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ground-temperature.R:241:5
+ 2.   └─destep:::thermostat__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-ground-temperature.R:241:5'): to_idf() includes valid ground temperatures ──
+Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the documented outdoor-temperature-band rule. This preserves the declared minimum/maximum ACH schedules but does not claim equivalence to DeST's undocumented solver-state coupling.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ground-temperature.R:241:5
+ 2.   └─destep:::ventilation__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-ground-temperature.R:241:5'): to_idf() includes valid ground temperatures ──
+DeST window types 35 use nominal SimpleGlazing K/SC approximation; source two-face BLACKNESS and detailed optics are not expressed. See attr(idf, 'conversion')$windows and IDF glazing comments.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ground-temperature.R:241:5
+── Warning ('test-conv-ideal-loads.R:464:5'): to_idf() includes resolvable ideal loads references ──
+DeST window transmitted-solar distribution mode(s) [1] are not converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof, floor, and surrounding-surface fractions have no established direct EnergyPlus projection; the converted model uses the EnergyPlus building-level solar-distribution algorithm.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ideal-loads.R:464:5
+ 2.   └─destep:::window__convert(...)
+ 3.     └─destep:::window__warn_transmitted_solar_distribution(dest)
+ 4.       └─destep:::warn(...)
+── Warning ('test-conv-ideal-loads.R:464:5'): to_idf() includes resolvable ideal loads references ──
+EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ideal-loads.R:464:5
+ 2.   └─destep:::const__convert(...)
+ 3.     └─destep:::const__assemble_objects(...)
+ 4.       └─destep:::const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+── Warning ('test-conv-ideal-loads.R:464:5'): to_idf() includes resolvable ideal loads references ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ideal-loads.R:464:5
+ 2.   └─destep:::thermostat__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-ideal-loads.R:464:5'): to_idf() includes resolvable ideal loads references ──
+Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the documented outdoor-temperature-band rule. This preserves the declared minimum/maximum ACH schedules but does not claim equivalence to DeST's undocumented solver-state coupling.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ideal-loads.R:464:5
+ 2.   └─destep:::ventilation__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-ideal-loads.R:464:5'): to_idf() includes resolvable ideal loads references ──
+DeST window types 35 use nominal SimpleGlazing K/SC approximation; source two-face BLACKNESS and detailed optics are not expressed. See attr(idf, 'conversion')$windows and IDF glazing comments.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-ideal-loads.R:464:5
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+DeST window transmitted-solar distribution mode(s) [1] are not converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof, floor, and surrounding-surface fractions have no established direct EnergyPlus projection; the converted model uses the EnergyPlus building-level solar-distribution algorithm.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::window__convert(...)
+ 3.     └─destep:::window__warn_transmitted_solar_distribution(dest)
+ 4.       └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::const__convert(...)
+ 3.     └─destep:::const__assemble_objects(...)
+ 4.       └─destep:::const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::thermostat__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the documented outdoor-temperature-band rule. This preserves the declared minimum/maximum ACH schedules but does not claim equivalence to DeST's undocumented solver-state coupling.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::ventilation__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+DeST window types 35 use nominal SimpleGlazing K/SC approximation; source two-face BLACKNESS and detailed optics are not expressed. See attr(idf, 'conversion')$windows and IDF glazing comments.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+DeST window transmitted-solar distribution mode(s) [1] are not converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof, floor, and surrounding-surface fractions have no established direct EnergyPlus projection; the converted model uses the EnergyPlus building-level solar-distribution algorithm.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::window__convert(...)
+ 3.     └─destep:::window__warn_transmitted_solar_distribution(dest)
+ 4.       └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::const__convert(...)
+ 3.     └─destep:::const__assemble_objects(...)
+ 4.       └─destep:::const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::thermostat__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the documented outdoor-temperature-band rule. This preserves the declared minimum/maximum ACH schedules but does not claim equivalence to DeST's undocumented solver-state coupling.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+ 2.   └─destep:::ventilation__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-schedule.R:404:9'): real model uses valid date-based schedules in both formats ──
+DeST window types 35 use nominal SimpleGlazing K/SC approximation; source two-face BLACKNESS and detailed optics are not expressed. See attr(idf, 'conversion')$windows and IDF glazing comments.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1, options = opts) at test-conv-schedule.R:404:9
+── Warning ('test-conv-thermostat.R:72:5'): can convert ROOM_TYPE_DATA setpoints with shared dual setpoints ──
+Skipped 1 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep:::thermostat__convert(dest, ep) at test-conv-thermostat.R:72:5
+ 2.   └─destep:::warn(...)
+── Warning ('test-conv-thermostat.R:237:5'): can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST model ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep:::thermostat__convert(dest, ep) at test-conv-thermostat.R:237:5
+ 2.   └─destep:::warn(...)
+── Warning ('test-conv-thermostat.R:262:5'): to_idf() includes resolvable thermostat references ──
+DeST window transmitted-solar distribution mode(s) [1] are not converted. WINDOW.SUN_TRANS_DIST_MODE and the referenced DIST_MODE air, roof, floor, and surrounding-surface fractions have no established direct EnergyPlus projection; the converted model uses the EnergyPlus building-level solar-distribution algorithm.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-thermostat.R:262:5
+ 2.   └─destep:::window__convert(...)
+ 3.     └─destep:::window__warn_transmitted_solar_distribution(dest)
+ 4.       └─destep:::warn(...)
+── Warning ('test-conv-thermostat.R:262:5'): to_idf() includes resolvable thermostat references ──
+EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem angular-reflectance defect that was corrected in EnergyPlus 9.4. Transition the converted IDF to EnergyPlus 9.4 or later before using its simulation results.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-thermostat.R:262:5
+ 2.   └─destep:::const__convert(...)
+ 3.     └─destep:::const__assemble_objects(...)
+ 4.       └─destep:::const__warn_simple_glazing_version(ep, nrow(win_type_glazing))
+── Warning ('test-conv-thermostat.R:262:5'): to_idf() includes resolvable thermostat references ──
+Skipped 9 ROOM row(s) that do not describe supported controlled zones.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-thermostat.R:262:5
+ 2.   └─destep:::thermostat__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-thermostat.R:262:5'): to_idf() includes resolvable thermostat references ──
+Mapped 28 DeST ventilation-range ROOM_RELATION row(s) using the documented outdoor-temperature-band rule. This preserves the declared minimum/maximum ACH schedules but does not claim equivalence to DeST's undocumented solver-state coupling.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-thermostat.R:262:5
+ 2.   └─destep:::ventilation__convert(tmpdb, ep)
+ 3.     └─destep:::warn(...)
+── Warning ('test-conv-thermostat.R:262:5'): to_idf() includes resolvable thermostat references ──
+DeST window types 35 use nominal SimpleGlazing K/SC approximation; source two-face BLACKNESS and detailed optics are not expressed. See attr(idf, 'conversion')$windows and IDF glazing comments.
+Backtrace:
+    ▆
+ 1. └─destep::to_idf(src, 23.1) at test-conv-thermostat.R:262:5
+
+[ FAIL 0 | WARN 27 | SKIP 19 | PASS 1830 ]
+Warning message:
+call dbDisconnect() when finished working with a connection
+>
+> proc.time()
+   user  system elapsed
+262.159  28.199 302.586

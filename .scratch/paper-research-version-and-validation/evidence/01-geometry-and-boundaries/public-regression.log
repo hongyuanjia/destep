@@ -1,0 +1,11 @@
+conv-source-boundaries: IDD v23.1.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v23.1.0 installation folder '/Applications/EnergyPlus-23-1-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-23-1-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+IDD v9.1.0 has not been parsed before. Try to locate 'Energy+.idd' in EnergyPlus v9.1.0 installation folder '/Applications/EnergyPlus-9-1-0'.
+IDD file found: '/Users/hongyuanjia/Applications/EnergyPlus-9-1-0/Energy+.idd'.
+Start parsing...
+Parsing completed.
+...............................
+
+══ DONE ════════════════════════════════════════════════════════════════════════
