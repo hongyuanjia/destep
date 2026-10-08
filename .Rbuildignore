@@ -16,6 +16,7 @@
 ^[Tt][Mm][Pp]($|/)
 ^inst/validation($|/)
 ^\.uvr$
+^\.scratch($|/)
 
 ^tests/testthat/fixture/.*[.]accdb$
 ^tests/testthat/fixture/.*[.]laccdb$

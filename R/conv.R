@@ -209,7 +209,10 @@ MAP_ID_NAME <- list(
 #'       When the saved switch is absent, conversion retains its legacy
 #'       documented outdoor-temperature-band rule and warns about the assumed
 #'       enabled setting. The `ventilation` attribute records this selection.
-#'       The rule preserves range inputs
+#'       A room group with `IS_AC_ROOM = 0` retains minimum ventilation only;
+#'       unused maximum and temperature-range references are not consumed.
+#'       the AC availability time table does not gate the range increment.
+#'       The rule preserves the remaining range inputs
 #'       but does not reproduce DeST's internal ventilation control algorithm.
 #'
 #' Storey multipliers are mapped to ZoneGroup independently of source
@@ -239,6 +242,19 @@ MAP_ID_NAME <- list(
 #' algorithms or guarantee matching annual loads. Unsupported selected HVAC
 #' equipment stops automatic/physical conversion with a diagnostic; it is not
 #' replaced silently by IdealLoads. See [destep_opts()] for supported subsets.
+#' Internal gains retain the source air and total radiant fractions. Separate
+#' surrounding-surface, floor and roof fractions are not mapped to EnergyPlus;
+#' effective sensible sources using these fractions produce a
+#' `destep_unsupported_gain_distribution` warning. The warning's `distributions`
+#' field records the affected gain types and source modes. Receiving-surface
+#' allocation and the resulting transient loads are not guaranteed equivalent.
+#' Heating setpoints above cooling setpoints are diagnosed only during hours
+#' when the effective room-type AC availability schedule is greater than zero.
+#' A `destep_thermostat_conflict` warning identifies the heating, cooling and
+#' availability schedule IDs, rooms and conflicting hours. The same table is
+#' retained in `conversion$schedules$temperature_conflicts`. Original schedules
+#' are preserved, including inactive inverted values; this diagnostic does not
+#' guarantee that EnergyPlus accepts the controls during a simulation.
 #' Terrain, solar distribution and shading-update settings retain EnergyPlus
 #' defaults. Edit the returned [eplusr::Idf] to change target simulation settings.
 #'
@@ -533,6 +549,10 @@ to_idf <- function(
     audit$schedules <- list(
         format = options$schedule_format,
         files = attr(conv$schedule, "files"),
+        temperature_conflicts = data.table::copy(attr(
+            conv$schedule,
+            "temperature_conflicts"
+        )),
         run_period = options$run_period,
         calendar = "365 days; no daylight saving; date-based values"
     )
