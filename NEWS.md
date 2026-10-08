@@ -2,12 +2,12 @@
 
 - Report missing enclosure-side and middle-plane references with the source
   enclosure ID, field and saved reference before processing surface geometry.
-  The structured error preserves these records without changing the input.
+  The structured error preserves these records without changing the input (#47).
 
 - Prefer direct diagonal partitions for concave faces and required room-shell
   junctions before triangulation. Preserve every boundary segment and reuse
   the existing opening-aware and center-fan fallbacks when a direct partition
-  cannot satisfy the geometry constraints.
+  cannot satisfy the geometry constraints (#47).
 
 - Preserve source outdoor, ground, and interzone boundaries independently of
   storey multipliers, replacing cyclic floor/ceiling rewiring. Unequal-multiplier
@@ -15,7 +15,7 @@
   their weighted outputs cannot be assumed to describe balanced physical
   whole-building heat transfer. Convex source faces remain intact unless a
   geometry check requires local splitting. Thermal equivalence to DeST still
-  requires separate validation.
+  requires separate validation (#47).
 
 - Reject negative source people counts and lighting/equipment power bounds
   instead of dropping them or changing their hourly profiles. AHU water
