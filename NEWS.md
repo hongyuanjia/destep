@@ -7,13 +7,13 @@
 - Warn when effective internal gains use separate surrounding-surface, floor
   and roof radiant fractions that are not projected to EnergyPlus. The source
   air/total-radiant split and existing target inputs are preserved; the warning
-  records the affected gain families and distribution modes.
+  records the affected gain families and distribution modes (#48).
 
 - Warn before simulation when conditioned-room heating setpoints exceed cooling
   setpoints during positive AC availability hours. Diagnostics identify heating,
   cooling and availability schedules, affected rooms, the first conflicting hour
   and total conflicting hours. Preserve all schedule values and retain the
-  diagnostics in `conversion$schedules$temperature_conflicts`.
+  diagnostics in `conversion$schedules$temperature_conflicts` (#48).
 
 - Prefer direct diagonal partitions for concave faces and required room-shell
   junctions before triangulation. Preserve every boundary segment and reuse
@@ -180,7 +180,7 @@
   increment for AC-enabled room groups independently of the AC availability
   schedule, following controlled native DeST checks. Record the source flag and
   the minimum-only rule in the ventilation audit. Non-AC rooms validate the
-  consumed minimum without requiring unused maximum or temperature-range inputs.
+  consumed minimum without requiring unused maximum or temperature-range inputs (#48).
 
 - Fixed exposed-floor outside absorptance conversion to preserve literal zero
   values. The converter no longer substitutes unrelated exterior-wall or
