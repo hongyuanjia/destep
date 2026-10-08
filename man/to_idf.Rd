@@ -71,6 +71,16 @@ leaves the input database unchanged. A
 \code{destep_restored_window_bindings} warning carries the affected records
 in its \code{bindings} field. This restores redundant input relationships,
 not missing geometry or DeST solver behavior.
+
+Storey multipliers are mapped to ZoneGroup independently of source
+surface boundaries. Outdoor, ground and interzone relationships are
+retained. Interzone pairs with unequal multipliers produce a warning
+and are listed in \code{conversion$surface_boundaries}: weighted outputs
+must not be interpreted as a physically balanced whole-building model.
+Successful conversion does not establish DeST thermal equivalence.
+Missing enclosure-side or middle-plane references produce a
+\code{destep_invalid_surface_references} error whose \code{references} table identifies
+the source enclosure, field and saved reference.
 }
 \section{Conversion scope}{
 

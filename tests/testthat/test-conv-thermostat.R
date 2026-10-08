@@ -256,7 +256,7 @@ test_that("can convert ROOM_TYPE_DATA thermostat setpoints from a real DeST mode
 test_that("to_idf() includes resolvable thermostat references", {
     skip_on_cran()
 
-    src <- ensure_dest_sqlite_file()
+    src <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
     idf <- to_idf(src, 23.1)

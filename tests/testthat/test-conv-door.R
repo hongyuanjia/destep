@@ -27,9 +27,9 @@ test_that("converts exterior and interzone DeST doors", {
             TYPE = c(1L, 0L, 1L, 0L),
             AZIMUTH = c(180, 0, 180, 0),
             TILT = c(90, 90, 90, 90),
-            ABSORB_COEF = c(0.7, 0.7, 0.0, 0.0),
-            BLACKNESS = c(0.9, 0.9, 0.0, 0.0),
-            VENTILATION_COEF = c(21.6, 1.8, 0.0, 0.0)
+            ABSORB_COEF = c(0.7, 0.7, 0.7, 0.7),
+            BLACKNESS = c(0.9, 0.9, 0.9, 0.9),
+            VENTILATION_COEF = c(21.6, 1.8, 7.9, 2.6)
         )
     )
     DBI::dbWriteTable(
@@ -135,15 +135,14 @@ test_that("converts exterior and interzone DeST doors", {
     ]
     expect_equal(
         convection[field_name == "Convection Coefficient 1", value_num],
-        1.8
+        2.6
     )
     expect_equal(
         convection[field_name == "Convection Coefficient 2", value_num],
-        21.6
+        7.9
     )
 
-    # Door constructions inherit the effective properties of the owning
-    # enclosure instead of the placeholder values on raw door-face records.
+    # Changing only the host must not overwrite the independent door faces.
     DBI::dbExecute(
         dest,
         "UPDATE SURFACE SET ABSORB_COEF = 0.1 WHERE SURFACE_ID = 10"
@@ -153,16 +152,40 @@ test_that("converts exterior and interzone DeST doors", {
         "UPDATE SURFACE SET ABSORB_COEF = 0.6 WHERE SURFACE_ID = 20"
     )
     properties <- attr(door__convert(dest, ep), "table")
+    expect_equal(unique(properties$INSIDE_SOLAR_ABSORPTANCE), 0.7)
+    expect_equal(unique(properties$OUTSIDE_SOLAR_ABSORPTANCE), 0.7)
+    DBI::dbExecute(
+        dest,
+        "UPDATE SURFACE SET ABSORB_COEF = 0.1, BLACKNESS = 0.8
+         WHERE SURFACE_ID = 11"
+    )
+    DBI::dbExecute(
+        dest,
+        "UPDATE SURFACE SET ABSORB_COEF = 0.6, BLACKNESS = 0.85
+         WHERE SURFACE_ID = 21"
+    )
+    properties <- attr(door__convert(dest, ep), "table")
     expect_equal(unique(properties$INSIDE_SOLAR_ABSORPTANCE), 0.6)
     expect_equal(unique(properties$OUTSIDE_SOLAR_ABSORPTANCE), 0.1)
     expect_match(
         unique(properties$CONSTRUCTION),
-        "Opaque Door [DeST i-a0.6-e0.9 o-a0.1-e0.9]",
+        "Opaque Door [DeST i-a0.6-e0.85 o-a0.1-e0.8]",
         fixed = TRUE
     )
     DBI::dbExecute(
         dest,
-        "UPDATE SURFACE SET ABSORB_COEF = 0.7 WHERE SURFACE_ID IN (10, 20)"
+        "UPDATE SURFACE SET ABSORB_COEF = 0.7, BLACKNESS = 0.9"
+    )
+
+    # A missing/invalid door film is diagnosed, never replaced by a valid host.
+    DBI::dbExecute(
+        dest,
+        "UPDATE SURFACE SET VENTILATION_COEF = 0 WHERE SURFACE_ID = 21"
+    )
+    expect_error(door__convert(dest, ep), "convection coefficients")
+    DBI::dbExecute(
+        dest,
+        "UPDATE SURFACE SET VENTILATION_COEF = 2.6 WHERE SURFACE_ID = 21"
     )
 
     # A shared door must produce reciprocal subsurfaces with opposite layer

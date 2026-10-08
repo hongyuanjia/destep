@@ -223,6 +223,16 @@ MAP_ID_NAME <- list(
 #' in its `bindings` field. This restores redundant input relationships,
 #' not missing geometry or DeST solver behavior.
 #'
+#' Storey multipliers are mapped to ZoneGroup independently of source
+#' surface boundaries. Outdoor, ground and interzone relationships are
+#' retained. Interzone pairs with unequal multipliers produce a warning
+#' and are listed in `conversion$surface_boundaries`: weighted outputs
+#' must not be interpreted as a physically balanced whole-building model.
+#' Successful conversion does not establish DeST thermal equivalence.
+#' Missing enclosure-side or middle-plane references produce a
+#' `destep_invalid_surface_references` error whose `references` table identifies
+#' the source enclosure, field and saved reference.
+#'
 #' @return \[eplusr::Idf\] The converted EnergyPlus model. The
 #'       `conversion` attribute and Version comments record the selected
 #'       options, resolved HVAC representation, source component record counts,
@@ -521,6 +531,10 @@ to_idf <- function(
     )
     audit$options <- options
     audit$window_bindings <- window_bindings
+    audit$surface_boundaries <- data.table::copy(attr(
+        conv$surface,
+        "boundary_diagnostics"
+    ))
     audit$hvac <- list(
         requested = requested_hvac,
         resolved = hvac,

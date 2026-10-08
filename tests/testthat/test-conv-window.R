@@ -373,7 +373,7 @@ test_that("can convert windows from a real DeST model", {
     skip_on_cran()
 
     ep <- eplusr::empty_idf(23.1)
-    src <- ensure_dest_sqlite_file()
+    src <- destep_test__unmultiplied_fixture()
     on.exit(DBI::dbDisconnect(src), add = TRUE)
 
     path_tmp <- tempfile(fileext = ".sql")
