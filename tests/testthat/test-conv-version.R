@@ -104,6 +104,99 @@ test_that("upward transition preserves file dependencies and conversion metadata
     expect_identical(list.files(directory), "schedule.csv")
 })
 
+test_that("optional blank equipment fractions use the documented unchanged default", {
+    path <- tempfile(fileext = ".idf")
+    on.exit(unlink(path))
+    writeLines(
+        c(
+            "Version,23.1;",
+            "Building,Transition fixture;",
+            "GlobalGeometryRules,UpperLeftCorner,Counterclockwise,Relative;",
+            "ZoneHVAC:IdealLoadsAirSystem,Ideal,,Supply;",
+            "ZoneHVAC:EquipmentList,List,SequentialLoad,ZoneHVAC:IdealLoadsAirSystem,Ideal,1,1;"
+        ),
+        path
+    )
+    ep <- eplusr::read_idf(path)
+    # Some installed parser versions already accept optional blanks. Exercise
+    # completion where needed and verify a valid input is otherwise unchanged.
+    before <- ep$to_table()
+    incomplete <- nrow(ep$validate()$incomplete_extensible) > 0L
+    normalized <- conv__complete_equipment_lists(ep)
+    expect_equal(nrow(normalized$validate()$incomplete_extensible), 0L)
+    if (incomplete) {
+        schedule <- normalized$to_table(class = "Schedule:Constant")
+        expect_equal(
+            as.numeric(schedule$value[schedule$field == "Hourly Value"]),
+            1
+        )
+    } else {
+        expect_identical(normalized$to_table(), before)
+    }
+    lists <- normalized$to_table(class = "ZoneHVAC:EquipmentList")
+    expect_equal(
+        lists$value[lists$field == "Zone Equipment 1 Cooling Sequence"],
+        "1"
+    )
+    expect_equal(
+        lists$value[
+            lists$field == "Zone Equipment 1 Heating or No-Load Sequence"
+        ],
+        "1"
+    )
+    normalized$save(path, overwrite = TRUE)
+    expect_true(eplusr::read_idf(path)$is_valid())
+})
+
+test_that("transition default completion preserves existing fractions and source names", {
+    path <- tempfile(fileext = ".idf")
+    on.exit(unlink(path))
+    writeLines(
+        c(
+            "Version,23.1;",
+            "Building,Transition fixture;",
+            "GlobalGeometryRules,UpperLeftCorner,Counterclockwise,Relative;",
+            "Schedule:Constant,Cooling half,,.5;",
+            "Schedule:Constant,destep Sequential Fraction One,,.25;",
+            "ZoneHVAC:IdealLoadsAirSystem,Ideal,,Supply;",
+            "ZoneHVAC:EquipmentList,List,SequentialLoad,ZoneHVAC:IdealLoadsAirSystem,Ideal,1,1,Cooling half;"
+        ),
+        path
+    )
+    source <- eplusr::read_idf(path)
+    before <- source$to_table()
+    incomplete <- nrow(source$validate()$incomplete_extensible) > 0L
+    ep <- conv__complete_equipment_lists(source)
+    fields <- ep$to_table(class = "ZoneHVAC:EquipmentList")
+    expect_equal(
+        fields$value[
+            fields$field ==
+                "Zone Equipment 1 Sequential Cooling Fraction Schedule Name"
+        ],
+        "Cooling half"
+    )
+    if (incomplete) {
+        expect_equal(
+            fields$value[
+                fields$field ==
+                    "Zone Equipment 1 Sequential Heating Fraction Schedule Name"
+            ],
+            "destep Sequential Fraction One 1"
+        )
+    } else {
+        expect_identical(ep$to_table(), before)
+    }
+    schedule <- ep$to_table(class = "Schedule:Constant")
+    expect_equal(
+        as.numeric(schedule$value[
+            schedule$name == "destep Sequential Fraction One" &
+                schedule$field == "Hourly Value"
+        ]),
+        .25
+    )
+    expect_true(ep$is_valid())
+})
+
 # A dry-gain model starts at 9.0.1. Upgrading its four-field equipment group
 # introduces optional fraction schedules; their blank default is constant one.
 test_that("9.0 equipment transitions retain full sequential load fractions", {
