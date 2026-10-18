@@ -1,6 +1,6 @@
 # destep 0.0.0.9000
 
-- Preserve complete source surfaces with necessary local cuts only; retain shared-wall ownership and coordinates, reject opening-area loss, and report source-shell tolerance limits.
+- Preserve complete source surfaces with necessary local cuts only; retain shared-wall ownership and coordinates, reject opening-area loss, and report source-shell tolerance limits (#49).
 
 - Preserve constant-one sequential load fractions when upgrading dry-gain
   models from EnergyPlus 9.0.1. Explicit default schedules prevent false
