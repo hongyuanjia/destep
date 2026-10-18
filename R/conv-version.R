@@ -1,6 +1,6 @@
 # Use the project's 9.0.1 reference-validation baseline. Only effective source
 # features may raise it; transition cannot downgrade an unsupported feature.
-conv__generation_version <- function(dest, target) {
+conv__generation_version <- function(dest, target, options = destep_opts()) {
     target <- numeric_version(as.character(target))
     if (target < "9.0.1") {
         abort(
@@ -23,6 +23,25 @@ conv__generation_version <- function(dest, target) {
         numeric_version("9.1.0")
     } else {
         numeric_version("9.0.1")
+    }
+    # Explicit standalone state controls and density syntax need a maintained
+    # common baseline. Never silently drop a selected feature on an old target.
+    state <- options$occupant_sensible == "temperature_feedback"
+    if (state) {
+        if (target < "9.2") {
+            abort(
+                "Selected density/state controls require EnergyPlus 9.2 or newer."
+            )
+        }
+        baseline <- max(baseline, numeric_version("9.2.0"))
+    }
+    if (options$ventilation_density == "standard") {
+        if (target < "26.1") {
+            abort(
+                "Standard-density ventilation and target_prediction currently require EnergyPlus 26.1 or newer."
+            )
+        }
+        baseline <- max(baseline, numeric_version("26.1.0"))
     }
     baseline
 }

@@ -167,12 +167,33 @@
 #'       doors using ordinary EnergyPlus surface-property objects. `"energyplus"`
 #'       omits these overrides so EnergyPlus selects its own coefficients.
 #'       Furniture's internal-mass exchange definition is retained separately.
+#' @param ventilation_density \[string\] `"outdoor"` retains EnergyPlus's
+#'       outdoor-density convention; `"standard"` uses its site standard
+#'       density, closer to the audited DeST fixed-density air exchange.
+#'       Standard density currently requires EnergyPlus 26.1 or newer. Humid-air specific
+#'       heat and site-reference density remain target-engine approximations.
+#' @param occupant_sensible \[string\] `"nominal"` preserves prescribed
+#'       sensible watts/person. `"temperature_feedback"` emits standalone EMS
+#'       for max(0, nominal + 5.536 * (26 - previous-hour temperature)), using
+#'       the target's last completed zone-step mean as its hourly endpoint.
+#'       Moisture remains nominal. The source execution switch is not inferred.
+#' @param ventilation_control \[string\] `"outdoor_band"` retains the
+#'       documented temperature-band approximation. `"target_prediction"`
+#'       emits standalone EMS using the target's own ThirdOrder air history
+#'       and one-zone-step-lagged non-air coefficients to select bounded,
+#'       possibly intermediate natural ventilation, including below the heating
+#'       lower bound. It requires IdealLoads, standard density and EnergyPlus
+#'       26.1 or newer. This is an explicit control approximation; it does not
+#'       reproduce the DeST coupled solver or guarantee improved annual loads.
+#'       This option retains Site:Location (including elevation) when weather
+#'       headers differ, keeping the predictor and standard-density flow on
+#'       the same site reference. It does not read external simulation results.
 #'
 #' @return An object of class `destep_options`, accepted by `to_idf(options = )`.
 #' @seealso [to_idf()]
 #' @section People inputs and interzone surfaces:
-#' Conversion retains nominal people sensible heat and `O_DAMP_PER_PERSON`;
-#' DeST occupant temperature feedback is not reproduced. Nonzero people moisture
+#' Conversion retains nominal `O_DAMP_PER_PERSON`. Sensible heat uses the
+#' selected nominal or target-temperature-feedback representation. Nonzero people moisture
 #' requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
 #' target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
 #' temperature changes can leave a one-zone-step mass residual. People carries
@@ -200,7 +221,10 @@ destep_opts <- function(
     run_period = c(1L, 365L),
     hvac = "auto",
     hvac_options = NULL,
-    surface_convection = "dest"
+    surface_convection = "dest",
+    ventilation_density = "outdoor",
+    occupant_sensible = "nominal",
+    ventilation_control = "outdoor_band"
 ) {
     if (length(list(...))) {
         stop(
@@ -234,6 +258,24 @@ destep_opts <- function(
     run_period <- as.integer(run_period)
     checkmate::assert_choice(hvac, c("auto", "ideal_loads", "physical"))
     checkmate::assert_choice(surface_convection, c("dest", "energyplus"))
+    checkmate::assert_choice(ventilation_density, c("outdoor", "standard"))
+    checkmate::assert_choice(
+        occupant_sensible,
+        c("nominal", "temperature_feedback")
+    )
+    checkmate::assert_choice(
+        ventilation_control,
+        c("outdoor_band", "target_prediction")
+    )
+    if (
+        ventilation_control == "target_prediction" &&
+            ventilation_density != "standard"
+    ) {
+        stop(
+            "target_prediction requires ventilation_density = 'standard'.",
+            call. = FALSE
+        )
+    }
     if (hvac == "ideal_loads" && !is.null(hvac_options)) {
         stop(
             "'hvac_options' can only be supplied when hvac = 'auto' or 'physical'.",
@@ -256,7 +298,10 @@ destep_opts <- function(
             run_period = run_period,
             hvac = hvac,
             hvac_options = hvac_options,
-            surface_convection = surface_convection
+            surface_convection = surface_convection,
+            ventilation_density = ventilation_density,
+            occupant_sensible = occupant_sensible,
+            ventilation_control = ventilation_control
         ),
         class = "destep_options"
     )
@@ -292,7 +337,12 @@ conv__resolve_options <- function(options) {
 conv__conversion_options <- function(options) {
     c(
         list(mode = options$preset),
-        unclass(options["surface_convection"])
+        unclass(options[c(
+            "surface_convection",
+            "ventilation_density",
+            "occupant_sensible",
+            "ventilation_control"
+        )])
     )
 }
 
@@ -316,6 +366,13 @@ conv__mode_audit <- function(ep, options) {
     supply_humidity <- startsWith(programs, "DeST_Supply_RH_")
     purpose[supply_humidity] <- "supply_humidity"
     requirement[supply_humidity] <- "source_input"
+    people_feedback <- startsWith(programs, "DeST_People_Feedback_")
+    prediction <- startsWith(programs, "DeST_Vent_Predict_")
+    purpose[people_feedback] <- "people_sensible_temperature_feedback"
+    purpose[prediction] <- "natural_ventilation_target_prediction"
+    requirement[
+        people_feedback | prediction
+    ] <- "selected_target_state_approximation"
     effective <- options[setdiff(names(options), "mode")]
     list(
         preset = options$mode,
