@@ -1,6 +1,6 @@
 # destep 0.0.0.9000
 
-- Reject unsupported louver types, missing active shading types, and stale shading geometry with source-object diagnostics before conversion.
+- Reject unsupported louver types, missing active shading types, and stale shading geometry with source-object diagnostics before conversion (#50).
 
 - Preserve constant-one sequential load fractions when upgrading dry-gain
   models from EnergyPlus 9.0.1. Explicit default schedules prevent false
