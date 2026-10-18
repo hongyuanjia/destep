@@ -462,3 +462,534 @@ test_that("can convert windows from a real DeST model", {
     area <- source_area[converted_area, on = "ID"]
     expect_lt(max(abs(area$CONVERTED_AREA - area$SOURCE_AREA)), 1e-6)
 })
+
+# Construct a source relation with three windows of the same type but distinct
+# material-area factors and ordered emissivities; geometry is deliberately absent.
+window_test__performance_db <- function() {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    DBI::dbWriteTable(
+        db,
+        "WINDOW",
+        data.frame(
+            ID = 1:3,
+            TYPE = 46L,
+            WINDOW_CONSTRUCTION = 4L,
+            K = c(1, 2, 1),
+            SIDE1 = 1:3,
+            SIDE2 = 4:6
+        )
+    )
+    DBI::dbWriteTable(
+        db,
+        "WINDOW_TYPE_DATA",
+        data.frame(
+            ID = 46L,
+            NAME = "Native two-layer",
+            K = 1.9,
+            SC = .883,
+            LIGHT_TRANS_RATIO = .703,
+            LIGHT_REFLECT_RATIO = .128,
+            LAYER_NUM = 2L
+        )
+    )
+    DBI::dbWriteTable(
+        db,
+        "SURFACE",
+        data.frame(SURFACE_ID = 1:6, BLACKNESS = c(.84, .84, .2, .84, .84, .84))
+    )
+    db
+}
+
+test_that("native normal and fixed-60-degree optics agree with independently retained evidence", {
+    # These constants were recovered and independently checked against original
+    # PE instructions and native diffuse QT before the converter implementation.
+    optical <- window__n2_optics(.883)
+    expect_equal(
+        unname(optical[c("tau", "rho", "diffuse_tau", "diffuse_alpha")]),
+        c(
+            .7515969409937324,
+            .1380098240762757,
+            .6100395965174817,
+            .13129574489050247
+        ),
+        tolerance = 1e-12
+    )
+    expect_gt(optical[["nominal_tau"]], optical[["tau"]])
+})
+
+test_that("source angular branch and grazing endpoint preserve independent N2 evidence", {
+    # Retained Python reconstruction from the native PE checks uses an explicit
+    # per-layer absorption flux, independently of this R backward recurrence.
+    expected <- rbind(
+        c(.74674010936077295, .13723058000687838),
+        c(.74200723722993178, .14159751114135555),
+        c(.74097577549888072, .14223144649944885),
+        c(.61003959651748174, .25866465859201571),
+        c(.0056647250982294235, .93352465317546918),
+        c(0, 1)
+    )
+    parameter <- window__n2_optics(.883)[["parameter"]]
+    actual <- t(vapply(
+        c(29, 30, 31, 60, 89, 90) * pi / 180,
+        function(angle) unname(window__n2_angle(parameter, angle)),
+        numeric(2L)
+    ))
+    expect_equal(actual, expected, tolerance = 1e-12)
+    # A high, unreachable nominal SC retains the bounded source search rather
+    # than rescaling the angle curve to hit .87*SC or an annual load target.
+    expect_lt(window__n2_optics(1.2)[["tau"]], .87 * 1.2)
+    for (sc in c(0, .1, .480459770114943, .883, 1.2)) {
+        parameter <- window__n2_optics(sc)[["parameter"]]
+        curve <- vapply(
+            0:90 * pi / 180,
+            function(angle) {
+                window__n2_angle(parameter, angle)
+            },
+            numeric(2L)
+        )
+        expect_true(all(is.finite(curve)))
+        expect_true(all(curve >= 0 & curve <= 1))
+        expect_true(all(colSums(curve) <= 1 + 1e-12))
+    }
+})
+
+test_that("only emitted N2 source angle tables require the newer table schema", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    expect_identical(
+        window__angle_generation_version(db, "26.1"),
+        numeric_version("9.2.0")
+    )
+    expect_error(
+        window__angle_generation_version(db, "9.1"),
+        class = "destep_unsupported_window_angle_target"
+    )
+    glazing <- const__window_type_objects(const__window_type_performance(
+        db
+    ))$glazing
+    expect_error(
+        window__equivalent_objects(db, eplusr::empty_idf("9.1"), glazing),
+        class = "destep_unsupported_window_angle_target"
+    )
+    # The unsupported-layer fallback is unchanged; an unused N2 catalogue row
+    # must not raise the generation version of actual N1 windows.
+    DBI::dbExecute(db, "UPDATE WINDOW_TYPE_DATA SET LAYER_NUM=1")
+    expect_null(window__angle_generation_version(db, "9.0.1"))
+    DBI::dbExecute(db, "DELETE FROM WINDOW")
+    expect_null(window__angle_generation_version(db, "9.0.1"))
+})
+
+test_that("source angle table order and references survive EnergyPlus serialization", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    ep <- eplusr::empty_idf("9.2")
+    ep$add(
+        Building = list(name = "Angle fixture"),
+        GlobalGeometryRules = list(
+            starting_vertex_position = "UpperLeftCorner",
+            vertex_entry_direction = "Counterclockwise",
+            coordinate_system = "Relative"
+        )
+    )
+    converted <- window__equivalent_objects(
+        db,
+        ep,
+        const__window_type_objects(const__window_type_performance(db))$glazing
+    )
+    table <- conv__combine_outputs(list(converted))
+    # Add all related classes together, so the IDD validates every named curve
+    # and independent axis reference in the actual material graph.
+    private <- eplusr::get_priv_env(ep)
+    add <- eplusr::add_idf_object(
+        private$idd_env(),
+        private$idf_env(),
+        table$object,
+        table$value,
+        default = TRUE,
+        unique = FALSE,
+        empty = TRUE,
+        level = "draft"
+    )
+    private$update_idf_env(add)
+    expect_true(ep$is_valid())
+    fragment <- tempfile(fileext = ".idf")
+    on.exit(unlink(fragment))
+    ep$save(fragment, overwrite = TRUE)
+    reread <- eplusr::read_idf(fragment)
+    expect_true(reread$is_valid())
+    objects <- reread$to_table()
+    expect_true(all(
+        objects$value[objects$field == "Optical Data Type"] ==
+            "SpectralAndAngle"
+    ))
+    values <- reread$Table_Lookup[[1L]]$to_table()
+    # Two wavelengths repeat within each angle; transposing these dimensions
+    # used to produce valid IDF syntax but the wrong optical response.
+    tau <- as.numeric(values$value[values$index >= 11L])
+    expected <- vapply(
+        0:90 * pi / 180,
+        function(angle) {
+            window__n2_angle(window__n2_optics(.883)[["parameter"]], angle)[[
+                "tau"
+            ]]
+        },
+        numeric(1L)
+    )
+    expect_equal(tau, rep(expected, each = 2L), tolerance = 1e-12)
+    expect_equal(length(tau), 182L)
+    front <- reread$Table_Lookup[[2L]]$to_table()
+    back <- reread$Table_Lookup[[3L]]$to_table()
+    front <- as.numeric(front$value[front$index >= 11L])
+    back <- as.numeric(back$value[back$index >= 11L])
+    expect_equal(front, back)
+    expect_true(all(tau + front <= 1 + 1e-12))
+    angle <- reread$Table_IndependentVariable[[1L]]$to_table()
+    wave <- reread$Table_IndependentVariable[[2L]]$to_table()
+    expect_equal(as.numeric(angle$value[angle$index >= 11L]), 0:90)
+    expect_equal(as.numeric(wave$value[wave$index >= 11L]), c(.1, 4))
+    # Runtime 9.2/23.1 use output-unit validation for independent axes. Their
+    # WindowManager still passes the first coordinate as degrees, independently
+    # of this metadata; both axes must use the compatible Dimensionless value.
+    expect_identical(angle$value[angle$field == "Unit Type"], "Dimensionless")
+    expect_identical(wave$value[wave$field == "Unit Type"], "Dimensionless")
+})
+
+test_that("row K and ordered emissivities prevent incorrect same-type merging", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    source <- const__window_type_performance(db)
+    source <- source[order(source$WINDOW_ID)]
+    expect_true(all(source$DETAILED_EQUIVALENT))
+    expect_equal(
+        source$GLASS_RESISTANCE,
+        c(.36845478947368415, .18422739473684208, .36845478947368415)
+    )
+    expect_equal(length(unique(source$TYPE_CONSTRUCTION_NAME)), 3L)
+    object <- const__window_type_objects(source)
+    expect_equal(nrow(object$glazing), 3L)
+    expect_equal(nrow(object$construction), 6L)
+    ep <- eplusr::empty_idf("9.2.0")
+    converted <- window__equivalent_objects(db, ep, object$glazing)
+    expect_equal(nrow(converted$object), 24L)
+    fields <- converted$value
+    front <- fields[
+        fields$field_name == "Front Side Infrared Hemispherical Emissivity",
+        "value_num"
+    ][[1L]]
+    back <- fields[
+        fields$field_name == "Back Side Infrared Hemispherical Emissivity",
+        "value_num"
+    ][[1L]]
+    expect_equal(front, c(.84, .84, .84, .84, .2, .84))
+    expect_equal(back, c(.84, .84, .84, .84, .84, .2))
+    conductivity <- fields[fields$field_name == "Conductivity", "value_num"][[
+        1L
+    ]]
+    expect_equal(
+        conductivity,
+        rep(
+            c(.016284223116140367, .032568446232280734, .016284223116140367),
+            each = 2L
+        )
+    )
+    expect_false(any(
+        converted$object$class_name == "WindowMaterial:SimpleGlazingSystem"
+    ))
+    DBI::dbExecute(db, "UPDATE SURFACE SET BLACKNESS=.84 WHERE SURFACE_ID=3")
+    shared <- const__window_type_performance(db)
+    expect_equal(length(unique(shared$TYPE_CONSTRUCTION_NAME)), 2L)
+})
+
+test_that("invalid saved row factors and emissivities are refused", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    for (invalid in c("0", "-1", "NULL")) {
+        DBI::dbExecute(
+            db,
+            paste0("UPDATE WINDOW SET K=", invalid, " WHERE ID=2")
+        )
+        expect_error(
+            const__window_type_performance(db),
+            class = "destep_invalid_window_factor"
+        )
+    }
+    DBI::dbExecute(db, "UPDATE WINDOW SET K=2 WHERE ID=2")
+    DBI::dbExecute(db, "UPDATE SURFACE SET BLACKNESS=1.2 WHERE SURFACE_ID=3")
+    expect_error(
+        const__window_type_performance(db),
+        class = "destep_invalid_window_emissivity"
+    )
+})
+
+test_that("other layer counts remain an explicit aggregate approximation", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbExecute(db, "UPDATE WINDOW_TYPE_DATA SET LAYER_NUM=3")
+    source <- const__window_type_performance(db)
+    expect_false(any(source$DETAILED_EQUIVALENT))
+    expect_equal(length(unique(source$TYPE_CONSTRUCTION_NAME)), 2L)
+    expect_equal(
+        source$GLASS_RESISTANCE[source$WINDOW_ID == 2L],
+        (1 / 1.9 - 1 / 8.7 - 1 / 23.3) / 2
+    )
+    expect_true(all(is.finite(
+        const__window_type_objects(source)$glazing$TARGET_U_FACTOR
+    )))
+})
+
+test_that("saved visible fields do not control the verified positive N2 optics", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbExecute(
+        db,
+        paste(
+            "UPDATE WINDOW_TYPE_DATA SET SC=.480459770114943,",
+            "LIGHT_TRANS_RATIO=.78, LIGHT_REFLECT_RATIO=.8"
+        )
+    )
+    source <- const__window_type_performance(db)
+    expect_true(all(source$DETAILED_EQUIVALENT))
+    expect_equal(source$SOURCE_LIGHT_TRANS_RATIO, rep(.78, 3L))
+    expect_equal(source$SOURCE_LIGHT_REFLECT_RATIO, rep(.8, 3L))
+    expect_equal(
+        source$NORMAL_VISIBLE_TAU,
+        rep(.418044085369104, 3L),
+        tolerance = 1e-12
+    )
+    expect_equal(
+        source$NORMAL_VISIBLE_RHO,
+        rep(.471562679700904, 3L),
+        tolerance = 1e-12
+    )
+    ep <- eplusr::empty_idf("9.2.0")
+    fields <- window__equivalent_objects(
+        db,
+        ep,
+        const__window_type_objects(source)$glazing
+    )$value
+    vt <- fields[
+        fields$field_name == "Visible Transmittance at Normal Incidence",
+        "value_num"
+    ][[1L]]
+    expect_equal(vt, rep(.418044085369104, 6L), tolerance = 1e-12)
+    vr <- fields[
+        grepl(
+            "Side Visible Reflectance at Normal Incidence$",
+            fields$field_name
+        ),
+        "value_num"
+    ][[1L]]
+    expect_equal(vr, rep(.471562679700904, 12L), tolerance = 1e-12)
+    expect_true(all(grepl("not_used", source$SOURCE_VISIBLE_USAGE)))
+    # Even nonphysical saved placeholders are metadata on this source branch.
+    DBI::dbExecute(
+        db,
+        "UPDATE WINDOW_TYPE_DATA SET LIGHT_TRANS_RATIO=-2, LIGHT_REFLECT_RATIO=10"
+    )
+    changed <- const__window_type_performance(db)
+    expect_equal(changed$NORMAL_VISIBLE_TAU, source$NORMAL_VISIBLE_TAU)
+    expect_equal(changed$NORMAL_VISIBLE_RHO, source$NORMAL_VISIBLE_RHO)
+    expect_equal(changed$GLASS_RESISTANCE, source$GLASS_RESISTANCE)
+    expect_equal(changed$SOURCE_LIGHT_TRANS_RATIO, rep(-2, 3L))
+    expect_equal(changed$SOURCE_LIGHT_REFLECT_RATIO, rep(10, 3L))
+})
+
+test_that("absent saved visible fields cannot block a complete positive N2 type", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbExecute(
+        db,
+        "ALTER TABLE WINDOW_TYPE_DATA DROP COLUMN LIGHT_TRANS_RATIO"
+    )
+    DBI::dbExecute(
+        db,
+        "ALTER TABLE WINDOW_TYPE_DATA DROP COLUMN LIGHT_REFLECT_RATIO"
+    )
+    source <- const__window_type_performance(db)
+    expect_true(all(source$DETAILED_EQUIVALENT))
+    expect_true(all(is.na(source$SOURCE_LIGHT_TRANS_RATIO)))
+    expect_true(all(is.na(source$SOURCE_LIGHT_REFLECT_RATIO)))
+    expect_equal(source$NORMAL_VISIBLE_TAU, source$NORMAL_SOLAR_TAU)
+    expect_equal(source$NORMAL_VISIBLE_RHO, source$NORMAL_SOLAR_RHO)
+})
+
+test_that("positive N2 aggregate fallback retains SC-derived visible transmission", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbExecute(db, "UPDATE SURFACE SET BLACKNESS=0")
+    source <- const__window_type_performance(db)
+    expect_false(any(source$DETAILED_EQUIVALENT))
+    # Losing a target emissivity representation does not change the native
+    # thermal branch. Its exact film constant still applies to the fallback.
+    expect_equal(
+        source$GLASS_RESISTANCE,
+        (1 / 1.9 - .157861) / c(1, 2, 1),
+        tolerance = 1e-12
+    )
+    expect_equal(
+        source$LIGHT_TRANS_RATIO,
+        rep(window__n2_optics(.883)[["tau"]], 3L)
+    )
+    expect_equal(source$SOURCE_LIGHT_TRANS_RATIO, rep(.703, 3L))
+    expect_true(all(is.na(source$NORMAL_SOLAR_TAU)))
+    # Only the verified two-layer branch substitutes the saved visible input.
+    DBI::dbExecute(db, "UPDATE WINDOW_TYPE_DATA SET LAYER_NUM=3")
+    other <- const__window_type_performance(db)
+    expect_equal(other$LIGHT_TRANS_RATIO, rep(.703, 3L))
+    expect_true(all(is.na(other$NORMAL_VISIBLE_TAU)))
+    expect_true(all(
+        other$SOURCE_VISIBLE_USAGE == "unverified_native_visible_path"
+    ))
+    DBI::dbExecute(db, "UPDATE WINDOW_TYPE_DATA SET ID=-46, LAYER_NUM=2")
+    DBI::dbExecute(db, "UPDATE WINDOW SET TYPE=-46")
+    negative <- const__window_type_performance(db)
+    expect_false(any(negative$DETAILED_EQUIVALENT))
+    expect_equal(negative$LIGHT_TRANS_RATIO, rep(.703, 3L))
+    expect_true(all(is.na(negative$NORMAL_VISIBLE_TAU)))
+})
+
+test_that("missing active window types cannot create an unverified stack fallback", {
+    db <- window_test__performance_db()
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbExecute(db, "DROP TABLE WINDOW_TYPE_DATA")
+    expect_error(
+        const__window_type_performance(db),
+        "missing WINDOW_TYPE_DATA table or required fields"
+    )
+    # A different saved construction cannot silently replace active K/SC data.
+    DBI::dbExecute(db, "UPDATE WINDOW SET WINDOW_CONSTRUCTION=100")
+    expect_error(
+        const__window_type_performance(db),
+        "missing WINDOW_TYPE_DATA table or required fields"
+    )
+})
+
+test_that("solar modes retain source weights and unresolved window references", {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbWriteTable(
+        db,
+        "WINDOW",
+        data.frame(ID = 1:3, SUN_TRANS_DIST_MODE = c(1L, 7L, NA_integer_))
+    )
+    DBI::dbWriteTable(
+        db,
+        "DIST_MODE",
+        data.frame(
+            DIST_MODE_ID = 1L,
+            DIST_AIR = 0,
+            DIST_ROOF = .167,
+            DIST_FLOOR = .642,
+            DIST_AROUND = .156
+        )
+    )
+    audit <- solar__source_audit(db)
+    expect_equal(audit$bindings$WINDOW_ID, 1:3)
+    expect_equal(audit$bindings$SURFACE_WEIGHT_SUM[1L], .965)
+    expect_equal(audit$bindings$DIST_FLOOR[1L], .642)
+    expect_equal(
+        audit$bindings$SOURCE_STATUS,
+        c("saved_mode_retained_for_audit", "unresolved_mode", "unresolved_mode")
+    )
+    expect_true(all(is.na(audit$bindings$DIST_FLOOR[2:3])))
+    warning <- NULL
+    withCallingHandlers(
+        window__warn_transmitted_solar_distribution(db),
+        warning = function(condition) {
+            warning <<- condition
+            invokeRestart("muffleWarning")
+        }
+    )
+    expect_s3_class(warning, "destep_unsupported_solar_distribution")
+    expect_equal(warning$distributions, audit$bindings)
+    comments <- solar__comments(audit)
+    expect_true(any(grepl(
+        "weights=0/0.167/0.642/0.156",
+        comments,
+        fixed = TRUE
+    )))
+    expect_true(any(grepl(
+        "mode=7 status=unresolved_mode",
+        comments,
+        fixed = TRUE
+    )))
+    DBI::dbExecute(db, "UPDATE DIST_MODE SET DIST_FLOOR=-.1")
+    expect_equal(
+        solar__source_audit(db)$bindings$SOURCE_STATUS[1L],
+        "invalid_source_weights"
+    )
+})
+
+test_that("missing mode schema and no windows have stable transparent diagnostics", {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbWriteTable(db, "WINDOW", data.frame(ID = 1L))
+    audit <- solar__source_audit(db)
+    expect_equal(audit$bindings$SOURCE_STATUS, "missing_binding_field")
+    expect_true(is.na(audit$bindings$MODE_ID))
+    DBI::dbExecute(db, "DELETE FROM WINDOW")
+    expect_equal(nrow(solar__source_audit(db)$bindings), 0L)
+    expect_length(solar__comments(solar__source_audit(db)), 0L)
+})
+
+test_that("duplicate mode identities cannot disappear in an audit join", {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbWriteTable(
+        db,
+        "WINDOW",
+        data.frame(ID = 1L, SUN_TRANS_DIST_MODE = 1L)
+    )
+    DBI::dbWriteTable(
+        db,
+        "DIST_MODE",
+        data.frame(
+            DIST_MODE_ID = c(1L, 1L),
+            DIST_AIR = 0,
+            DIST_ROOF = 0,
+            DIST_FLOOR = 1,
+            DIST_AROUND = 0
+        )
+    )
+    expect_error(
+        solar__source_audit(db),
+        class = "destep_invalid_solar_distribution"
+    )
+})
+
+test_that("receiver metadata includes native floor and roof room-face types", {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    DBI::dbWriteTable(
+        db,
+        "WINDOW",
+        data.frame(
+            ID = 872L,
+            SUN_TRANS_DIST_MODE = 1L,
+            SIDE1 = 873L,
+            SIDE2 = 875L
+        )
+    )
+    DBI::dbWriteTable(db, "ROOM", data.frame(ID = 199L, OF_ROOM_GROUP = 200L))
+    DBI::dbWriteTable(
+        db,
+        "SURFACE",
+        data.frame(
+            SURFACE_ID = c(109L, 248L, 317L, 875L),
+            OF_ROOM = 199L,
+            TYPE = c(0L, 4L, 5L, 0L),
+            AREA = c(21.6, 48, 48, 6),
+            AZIMUTH = c(0, 999, -999, 270)
+        )
+    )
+    DBI::dbWriteTable(
+        db,
+        "MAIN_ENCLOSURE",
+        data.frame(SIDE1 = c(107L, 251L, 314L), SIDE2 = c(109L, 248L, 317L))
+    )
+    receivers <- solar__source_audit(db)$receivers
+    expect_equal(nrow(receivers), 4L)
+    expect_setequal(receivers$FAMILY, c("around", "floor", "roof"))
+    expect_equal(sum(receivers$RAW_AREA), 123.6)
+    expect_true(all(receivers$SCOPE == "single_room_group_saved_receivers"))
+})

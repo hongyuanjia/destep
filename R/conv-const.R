@@ -17,6 +17,7 @@ const__window_type_performance <- function(dest) {
             K = double(),
             SC = double(),
             LIGHT_TRANS_RATIO = double(),
+            SOURCE_LIGHT_TRANS_RATIO = double(),
             TYPE_RECORD_FOUND = logical(),
             SHGC = double(),
             TYPE_DATA_VALID = logical(),
@@ -24,7 +25,7 @@ const__window_type_performance <- function(dest) {
             TYPE_CONSTRUCTION_NAME = character(),
             FALLBACK_REASON = character()
         )]
-        return(window)
+        return(window__effective_performance(dest, window))
     }
 
     # A zero construction reference means DeST expects the matching default.
@@ -59,16 +60,28 @@ const__window_type_performance <- function(dest) {
         }
     }
 
-    required <- c("ID", "NAME", "K", "SC", "LIGHT_TRANS_RATIO")
+    # The verified positive TYPE N2 consumers use SC rather than the stored
+    # visible fields. Their absence must not make an otherwise complete type
+    # disappear; unsupported branches retain their explicit VT approximation.
+    required <- c("ID", "NAME", "K", "SC")
     has_type_data <- "WINDOW_TYPE_DATA" %in%
         DBI::dbListTables(dest) &&
         db_has_fields(dest, "WINDOW_TYPE_DATA", required)
     if (has_type_data) {
+        visible <- if (
+            db_has_fields(dest, "WINDOW_TYPE_DATA", "LIGHT_TRANS_RATIO")
+        ) {
+            "LIGHT_TRANS_RATIO"
+        } else {
+            "NULL AS LIGHT_TRANS_RATIO"
+        }
         type <- DBI::dbGetQuery(
             dest,
-            "SELECT ID AS TYPE_ID, NAME AS TYPE_NAME, K, SC,
-                    LIGHT_TRANS_RATIO
-             FROM WINDOW_TYPE_DATA"
+            paste0(
+                "SELECT ID AS TYPE_ID, NAME AS TYPE_NAME, K, SC, ",
+                visible,
+                " FROM WINDOW_TYPE_DATA"
+            )
         )
         data.table::setDT(type)
         duplicate <- type[
@@ -107,6 +120,14 @@ const__window_type_performance <- function(dest) {
     for (column in c("K", "SC", "LIGHT_TRANS_RATIO")) {
         data.table::set(window, NULL, column, as.double(window[[column]]))
     }
+    # Keep the original placeholder, including invalid or absent values, before
+    # sanitizing the legacy fallback VT. Effective SC-derived VT is separate.
+    data.table::set(
+        window,
+        NULL,
+        "SOURCE_LIGHT_TRANS_RATIO",
+        window$LIGHT_TRANS_RATIO
+    )
     window[, SHGC := 0.87 * SC]
     window[,
         TYPE_DATA_VALID := is.finite(K) &
@@ -172,7 +193,7 @@ const__window_type_performance <- function(dest) {
             call. = FALSE
         )
     }
-    window
+    window__effective_performance(dest, window)
 }
 
 # Preserve the physical window-face inputs that SimpleGlazing cannot express,
@@ -197,7 +218,7 @@ const__window_diagnostics <- function(dest, window_type) {
             call. = FALSE
         )
     }
-    data.table::data.table(
+    output <- data.table::data.table(
         WINDOW_ID = window_type$WINDOW_ID,
         TYPE_ID = window_type$TYPE_ID,
         TYPE_NAME = window_type$TYPE_NAME,
@@ -207,9 +228,33 @@ const__window_diagnostics <- function(dest, window_type) {
         NOMINAL_SHGC = window_type$SHGC,
         SIDE1_BLACKNESS = as.double(face$SIDE1_BLACKNESS[index]),
         SIDE2_BLACKNESS = as.double(face$SIDE2_BLACKNESS[index]),
-        REPRESENTATION = "SimpleGlazing: nominal SHGC = 0.87 * SC",
-        UNREPRESENTED = "physical panes; angular/diffuse optics; absorption location; two face BLACKNESS values"
+        REPRESENTATION = window_type$REPRESENTATION,
+        UNREPRESENTED = data.table::fifelse(
+            window_type$DETAILED_EQUIVALENT,
+            "physical panes; angular interpolation; grey spectra; diffuse integration; absorption location; glass heat capacity; asymmetric back optics; native daylighting room reflection",
+            "physical panes; angular/diffuse optics; absorption location; glass heat capacity; two face BLACKNESS values"
+        )
     )
+    for (name in c(
+        "ROW_K",
+        "SOURCE_ROW_K_PRESENT",
+        "LAYER_NUM",
+        "DETAILED_EQUIVALENT",
+        "GLASS_RESISTANCE",
+        "NORMAL_SOLAR_TAU",
+        "NORMAL_SOLAR_RHO",
+        "SOURCE_LIGHT_TRANS_RATIO",
+        "SOURCE_LIGHT_REFLECT_RATIO",
+        "SOURCE_VISIBLE_USAGE",
+        "NORMAL_VISIBLE_TAU",
+        "NORMAL_VISIBLE_RHO",
+        "NATIVE_DIFFUSE_TAU",
+        "NATIVE_DIFFUSE_ALPHA",
+        "TYPE_CONSTRUCTION_NAME"
+    )) {
+        data.table::set(output, NULL, name, window_type[[name]])
+    }
+    output
 }
 
 # Read opaque and transparent layers for every distinct DeST door
@@ -633,12 +678,21 @@ const__material_table <- function(layer, rows = NULL) {
     )
 }
 
-# Build aggregate simple-glazing constructions and retain the validated source
-# rows used later to create WindowMaterial:SimpleGlazingSystem objects.
+# Build one construction per effective window property variant; ordered side
+# emissivities and row K must not be discarded by deduplicating solely by TYPE.
 const__window_type_objects <- function(window_type) {
+    window_type <- data.table::copy(window_type)
+    if (!"DETAILED_EQUIVALENT" %in% names(window_type)) {
+        data.table::set(
+            window_type,
+            NULL,
+            "DETAILED_EQUIVALENT",
+            rep(FALSE, nrow(window_type))
+        )
+    }
     glazing <- unique(
         window_type[TYPE_DATA_VALID == TRUE],
-        by = "TYPE_ID"
+        by = "TYPE_CONSTRUCTION_NAME"
     )
     if (nrow(glazing) == 0L) {
         return(list(
@@ -652,8 +706,16 @@ const__window_type_objects <- function(window_type) {
     target_u <- vapply(
         seq_len(nrow(glazing)),
         function(index) {
+            if (glazing$DETAILED_EQUIVALENT[[index]]) {
+                return(NA_real_)
+            }
             tryCatch(
-                const__simple_glazing_u_factor(glazing$K[[index]]),
+                const__simple_glazing_u_factor(
+                    glazing$K[[index]],
+                    if ("GLASS_RESISTANCE" %in% names(glazing)) {
+                        glazing$GLASS_RESISTANCE[[index]]
+                    }
+                ),
                 error = function(condition) {
                     type_id <- glazing$TYPE_ID[[index]]
                     stop(
@@ -689,8 +751,13 @@ const__window_type_objects <- function(window_type) {
         name = TYPE_CONSTRUCTION_NAME,
         value = Map(c, TYPE_CONSTRUCTION_NAME, SIMPLE_GLAZING_NAME)
     )]
-    # Whole-window simple glazing is direction-independent, but reciprocal
-    # interzone windows retain an explicit reverse construction name.
+    # Reciprocal detailed windows need a material with swapped emissivities;
+    # the aggregate simple model remains direction-independent.
+    reverse_material <- data.table::fifelse(
+        glazing$DETAILED_EQUIVALENT,
+        paste0(glazing$SIMPLE_GLAZING_NAME, " [Reverse]"),
+        glazing$SIMPLE_GLAZING_NAME
+    )
     reverse <- glazing[, list(
         ID = TYPE_ID,
         KIND = -3L,
@@ -698,7 +765,7 @@ const__window_type_objects <- function(window_type) {
         value = Map(
             c,
             sprintf("%s [Reverse]", TYPE_CONSTRUCTION_NAME),
-            SIMPLE_GLAZING_NAME
+            reverse_material
         )
     )]
 
@@ -806,7 +873,12 @@ const__object_tables <- function(source) {
         material = dt_mat,
         glazing = dt_glaze,
         air = dt_air,
-        simple_glazing = window_type$glazing
+        simple_glazing = window_type$glazing[
+            !window_type$glazing$DETAILED_EQUIVALENT
+        ],
+        effective_glazing = window_type$glazing[
+            window_type$glazing$DETAILED_EQUIVALENT
+        ]
     )
 }
 
@@ -999,7 +1071,12 @@ const__apply_surface_properties <- function(object, surface) {
 }
 
 # MAIN_ENCLOSURE$CONSTRUCTION -> Construction -> Material
-const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
+const__convert <- function(
+    dest,
+    ep,
+    surface = NULL,
+    subsurface = NULL
+) {
     if (!db_has_rows(dest, "MAIN_ENCLOSURE")) {
         return(NULL)
     }
@@ -1021,6 +1098,13 @@ const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
         object$air,
         object$construction
     )
+    out <- conv__combine_outputs(Filter(
+        Negate(is.null),
+        list(
+            out,
+            window__equivalent_objects(dest, ep, object$effective_glazing)
+        )
+    ))
 
     # Retain one source row per window in the conversion audit; the target
     # SimpleGlazing object has no fields for the two source face emissivities.
@@ -1080,9 +1164,10 @@ const__convert <- function(dest, ep, surface = NULL, subsurface = NULL) {
                         type$NOMINAL_SHGC
                     ),
                     "Equivalent glazing from active WINDOW.TYPE -> WINDOW_TYPE_DATA K/SC.",
-                    "Glass resistance uses nominal films 1/8.7 + 1/23.3 m2 K/W (DeST bshell 0.2.230705 evidence).",
+                    "Positive TYPE N2 glass resistance is max(1/type_U - .157861, 1e-6)/row_K; other branches use (1/type_U - 1/8.7 - 1/23.3)/row_K.",
                     "SHGC = 0.87 * SC is an assumed aggregate mapping; it is not verified native solar transmittance.",
                     "Physical panes, angular/diffuse response and absorption location are not recovered from K/SC.",
+                    "Verified positive TYPE N2 uses SC-derived visible transmittance even when SimpleGlazing remains necessary; other native visible branches are unverified.",
                     paste0(
                         "Source WINDOW face BLACKNESS (WINDOW.ID:side1/side2) = ",
                         type$SOURCE_BLACKNESS,
@@ -1242,18 +1327,22 @@ const__warn_simple_glazing_version <- function(ep, glazing_count) {
 # of 1/8.7 + 1/23.3 m2 K/W; EnergyPlus uses U-dependent winter-film correlations
 # (Engineering Reference, Simple Window Model, step 1). Copying K directly
 # therefore changes material resistance even when actual surface films match.
-const__simple_glazing_u_factor <- function(k) {
+const__simple_glazing_u_factor <- function(k, resistance = NULL) {
     # These are the correlations used by MaterialGlass in EnergyPlus, before
     # the separate user-supplied surface convection coefficients are applied.
     glass_resistance <- function(u) {
-        inside <- ifelse(
+        inside <- data.table::fifelse(
             u < 5.85,
             1 / (0.359073 * log(u) + 6.949915),
             1 / (1.788041 * u - 2.886625)
         )
         1 / u - inside - 1 / (0.025342 * u + 29.163853)
     }
-    target <- 1 / k - 1 / 8.7 - 1 / 23.3
+    target <- if (is.null(resistance)) {
+        1 / k - 1 / 8.7 - 1 / 23.3
+    } else {
+        resistance
+    }
     # The winter-film fit changes branches at U=5.85 and is not globally
     # monotonic. Prefer the lower-U root; use the second branch only for the
     # small resistance interval below the first branch's minimum.

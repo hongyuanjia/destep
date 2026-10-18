@@ -1050,11 +1050,10 @@ test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
     # model is transitioned to 23.1. Keep it distinct from source limitations,
     # and check every warning instead of hiding unexpected diagnostics.
     expected <- c(
-        "EnergyPlus 9.0-9.3 contain a known WindowMaterial:SimpleGlazingSystem",
         "Skipped 9 ROOM row(s)",
         "DeST internal-gain surface distribution",
         "DeST window transmitted-solar distribution",
-        "nominal SimpleGlazing K/SC approximation",
+        "SC-derived source angle tables where supported",
         "Mapped 23 DeST ventilation-range ROOM_RELATION row(s)"
     )
     expect_length(warnings, length(expected))
