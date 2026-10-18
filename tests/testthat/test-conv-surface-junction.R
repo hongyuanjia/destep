@@ -31,9 +31,9 @@ surface_test__cleanup_room <- function() {
     surface
 }
 
-test_that("convex source faces retain protected collinear junctions", {
+test_that("convex source faces stay whole across harmless straight junctions", {
     # A perpendicular face meets a rectangle at its straight-through vertex.
-    # The shared vertex is retained, but does not force either face into parts.
+    # A redundant collinear point may be cleaned without splitting either face.
     surface <- data.table::data.table(
         ID = c(rep(1L, 5L), rep(2L, 4L)),
         PLANE = c(rep(1L, 5L), rep(2L, 4L)),
@@ -50,9 +50,7 @@ test_that("convex source faces retain protected collinear junctions", {
     converted <- surface__normalize_topology(surface)
     expect_equal(data.table::uniqueN(converted$OUTPUT_ID), 2L)
     expect_true(all(converted$PART_COUNT == 1L))
-    expect_true(any(
-        converted$ID == 1L & converted$POINT_X == 1 & converted$POINT_Y == 0
-    ))
+    expect_equal(geom__polygon_area(converted[converted$ID == 1L, ]), 2)
     expect_equal(surface, original)
 })
 
@@ -71,13 +69,21 @@ test_that("closure detects breaks exposed by removable vertex cleanup", {
     expect_length(surface__energyplus_unclosed_rooms(surface[0L]), 0L)
 })
 
-test_that("non-repeated rooms receive local cleanup-aware junction repair", {
+test_that("source-closed near-edge rooms are preserved with explicit diagnostics", {
     surface <- surface_test__cleanup_room()
     original <- data.table::copy(surface)
     before <- surface[, .(area = geom__polygon_area(.SD)), by = ID]
-    repaired <- surface__preserve_boundaries(surface)
-    expect_length(surface__energyplus_unclosed_rooms(repaired), 0L)
-    expect_gt(
+    expect_warning(
+        repaired <- surface__preserve_boundaries(surface),
+        class = "destep_geometry_closure_tolerance"
+    )
+    source_profile <- eplus_geom__profile()
+    source_profile$closure_vertex_distance <- source_profile$plane_distance
+    expect_length(
+        surface__energyplus_unclosed_rooms(repaired, source_profile),
+        0L
+    )
+    expect_equal(
         data.table::uniqueN(repaired$OUTPUT_ID),
         data.table::uniqueN(surface$OUTPUT_ID)
     )
@@ -95,4 +101,37 @@ test_that("non-repeated rooms receive local cleanup-aware junction repair", {
     expect_true(all(repaired$STOREY_MULTIPLIER == 1L))
     expect_true(all(repaired$BOUNDARY_MODE == "source"))
     expect_equal(surface, original)
+})
+
+test_that("an independent open room does not pull source-closed rooms into repair", {
+    closed <- surface_test__cleanup_room()
+    open <- data.table::copy(closed[
+        closed$OUTPUT_ID == closed$OUTPUT_ID[[1L]],
+    ])
+    data.table::set(open, j = "ROOM", value = "Actual gap")
+    data.table::set(open, j = "OUTPUT_ID", value = "open-face")
+    data.table::set(open, j = "NAME", value = "Open face")
+    data.table::set(open, j = "BOUNDARY", value = "Outdoors")
+    data.table::set(open, j = "BOUNDARY_OBJECT", value = NA_character_)
+    visited <- character()
+    split_edges <- surface__split_edges
+    local_mocked_bindings(
+        surface__split_edges = function(surface, all_coordinates, profile) {
+            visited <<- c(visited, surface$ROOM[[1L]])
+            split_edges(surface, all_coordinates, profile)
+        },
+        surface__local_cuts = function(face, profile) list()
+    )
+    profile <- eplus_geom__profile()
+    profile$closure_vertex_distance <- profile$plane_distance
+    expect_error(
+        surface__repair_source_edges(
+            rbind(closed, open),
+            data.table::data.table(),
+            profile
+        ),
+        "Actual gap"
+    )
+    expect_true(length(visited) > 0L)
+    expect_true(all(visited == "Actual gap"))
 })

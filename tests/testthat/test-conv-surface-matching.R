@@ -33,6 +33,14 @@ surface_test__matching_pair <- function() {
 }
 
 test_that("source peers and exterior boundaries survive unequal multipliers", {
+    # This fixture isolates boundary semantics; one slab is not a room shell.
+    local_mocked_bindings(surface__repair_local_edges = function(
+        surface,
+        window,
+        profile
+    ) {
+        surface
+    })
     value <- surface_test__matching_pair()
     original <- data.table::copy(value)
     result <- surface__preserve_boundaries(value)

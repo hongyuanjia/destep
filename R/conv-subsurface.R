@@ -193,7 +193,20 @@ subsurface__split_by_surface <- function(
     surface = NULL,
     profile = eplus_geom__profile()
 ) {
-    expected <- unique(subsurface[, .(OUTPUT_ID, ORIGINAL_NAME)])
+    # Keep a per-source-side invariant before clipping. Checking only whether
+    # one piece survives allows a valid window to lose a thin strip silently.
+    expected <- subsurface[,
+        .(
+            ORIGINAL_NAME = ORIGINAL_NAME[[1L]],
+            SOURCE_ID = if ("ID" %in% names(.SD)) {
+                .SD[["ID"]][[1L]]
+            } else {
+                .BY$OUTPUT_ID
+            },
+            SOURCE_AREA = geom__polygon_area(.SD)
+        ),
+        by = "OUTPUT_ID"
+    ]
     if (is.null(surface)) {
         subsurface[, PART := 1L]
     } else {
@@ -295,8 +308,43 @@ subsurface__split_by_surface <- function(
     }
 
     if (!"SUBPART" %in% names(subsurface)) {
-        subsurface[, SUBPART := 1L]
+        data.table::set(subsurface, j = "SUBPART", value = 1L)
     }
+    # Hosts are nonoverlapping source-preserving partitions. Consequently the
+    # sum of clipped piece areas must equal the original opening; an outside
+    # source portion or discarded sub-centimetre strip is an error, not a repair.
+    pieces <- subsurface[,
+        .(area = geom__polygon_area(.SD)),
+        by = c("OUTPUT_ID", "PART", "SUBPART")
+    ]
+    total <- pieces[, .(OUTPUT_AREA = sum(.SD[["area"]])), by = "OUTPUT_ID"]
+    checked <- merge(expected, total, by = "OUTPUT_ID", sort = FALSE)
+    lost <- abs(checked$SOURCE_AREA - checked$OUTPUT_AREA) >
+        pmax(profile$area, checked$SOURCE_AREA * 1e-8)
+    if (any(lost)) {
+        row <- which(lost)[[1L]]
+        stop(structure(
+            list(
+                message = sprintf(
+                    paste(
+                        "DeST subsurface '%s' (source ID %s) changes area during host clipping:",
+                        "source %.9g m2, output %.9g m2. Check source containment or host partition;",
+                        "partial opening loss is not permitted."
+                    ),
+                    checked$ORIGINAL_NAME[[row]],
+                    checked$SOURCE_ID[[row]],
+                    checked$SOURCE_AREA[[row]],
+                    checked$OUTPUT_AREA[[row]]
+                ),
+                call = NULL,
+                source_id = checked$SOURCE_ID[[row]],
+                source_area = checked$SOURCE_AREA[[row]],
+                output_area = checked$OUTPUT_AREA[[row]]
+            ),
+            class = c("destep_subsurface_coverage_loss", "error", "condition")
+        ))
+    }
+
     data.table::setorderv(
         subsurface,
         c("OUTPUT_ID", "PART", "SUBPART", "POINT_NO")
