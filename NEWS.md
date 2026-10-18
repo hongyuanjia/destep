@@ -1,6 +1,6 @@
 # destep 0.0.0.9000
 
-- Add explicit standalone sensible-gain feedback, standard-density ventilation and target-state ventilation prediction options, retaining existing defaults and documenting their version requirements and control approximations.
+- Add explicit standalone sensible-gain feedback, standard-density ventilation and target-state ventilation prediction options, retaining existing defaults and documenting their version requirements and control approximations (#53).
 
 - Preserve blank optional equipment-list fractions as the unchanged default of one across supported generation versions, without replacing existing schedules or required fields (#51).
 
