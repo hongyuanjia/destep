@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Distinguish source weather field errors from ambiguous or inconsistent hour interpretations without changing checks, thresholds, source values or radiation-time selection.
+
 - Preserve constant-one sequential load fractions when upgrading dry-gain
   models from EnergyPlus 9.0.1. Explicit default schedules prevent false
   incomplete-equipment-group errors with released eplusr 0.17.0 (#48).
