@@ -7,8 +7,19 @@ test_that("can convert 'BuildingSurface:Detailed'", {
     conv__update_names(dest)
 
     # can convert 'BuildingSurface:Detailed'
-    expect_type(surface <- surface__convert(dest, ep), "list")
-    automatic <- surface__convert(dest, ep, surface_convection = "energyplus")
+    expect_warning(
+        surface <- surface__convert(dest, ep),
+        class = "destep_geometry_closure_tolerance"
+    )
+    expect_type(surface, "list")
+    expect_warning(
+        automatic <- surface__convert(
+            dest,
+            ep,
+            surface_convection = "energyplus"
+        ),
+        class = "destep_geometry_closure_tolerance"
+    )
     expect_false(
         "SurfaceProperty:ConvectionCoefficients" %in%
             automatic$object$class_name
@@ -417,7 +428,7 @@ test_that("EnergyPlus geometry assumptions are versioned in one profile", {
     reference <- expect_silent(eplus_geom__profile("23.1"))
     expect_true(reference$validated)
     expect_equal(reference$coordinate_distance, 0.01)
-    expect_equal(reference$closure_vertex_distance, 0.0127)
+    expect_equal(reference$closure_vertex_distance, 0.01)
 
     expect_warning(
         later <- eplus_geom__profile("24.1"),
@@ -629,24 +640,15 @@ test_that("EnergyPlus-compatible closure accepts a harmless T-junction", {
     expect_equal(surface__energyplus_unclosed_rooms(open_shell), "Room")
 })
 
-test_that("surface coordinates follow EnergyPlus's vertex tolerance", {
+test_that("unrelated source vertices keep their saved positions", {
     point <- data.table::data.table(
-        ID = rep(1:2, each = 2L),
+        PLANE = rep(1:2, each = 2L),
         POINT_NO = rep(0:1, 2L),
         POINT_X = c(188.175, 190.192, 188.183, 190.192),
         POINT_Y = c(-16.750, -14.488, -16.742, -14.480),
         POINT_Z = 2.9
     )
-
-    snapped <- surface__snap_coordinates(point)
-    expect_equal(
-        snapped[1L, .(POINT_X, POINT_Y, POINT_Z)],
-        snapped[3L, .(POINT_X, POINT_Y, POINT_Z)]
-    )
-    expect_equal(
-        snapped[2L, .(POINT_X, POINT_Y, POINT_Z)],
-        snapped[4L, .(POINT_X, POINT_Y, POINT_Z)]
-    )
+    expect_identical(surface__canonical_source_vertices(point), point)
 
     sliver <- data.table::data.table(
         POINT_NO = 0:2,
@@ -859,6 +861,14 @@ test_that("source boundary handling preserves an already convex polygon", {
         )
     ))
 
+    # This isolated floor/ceiling pair tests graph semantics, not a room shell.
+    local_mocked_bindings(surface__repair_local_edges = function(
+        surface,
+        window,
+        profile
+    ) {
+        surface
+    })
     converted <- surface__preserve_boundaries(surface)
     object <- converted[,
         .(
@@ -1009,9 +1019,18 @@ test_that("unmultiplied fixture preserves source boundaries, geometry, and closu
     )
     expect_true(all(paired$BOUNDARY_MODE == "source"))
 
-    # Match EnergyPlus's own two-pass closure test instead of requiring every
-    # harmless T-junction to be physically inserted into exported polygons.
-    expect_length(surface__energyplus_unclosed_rooms(surface), 0L)
+    # The 3 mm source edge separation is closed at source tolerance. Preserve
+    # the two native volume-check warnings rather than cutting whole rooms.
+    source_profile <- eplus_geom__profile()
+    source_profile$closure_vertex_distance <- source_profile$plane_distance
+    expect_length(
+        surface__energyplus_unclosed_rooms(surface, source_profile),
+        0L
+    )
+    expect_setequal(
+        surface__energyplus_unclosed_rooms(surface),
+        c("2-N-1", "3-N-1")
+    )
 
     raw <- data.table::as.data.table(DBI::dbGetQuery(
         dest,
@@ -1046,10 +1065,10 @@ test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
         warnings <<- c(warnings, conditionMessage(w))
         invokeRestart("muffleWarning")
     })
-    # Baseline generation emits the known pre-9.4 glazing warning before the
-    # model is transitioned to 23.1. Keep it distinct from source limitations,
-    # and check every warning instead of hiding unexpected diagnostics.
+    # Check each geometry and window-representation diagnostic explicitly;
+    # declared source limitations must not hide unexpected warnings.
     expected <- c(
+        "Room shell(s) 2-N-1, 3-N-1 close at the source geometry tolerance",
         "Skipped 9 ROOM row(s)",
         "DeST internal-gain surface distribution",
         "DeST window transmitted-solar distribution",
@@ -1162,11 +1181,315 @@ test_that("unmultiplied fixture passes EnergyPlus detailed diagnostics", {
         errors$message,
         ignore.case = TRUE
     )
+    # These exact source-preserving warnings are registered separately. Keep
+    # every other enclosure, nonconvex-consumer or geometry warning blocking.
+    known_source <- grepl(
+        '^CheckConvexity: Zone="3-N-(1|3|12)", Surface="3-N-(1|3|12) ROOF" is non-convex[.]$|^CalculateZoneVolume: The Zone="(2-N-1|3-N-1)" is not fully enclosed[.]',
+        errors$message
+    )
+    expect_equal(sum(known_source), 5L)
+    geometry_problem <- geometry_problem & !known_source
     expect_false(
         any(geometry_problem),
         info = paste(
             errors$message[geometry_problem],
             collapse = "\n"
         )
+    )
+})
+
+# Create complete room-side metadata around a diagnostic horizontal outline.
+geometry_test__face <- function(
+    id,
+    x,
+    y,
+    z = 0,
+    type = "Roof",
+    boundary = "Outdoors"
+) {
+    data.table::data.table(
+        ID = id,
+        PLANE = id,
+        NAME = paste0("Face ", id),
+        ROOM = paste0("Room ", id),
+        TYPE_SURFACE = 0L,
+        TYPE = type,
+        BOUNDARY = boundary,
+        BOUNDARY_OBJECT = NA_character_,
+        POINT_NO = seq_along(x) - 1L,
+        POINT_X = x,
+        POINT_Y = y,
+        POINT_Z = z
+    )
+}
+
+test_that("source coordinates are shared by identity, never nearest location", {
+    source <- data.table::data.table(
+        PLANE = 1:3,
+        POINT_NO = 0L,
+        POINT_X = c(100, 100.005, 100.006),
+        POINT_Y = c(20, 20.015, 20.008),
+        POINT_Z = c(0, 0, 0.001)
+    )
+    expect_identical(surface__canonical_source_vertices(source), source)
+    # A complete disjoint triangle cannot warp an otherwise planar roof.
+    roof <- geometry_test__face(1L, c(0, 10, 10, 0), c(0, 0, 10, 10))
+    other <- geometry_test__face(2L, c(-0.005, -5, -5), c(0, -5, 5), 0.005)
+    together <- surface__canonical_source_vertices(rbind(roof, other))
+    expect_equal(together[together$ID == 1L, ], roof)
+    expect_equal(
+        geom__polygon_frame(together[together$ID == 1L, ])$planarity_error,
+        0
+    )
+    repeated <- rbind(roof, roof)
+    expect_identical(surface__canonical_source_vertices(repeated), repeated)
+    data.table::set(repeated, i = 5L, j = "POINT_Z", value = 0.005)
+    expect_error(
+        surface__canonical_source_vertices(repeated),
+        "inconsistent copies"
+    )
+})
+
+test_that("unobstructed roofs and nonsolar interior faces remain whole", {
+    x <- c(0, 4, 4, 2, 2, 0)
+    y <- c(0, 0, 1, 1, 3, 3)
+    for (role in c("Roof", "Floor", "Ceiling")) {
+        boundary <- if (role == "Roof") "Outdoors" else "Surface"
+        source <- geometry_test__face(
+            1L,
+            x,
+            y,
+            type = role,
+            boundary = boundary
+        )
+        target <- surface__normalize_topology(source)
+        expect_equal(data.table::uniqueN(target$OUTPUT_ID), 1L)
+        expect_equal(geom__polygon_area(target), geom__polygon_area(source))
+        expect_equal(target$POINT_X, source$POINT_X)
+        expect_equal(target$POINT_Y, source$POINT_Y)
+        expect_equal(target$ROOM, source$ROOM)
+        expect_equal(source$NAME, rep("Face 1", 6L))
+    }
+})
+
+test_that("only constrained convex clipping consumers request decomposition", {
+    roof <- geometry_test__face(1L, c(0, 4, 4, 2, 2, 0), c(0, 0, 1, 1, 3, 3))
+    expect_equal(
+        data.table::uniqueN(surface__normalize_topology(roof)$OUTPUT_ID),
+        1L
+    )
+    # A genuine external clipping/casting face remains decomposable. This does
+    # not change room ownership or generate a surrogate shading calculation.
+    wall <- data.table::copy(roof)
+    data.table::set(wall, j = "TYPE", value = "Wall")
+    data.table::set(wall, j = "POINT_Z", value = wall$POINT_Y)
+    data.table::set(wall, j = "POINT_Y", value = 0)
+    expect_gt(
+        data.table::uniqueN(surface__normalize_topology(wall)$OUTPUT_ID),
+        1L
+    )
+})
+
+test_that("only an adjoining rising exterior wall constrains a concave roof", {
+    roof <- geometry_test__face(1L, c(0, 4, 4, 2, 2, 0), c(0, 0, 1, 1, 3, 3))
+    wall <- geometry_test__face(
+        2L,
+        c(1, 3, 3, 1),
+        c(0, 0, 0, 0),
+        c(0, 0, 2, 2),
+        type = "Wall"
+    )
+    profile <- eplus_geom__profile()
+    expect_identical(surface__roof_rising_walls(roof, wall, profile), 2L)
+    target <- surface__normalize_topology(rbind(roof, wall))
+    parts <- split(target[target$ID == 1L, ], by = "OUTPUT_ID")
+    expect_gt(length(parts), 1L)
+    expect_equal(
+        sum(vapply(parts, geom__polygon_area, numeric(1L))),
+        geom__polygon_area(roof)
+    )
+    expect_setequal(unique(target[target$ID == 1L, ]$ROOM), roof$ROOM[[1L]])
+
+    # Remote heights, a corner, coplanar/below walls and an interior wall must
+    # not split the roof. A 5 mm gap is source separation, not a snap request.
+    controls <- lapply(seq_len(7L), function(i) data.table::copy(wall))
+    data.table::set(controls[[1L]], j = "POINT_Y", value = 100)
+    data.table::set(controls[[2L]], j = "POINT_X", value = c(4, 5, 5, 4))
+    data.table::set(controls[[3L]], j = "POINT_Z", value = c(-2, -2, 0, 0))
+    data.table::set(controls[[4L]], j = "BOUNDARY", value = "Surface")
+    data.table::set(controls[[5L]], j = "POINT_Y", value = -0.005)
+    data.table::set(controls[[6L]], j = "TYPE_SURFACE", value = 1L)
+    data.table::set(controls[[7L]], j = "POINT_Z", value = c(5, 5, 10, 10))
+    for (other in controls) {
+        value <- surface__normalize_topology(rbind(roof, other))
+        expect_equal(data.table::uniqueN(value[value$ID == 1L, ]$OUTPUT_ID), 1L)
+    }
+    # A higher roof elsewhere is also insufficient, even directly overhead.
+    upper <- data.table::copy(roof)
+    for (name in c("ID", "PLANE")) {
+        data.table::set(upper, j = name, value = 3L)
+    }
+    data.table::set(upper, j = "POINT_Z", value = 20)
+    value <- surface__normalize_topology(rbind(roof, upper))
+    expect_equal(data.table::uniqueN(value[value$ID == 1L, ]$OUTPUT_ID), 1L)
+    expect_length(
+        surface__convex_planes(roof[0], data.table::data.table(), profile),
+        0L
+    )
+})
+
+test_that("local roof incidence is independent of rotation and translation", {
+    roof <- geometry_test__face(1L, c(0, 4, 4, 2, 2, 0), c(0, 0, 1, 1, 3, 3))
+    wall <- geometry_test__face(
+        2L,
+        c(1, 3, 3, 1),
+        c(0, 0, 0, 0),
+        c(0, 0, 2, 2),
+        type = "Wall"
+    )
+    # A reversed, partial wall edge still shares positive roof-boundary length.
+    wall <- wall[4:1, ]
+    theta <- 0.731
+    rotation <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), 2L)
+    for (value in list(roof, wall)) {
+        xy <- as.matrix(value[, c("POINT_X", "POINT_Y"), with = FALSE])
+        transformed <- xy %*% rotation
+        data.table::set(value, j = "POINT_X", value = transformed[, 1L] + 1000)
+        data.table::set(value, j = "POINT_Y", value = transformed[, 2L] - 2000)
+        data.table::set(value, j = "POINT_Z", value = value$POINT_Z + 30)
+    }
+    expect_identical(
+        surface__roof_rising_walls(roof, wall, eplus_geom__profile()),
+        2L
+    )
+    expect_length(
+        surface__roof_rising_walls(roof, wall[0], eplus_geom__profile()),
+        0L
+    )
+})
+
+test_that("second-pass T-junction closure does not request extra cuts", {
+    # Two front walls meet whole floor/roof edges halfway along their length.
+    # This is a true T-junction, not a removable point within one source face.
+    faces <- list(
+        rbind(c(0, 0, 0), c(0, 1, 0), c(2, 1, 0), c(2, 0, 0)),
+        rbind(c(0, 0, 1), c(2, 0, 1), c(2, 1, 1), c(0, 1, 1)),
+        rbind(c(0, 0, 0), c(1, 0, 0), c(1, 0, 1), c(0, 0, 1)),
+        rbind(c(1, 0, 0), c(2, 0, 0), c(2, 0, 1), c(1, 0, 1)),
+        rbind(c(2, 1, 0), c(0, 1, 0), c(0, 1, 1), c(2, 1, 1)),
+        rbind(c(0, 1, 0), c(0, 0, 0), c(0, 0, 1), c(0, 1, 1)),
+        rbind(c(2, 0, 0), c(2, 1, 0), c(2, 1, 1), c(2, 0, 1))
+    )
+    shell <- data.table::rbindlist(lapply(seq_along(faces), function(index) {
+        xyz <- faces[[index]]
+        value <- geometry_test__face(
+            index,
+            xyz[, 1L],
+            xyz[, 2L],
+            xyz[, 3L],
+            type = c("Floor", "Roof", rep("Wall", 5L))[[index]]
+        )
+        data.table::set(value, j = "ROOM", value = "T junction")
+        data.table::set(value, j = "OUTPUT_ID", value = as.character(index))
+        value
+    }))
+    expect_length(surface__energyplus_unclosed_rooms(shell), 0L)
+    diagnostic <- surface__energyplus_unclosed_rooms(shell, details = TRUE)
+    expect_length(diagnostic$output_ids, 0L)
+    expect_equal(diagnostic$defects, 0)
+    expect_equal(diagnostic$first_defects, 0)
+})
+
+test_that("window and door hosts both participate in clipping protection", {
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    tables <- list(
+        WINDOW = data.frame(ID = 1L, OF_ENCLOSURE = 1L, MIDDLE_PLANE = 2L),
+        DOOR = data.frame(ID = 1L, OF_ENCLOSURE = 1L, MIDDLE_PLANE = 2L),
+        MAIN_ENCLOSURE = data.frame(ID = 1L, MIDDLE_PLANE = 10L),
+        PLANE = data.frame(PLANE_ID = 2L, GEOMETRY = 2L),
+        GEOMETRY = data.frame(GEOMETRY_ID = 2L, BOUNDARY_LOOP_ID = 2L),
+        LOOP_POINT = data.frame(LOOP_ID = 2L, POINT_NO = 0:3, POINT = 1:4),
+        POINT = data.frame(
+            POINT_ID = 1:4,
+            X = c(0.2, 0.8, 0.8, 0.2),
+            Y = c(0.2, 0.2, 0.8, 0.8),
+            Z = 0
+        )
+    )
+    for (name in names(tables)) {
+        DBI::dbWriteTable(db, name, tables[[name]])
+    }
+    opening <- surface__opening_table(db)
+    expect_setequal(unique(opening$OPENING_ID), c("WINDOW/1", "DOOR/1"))
+    # An interior concave host with only an opaque door still needs convex
+    # clipping pieces. Its original ownership and total area remain unchanged.
+    host <- geometry_test__face(
+        10L,
+        c(0, 3, 3, 1, 1, 0),
+        c(0, 0, 1, 1, 3, 3),
+        type = "Wall",
+        boundary = "Surface"
+    )
+    door <- opening[opening$OPENING_ID == "DOOR/1", ]
+    target <- surface__normalize_topology(host, door)
+    expect_gt(data.table::uniqueN(target$OUTPUT_ID), 1L)
+    parts <- split(target, target$OUTPUT_ID)
+    expect_true(surface__cut_preserves_openings(
+        parts,
+        door,
+        eplus_geom__profile()
+    ))
+    expect_equal(
+        sum(vapply(parts, geom__polygon_area, numeric(1L))),
+        geom__polygon_area(host)
+    )
+})
+
+test_that("window clipping cannot silently lose source area", {
+    host <- geometry_test__face(1L, c(0, 4, 4, 0), c(0, 0, 3, 3))
+    data.table::set(host, j = "PART", value = 1L)
+    opening <- geometry_test__face(100L, c(3, 5, 5, 3), c(1, 1, 2, 2))
+    for (name in c(
+        "OUTPUT_ID",
+        "ORIGINAL_NAME",
+        "SURFACE_ID",
+        "SIDE",
+        "INTERZONE"
+    )) {
+        value <- switch(
+            name,
+            OUTPUT_ID = "100-1",
+            ORIGINAL_NAME = "Source window",
+            SURFACE_ID = 1L,
+            SIDE = 1L,
+            INTERZONE = FALSE
+        )
+        data.table::set(opening, j = name, value = value)
+    }
+    expect_error(
+        subsurface__split_by_surface(opening, host),
+        class = "destep_subsurface_coverage_loss"
+    )
+    # The whole valid opening is preserved without an artificial host split.
+    data.table::set(opening, j = "POINT_X", value = c(1, 2.005, 2.005, 1))
+    target <- subsurface__split_by_surface(opening, host)
+    expect_equal(
+        sum(
+            target[,
+                list(area = geom__polygon_area(.SD)),
+                by = "OUTPUT_PART_ID"
+            ]$area
+        ),
+        1.005,
+        tolerance = 1e-6
+    )
+    first <- geometry_test__face(1L, c(0, 2, 2, 0), c(0, 0, 3, 3))
+    second <- geometry_test__face(1L, c(2, 4, 4, 2), c(0, 0, 3, 3))
+    data.table::set(first, j = "PART", value = 1L)
+    data.table::set(second, j = "PART", value = 2L)
+    expect_error(
+        subsurface__split_by_surface(opening, rbind(first, second)),
+        class = "destep_subsurface_coverage_loss"
     )
 })

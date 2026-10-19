@@ -180,3 +180,60 @@ test_that("warnings promoted to errors roll back a restoration", {
     expect_error(window__restore_bindings(dest), "Restored")
     expect_identical(DBI::dbReadTable(dest, "SURFACE"), before)
 })
+
+# Import an actual Access model, then mark one explicitly hosted window side
+# unbound on the disposable connection. The source file itself is never edited.
+window_public__fixture <- function() {
+    dest <- read_dest(ensure_dest_test_file())
+    DBI::dbExecute(
+        dest,
+        "UPDATE SURFACE SET OF_ROOM = -1
+         WHERE SURFACE_ID = (SELECT SIDE1 FROM WINDOW WHERE ID = 925563)"
+    )
+    dest
+}
+
+test_that("public conversion rejects ambiguous bindings and preserves input", {
+    dest <- window_public__fixture()
+    on.exit(DBI::dbDisconnect(dest))
+    DBI::dbExecute(
+        dest,
+        "UPDATE WINDOW SET SIDE2 = SIDE1 WHERE ID = 925563"
+    )
+    tables <- DBI::dbListTables(dest)
+    before <- lapply(tables, DBI::dbReadTable, conn = dest)
+    for (copy in c(TRUE, FALSE)) {
+        expect_error(
+            to_idf(dest, 23.1, copy = copy),
+            class = "destep_invalid_window_bindings"
+        )
+        expect_identical(DBI::dbListTables(dest), tables)
+        expect_identical(lapply(tables, DBI::dbReadTable, conn = dest), before)
+    }
+})
+
+test_that("public mutable conversion rolls back failed binding updates", {
+    dest <- window_public__fixture()
+    on.exit(DBI::dbDisconnect(dest))
+    DBI::dbExecute(
+        dest,
+        "CREATE TRIGGER refuse_binding BEFORE UPDATE OF OF_ROOM ON SURFACE
+         WHEN OLD.OF_ROOM = -1 BEGIN SELECT RAISE(ABORT, 'public test refusal'); END"
+    )
+    tables <- DBI::dbListTables(dest)
+    before <- lapply(tables, DBI::dbReadTable, conn = dest)
+    expect_error(to_idf(dest, 23.1, copy = FALSE), "public test refusal")
+    expect_identical(DBI::dbListTables(dest), tables)
+    expect_identical(lapply(tables, DBI::dbReadTable, conn = dest), before)
+})
+
+test_that("public restoration warning promoted to error rolls back input", {
+    dest <- window_public__fixture()
+    on.exit(DBI::dbDisconnect(dest))
+    tables <- DBI::dbListTables(dest)
+    before <- lapply(tables, DBI::dbReadTable, conn = dest)
+    withr::local_options(warn = 2L)
+    expect_error(to_idf(dest, 23.1, copy = FALSE), "Restored")
+    expect_identical(DBI::dbListTables(dest), tables)
+    expect_identical(lapply(tables, DBI::dbReadTable, conn = dest), before)
+})

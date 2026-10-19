@@ -1,5 +1,5 @@
 # Read the two room-side copies of every DeST enclosure on their shared middle
-# plane, then put the coordinates on the EnergyPlus geometry tolerance grid.
+# plane. Nearby but topologically unrelated vertices keep their source coordinates.
 surface__source_table <- function(dest, geometry_profile) {
     surface__validate_source_references(dest)
     # NOTE: In DeST, the main enclosure table is used to store the relationship
@@ -140,35 +140,42 @@ surface__source_table <- function(dest, geometry_profile) {
     assert_unique_name(surface$NAME[surface$POINT_NO == 0L], "surface")
     data.table::setDT(surface)
     data.table::setorderv(surface, c("ID", "POINT_NO"))
-    surface__snap_coordinates(surface, geometry_profile)
+    surface__canonical_source_vertices(surface, geometry_profile)
 }
 
-# Read window vertices used as protected junctions while host surfaces are
-# normalized. Empty DeST window tables deliberately produce an empty data.table.
-surface__window_table <- function(dest) {
-    if (!db_has_rows(dest, "WINDOW")) {
-        return(data.table::data.table())
-    }
-
-    data.table::as.data.table(DBI::dbGetQuery(
-        dest,
-        "
+# Read both window and door outlines for host clipping and local-cut protection.
+# Prefix source IDs by table so independently numbered doors/windows stay distinct.
+surface__opening_table <- function(dest) {
+    tables <- c("WINDOW", "DOOR")
+    rows <- lapply(tables, function(table) {
+        if (!db_has_rows(dest, table)) {
+            return(NULL)
+        }
+        data.table::as.data.table(DBI::dbGetQuery(
+            dest,
+            sprintf(
+                "
         SELECT
-            W.ID AS WINDOW_ID,
+            '%s/' || W.ID AS OPENING_ID,
             E.MIDDLE_PLANE AS PLANE,
             L.POINT_NO,
             ROUND(P.X, 3) AS POINT_X,
             ROUND(P.Y, 3) AS POINT_Y,
             ROUND(P.Z, 3) AS POINT_Z
-        FROM WINDOW W
+        FROM %s W
         INNER JOIN MAIN_ENCLOSURE E ON W.OF_ENCLOSURE = E.ID
         INNER JOIN PLANE PL ON W.MIDDLE_PLANE = PL.PLANE_ID
         INNER JOIN GEOMETRY G ON PL.GEOMETRY = G.GEOMETRY_ID
         INNER JOIN LOOP_POINT L ON G.BOUNDARY_LOOP_ID = L.LOOP_ID
         INNER JOIN POINT P ON L.POINT = P.POINT_ID
         ORDER BY W.ID, L.POINT_NO
-    "
-    ))
+    ",
+                table,
+                table
+            )
+        ))
+    })
+    data.table::rbindlist(rows)
 }
 
 # Convert normalized surface rows into the ordered field lists expected by
@@ -484,12 +491,16 @@ surface__convert <- function(
 ) {
     surface_convection <- match.arg(surface_convection, c("dest", "energyplus"))
     surface <- surface__source_table(dest, geometry_profile)
-    window <- surface__window_table(dest)
+    window <- surface__opening_table(dest)
 
-    # Normalize shared middle planes once, preserving convex source polygons.
+    # Normalize shared middle planes once, preferring complete source polygons.
     # Repair only junctions that fail closure when
     # removable vertices are cleaned as part of target geometry processing.
-    surface <- surface__normalize_topology(surface, window, geometry_profile)
+    surface <- surface__normalize_topology(
+        surface,
+        window,
+        geometry_profile
+    )
     # remove the surface indicating outside environment and grounds
     surface <- surface[!J(c(1L, 2L)), on = "TYPE_SURFACE"]
     surface <- surface__preserve_boundaries(
@@ -563,7 +574,9 @@ surface__convert <- function(
 # This profile-based check is supplemented by actual engine regression runs.
 surface__energyplus_unclosed_rooms <- function(
     surface,
-    profile = eplus_geom__profile()
+    profile = eplus_geom__profile(),
+    details = FALSE,
+    cleanup_cache = NULL
 ) {
     vertex_tolerance <- profile$closure_vertex_distance
     # Private copies keep source junction vertices available to the later repair.
@@ -572,35 +585,54 @@ surface__energyplus_unclosed_rooms <- function(
     room_is_closed <- function(room) {
         output_ids <- unique(room$OUTPUT_ID)
         faces <- lapply(output_ids, function(output_id) {
-            face <- data.table::copy(room[
-                OUTPUT_ID == output_id,
+            face <- room[OUTPUT_ID == output_id, .(POINT_X, POINT_Y, POINT_Z)]
+            key <- paste(as.vector(t(as.matrix(face))), collapse = "/")
+            if (!is.null(cleanup_cache) && !is.null(cleanup_cache[[key]])) {
+                return(cleanup_cache[[key]])
+            }
+            cleaned <- as.matrix(surface__simplify_polygon(face, profile)[,
                 .(POINT_X, POINT_Y, POINT_Z)
             ])
-            as.matrix(surface__simplify_polygon(face, profile)[,
-                .(POINT_X, POINT_Y, POINT_Z)
-            ])
+            if (!is.null(cleanup_cache)) {
+                cleanup_cache[[key]] <- cleaned
+            }
+            cleaned
         })
         if (length(faces) == 0L || any(vapply(faces, nrow, integer(1L)) < 3L)) {
-            return(FALSE)
+            return(list(
+                output_ids = output_ids,
+                points = do.call(rbind, faces),
+                score = Inf,
+                defects = Inf,
+                first_defects = Inf
+            ))
         }
 
         # EnergyPlus keeps the first coordinate in traversal order as the
-        # representative of every coordinate-wise 1.27 cm vertex cluster.
+        # representative of every coordinate-wise 1 cm vertex cluster.
         unique_vertices <- matrix(numeric(), nrow = 0L, ncol = 3L)
+        vertex_cache <- new.env(hash = TRUE, parent = emptyenv())
         vertex_index <- function(point) {
+            key <- paste(point, collapse = "/")
+            if (!is.null(vertex_cache[[key]])) {
+                return(vertex_cache[[key]])
+            }
             if (nrow(unique_vertices) > 0L) {
                 close <- which(
-                    apply(
-                        abs(sweep(unique_vertices, 2L, point, "-")),
-                        1L,
-                        max
-                    ) <
-                        vertex_tolerance
+                    rowSums(
+                        abs(sweep(unique_vertices, 2L, point, "-")) >=
+                            vertex_tolerance
+                    ) ==
+                        0L
                 )
-                if (length(close) > 0L) return(close[[1L]])
+                if (length(close) > 0L) {
+                    vertex_cache[[key]] <- close[[1L]]
+                    return(close[[1L]])
+                }
             }
             unique_vertices <<- rbind(unique_vertices, point)
-            nrow(unique_vertices)
+            vertex_cache[[key]] <- nrow(unique_vertices)
+            vertex_cache[[key]]
         }
         face_indices <- lapply(faces, function(face) {
             apply(face, 1L, vertex_index)
@@ -618,7 +650,13 @@ surface__energyplus_unclosed_rooms <- function(
 
         first_count <- count_edges(face_indices)
         if (length(first_count) > 0L && all(first_count == 2L)) {
-            return(TRUE)
+            return(list(
+                output_ids = character(),
+                points = matrix(numeric(), 0L, 3L),
+                score = 0,
+                defects = 0,
+                first_defects = 0
+            ))
         }
 
         # Only a failed first pass receives every near-collinear room vertex.
@@ -648,9 +686,9 @@ surface__energyplus_unclosed_rooms <- function(
                     end,
                     "-"
                 ))
-                not_endpoint <- apply(start_distance, 1L, max) >=
-                    vertex_tolerance &
-                    apply(end_distance, 1L, max) >= vertex_tolerance
+                not_endpoint <- rowSums(start_distance >= vertex_tolerance) >
+                    0L &
+                    rowSums(end_distance >= vertex_tolerance) > 0L
                 relative <- sweep(unique_vertices, 2L, start, "-")
                 unit <- direction / edge_length
                 perpendicular <- relative -
@@ -681,402 +719,94 @@ surface__energyplus_unclosed_rooms <- function(
             expanded[c(TRUE, diff(expanded) != 0L)]
         })
         second_count <- count_edges(expanded_indices)
-        length(second_count) > 0L && all(second_count == 2L)
+        bad_edges <- names(second_count)[second_count != 2L]
+        # T-junctions accepted by the engine's second pass require no repair.
+        # First-pass edge differences are candidates only for a truly open room.
+        if (!length(bad_edges)) {
+            return(list(
+                output_ids = character(),
+                points = matrix(numeric(), 0L, 3L),
+                score = 0,
+                defects = 0,
+                first_defects = 0
+            ))
+        }
+        first_bad <- names(first_count)[first_count != 2L]
+        first_bad_faces <- vapply(
+            face_indices,
+            function(index) {
+                following <- c(index[-1L], index[[1L]])
+                any(geom__edge_key(index, following) %in% first_bad)
+            },
+            logical(1L)
+        )
+        bad_faces <- vapply(
+            expanded_indices,
+            function(index) {
+                following <- c(index[-1L], index[[1L]])
+                any(geom__edge_key(index, following) %in% bad_edges)
+            },
+            logical(1L)
+        )
+        vertices <- unique(as.integer(unlist(strsplit(
+            bad_edges,
+            "/",
+            fixed = TRUE
+        ))))
+        list(
+            output_ids = output_ids[bad_faces | first_bad_faces],
+            bad_output_ids = output_ids[bad_faces],
+            points = unique_vertices[vertices, , drop = FALSE],
+            defects = length(bad_edges),
+            first_defects = sum(first_count != 2L),
+            score = if (!length(bad_edges)) {
+                0
+            } else {
+                1000 * length(bad_edges) + sum(first_count != 2L)
+            }
+        )
     }
 
     rooms <- unique(surface$ROOM)
-    closed <- vapply(
-        rooms,
-        function(room_name) {
-            room_is_closed(surface[
-                ROOM == room_name &
-                    TYPE %in% c("Wall", "Floor", "Ceiling", "Roof")
-            ])
-        },
-        logical(1L)
-    )
-    rooms[!closed]
-}
-
-# Identify surface groups that need junction repair and collect all original or
-# projected room-shell points that may split their edges.
-surface__junction_context <- function(
-    surface,
-    profile = eplus_geom__profile()
-) {
-    object <- unique(surface[, .(
-        OUTPUT_ID,
-        NAME,
-        ROOM,
-        BOUNDARY,
-        BOUNDARY_OBJECT,
-        BOUNDARY_MODE
-    )])
-    peer_index <- match(object$BOUNDARY_OBJECT, object$NAME)
-    object[, PEER_OUTPUT_ID := object$OUTPUT_ID[peer_index]]
-    object[,
-        GROUP := ifelse(
-            BOUNDARY == "Surface" &
-                NAME != BOUNDARY_OBJECT &
-                !is.na(PEER_OUTPUT_ID),
-            ifelse(
-                OUTPUT_ID < PEER_OUTPUT_ID,
-                paste(OUTPUT_ID, PEER_OUTPUT_ID, sep = "|"),
-                paste(PEER_OUTPUT_ID, OUTPUT_ID, sep = "|")
-            ),
-            OUTPUT_ID
-        )
-    ]
-    repair_rooms <- surface__energyplus_unclosed_rooms(surface, profile)
-    if (length(repair_rooms) == 0L) {
-        return(list(
-            object = object,
-            repair_groups = character(),
-            room_point = data.table::data.table()
-        ))
+    diagnostic <- lapply(rooms, function(room_name) {
+        room_is_closed(surface[
+            ROOM == room_name &
+                TYPE %in% c("Wall", "Floor", "Ceiling", "Roof")
+        ])
+    })
+    failed <- lengths(lapply(diagnostic, `[[`, "output_ids")) > 0L
+    if (!details) {
+        return(rooms[failed])
     }
-    repair_groups <- unique(object[ROOM %in% repair_rooms]$GROUP)
-    repair_member_rooms <- unique(object[GROUP %in% repair_groups]$ROOM)
-    room_point <- unique(surface[
-        ROOM %in% repair_member_rooms,
-        .(ROOM, POINT_X, POINT_Y, POINT_Z)
-    ])
-
-    list(
-        object = object,
-        repair_groups = repair_groups,
-        room_point = room_point
-    )
-}
-
-# Rebuild every affected reciprocal surface group from a shared split polygon,
-# translating the same geometry to the peer plane when a peer exists.
-surface__normalize_junction_groups <- function(
-    surface,
-    window,
-    profile,
-    context
-) {
-    tolerance <- profile$plane_distance
-    distance_tolerance <- profile$coordinate_distance
-    coordinate_columns <- geom__coordinate_columns()
-    object <- context$object
-    repair_groups <- context$repair_groups
-    room_point <- context$room_point
-    output <- list()
-
-    for (group in unique(object$GROUP)) {
-        member <- object[GROUP == group]
-        base_id <- member$OUTPUT_ID[[1L]]
-        base <- surface[OUTPUT_ID == base_id]
-        paired <- nrow(member) == 2L
-        peer <- if (paired) {
-            surface[OUTPUT_ID == member$OUTPUT_ID[[2L]]]
-        } else {
-            NULL
-        }
-        if (!group %in% repair_groups) {
-            output[[length(output) + 1L]] <- base
-            if (paired) {
-                output[[length(output) + 1L]] <- peer
-            }
-            next
-        }
-
-        rooms <- unique(member$ROOM)
-        candidate <- room_point[ROOM %in% rooms]
-        normal <- geom__unit_normal(base)
-        origin <- as.numeric(base[1L, .(POINT_X, POINT_Y, POINT_Z)])
-        coordinate <- as.matrix(candidate[, .(POINT_X, POINT_Y, POINT_Z)])
-        plane_distance <- as.vector(
-            sweep(coordinate, 2L, origin, "-") %*% normal
-        )
-        coordinate <- coordinate[
-            abs(plane_distance) <= tolerance,
-            ,
-            drop = FALSE
-        ]
-        candidate <- unique(data.table::data.table(
+    points <- data.table::rbindlist(lapply(which(failed), function(index) {
+        coordinate <- diagnostic[[index]]$points
+        data.table::data.table(
+            ROOM = rooms[[index]],
             POINT_X = coordinate[, 1L],
             POINT_Y = coordinate[, 2L],
             POINT_Z = coordinate[, 3L]
+        )
+    }))
+    list(
+        rooms = rooms[failed],
+        output_ids = unlist(
+            lapply(diagnostic, `[[`, "output_ids"),
+            use.names = FALSE
+        ),
+        bad_output_ids = unlist(
+            lapply(diagnostic, `[[`, "bad_output_ids"),
+            use.names = FALSE
+        ),
+        points = points,
+        score = sum(vapply(diagnostic, `[[`, numeric(1L), "score")),
+        defects = sum(vapply(diagnostic, `[[`, numeric(1L), "defects")),
+        first_defects = sum(vapply(
+            diagnostic,
+            `[[`,
+            numeric(1L),
+            "first_defects"
         ))
-        candidate[,
-            JUNCTION_KEY := sprintf(
-                "%.8f|%.8f|%.8f",
-                POINT_X,
-                POINT_Y,
-                POINT_Z
-            )
-        ]
-        candidate <- unique(candidate, by = "JUNCTION_KEY")
-        candidate[, JUNCTION_KEY := NULL]
-        split_profile <- profile
-        split_profile$coordinate_distance <-
-            distance_tolerance * (1.0 + 1e-6)
-        split <- surface__split_edges(base, candidate, split_profile)
-        # A junction already present in the source can be removed by EnergyPlus.
-        # Once this group is marked for repair, preserving that junction may
-        # require a real part edge even if split_edges inserted no new vertex.
-        changed <- nrow(split) > nrow(base) ||
-            any(surface__redundant_vertices(split, profile))
-        if (!changed) {
-            output[[length(output) + 1L]] <- base
-            if (paired) {
-                output[[length(output) + 1L]] <- peer
-            }
-            next
-        }
-
-        avoid_points <- if (nrow(window) > 0L) {
-            window[PLANE == base$PLANE[[1L]]]
-        } else {
-            data.table::data.table()
-        }
-        # Direct diagonals often preserve required junctions with fewer parts.
-        # A center fan remains the convex fallback; ordinary ear clipping can
-        # bypass a collinear junction and reopen the room shell after cleanup.
-        direct <- surface__partition_by_diagonals(split, avoid_points, profile)
-        triangle <- if (!is.null(direct)) {
-            direct
-        } else if (
-            nrow(avoid_points) == 0L &&
-                geom__polygon_is_convex(split, profile$angle)
-        ) {
-            center <- colMeans(as.matrix(
-                split[, .(POINT_X, POINT_Y, POINT_Z)]
-            ))
-            radial <- sqrt(rowSums(
-                sweep(
-                    as.matrix(split[, .(POINT_X, POINT_Y, POINT_Z)]),
-                    2L,
-                    center,
-                    "-"
-                )^2
-            ))
-            if (any(radial < distance_tolerance)) {
-                stop(sprintf(
-                    "Could not normalize room junctions for surface group %s without a short radial edge.",
-                    group
-                ))
-            }
-            data.table::rbindlist(lapply(seq_len(nrow(split)), function(index) {
-                following <- index %% nrow(split) + 1L
-                value <- data.table::copy(split[c(index, index, following)])
-                value[
-                    1L,
-                    `:=`(
-                        POINT_X = center[[1L]],
-                        POINT_Y = center[[2L]],
-                        POINT_Z = center[[3L]]
-                    )
-                ]
-                value[, `:=`(PART = index, POINT_NO = 0:2)]
-                value
-            }))
-        } else {
-            tryCatch(
-                surface__triangulate_polygon(split, avoid_points, profile),
-                error = function(error) {
-                    stop(sprintf(
-                        "Could not normalize room junctions for surface group %s: %s",
-                        group,
-                        conditionMessage(error)
-                    ))
-                }
-            )
-        }
-        triangle <- surface__merge_convex_parts(triangle, profile)
-        part_ids <- unique(triangle$PART)
-        base_metadata <- base[
-            1L,
-            setdiff(names(base), coordinate_columns),
-            with = FALSE
-        ]
-        base_metadata[, SOURCE_JUNCTION_OUTPUT_ID := OUTPUT_ID]
-        if (paired) {
-            peer_metadata <- peer[
-                1L,
-                setdiff(names(peer), coordinate_columns),
-                with = FALSE
-            ]
-            peer_metadata[, SOURCE_JUNCTION_OUTPUT_ID := OUTPUT_ID]
-            translation <- colMeans(as.matrix(
-                peer[, .(POINT_X, POINT_Y, POINT_Z)]
-            )) -
-                colMeans(as.matrix(base[, .(POINT_X, POINT_Y, POINT_Z)]))
-        }
-
-        base_names <- if (length(part_ids) == 1L) {
-            base$NAME[[1L]]
-        } else {
-            sprintf("%s [Junction %d]", base$NAME[[1L]], seq_along(part_ids))
-        }
-        peer_names <- if (paired) {
-            if (length(part_ids) == 1L) {
-                peer$NAME[[1L]]
-            } else {
-                sprintf(
-                    "%s [Junction %d]",
-                    peer$NAME[[1L]],
-                    seq_along(part_ids)
-                )
-            }
-        } else {
-            character()
-        }
-
-        for (index in seq_along(part_ids)) {
-            geometry <- triangle[
-                PART == part_ids[[index]],
-                .(POINT_NO, POINT_X, POINT_Y, POINT_Z)
-            ]
-            geometry[, POINT_NO := seq_len(.N) - 1L]
-            base_part <- data.table::copy(base_metadata)
-            base_part[, `:=`(
-                NAME = base_names[[index]],
-                OUTPUT_ID = sprintf("%s-J%d", base_id, index),
-                BOUNDARY_OBJECT = if (paired) {
-                    peer_names[[index]]
-                } else if (
-                    BOUNDARY == "Surface" &&
-                        BOUNDARY_OBJECT == base$NAME[[1L]]
-                ) {
-                    base_names[[index]]
-                } else {
-                    BOUNDARY_OBJECT
-                }
-            )]
-
-            output[[length(output) + 1L]] <- cbind(
-                base_part[rep(1L, nrow(geometry))],
-                geometry
-            )
-
-            if (paired) {
-                peer_geometry <- data.table::copy(geometry)
-                peer_geometry[, `:=`(
-                    POINT_X = POINT_X + translation[[1L]],
-                    POINT_Y = POINT_Y + translation[[2L]],
-                    POINT_Z = POINT_Z + translation[[3L]]
-                )]
-                peer_part <- data.table::copy(peer_metadata)
-                peer_part[, `:=`(
-                    NAME = peer_names[[index]],
-                    OUTPUT_ID = sprintf("%s-J%d", peer$OUTPUT_ID[[1L]], index),
-                    BOUNDARY_OBJECT = base_names[[index]]
-                )]
-
-                output[[length(output) + 1L]] <- cbind(
-                    peer_part[rep(1L, nrow(peer_geometry))],
-                    peer_geometry
-                )
-            }
-        }
-    }
-
-    surface <- data.table::rbindlist(output, fill = TRUE)
-    data.table::setorderv(surface, c("ID", "OUTPUT_ID", "POINT_NO"))
-    surface[, PART := data.table::rleid(OUTPUT_ID), by = "ID"]
-    surface[, PART_COUNT := data.table::uniqueN(PART), by = "ID"]
-    surface
-}
-
-# Repair necessary coplanar room-shell junctions while preserving original
-# reciprocal boundary references.
-surface__normalize_room_junctions <- function(
-    surface,
-    window = data.table::data.table(),
-    profile = eplus_geom__profile()
-) {
-    surface <- data.table::copy(surface)
-    context <- surface__junction_context(surface, profile)
-    if (length(context$repair_groups) == 0L) {
-        return(surface)
-    }
-
-    surface__normalize_junction_groups(surface, window, profile, context)
-}
-
-# Snap coordinates that EnergyPlus cannot distinguish to one deterministic
-# representative before topology is constructed. A spatial hash restricts each
-# search to neighboring 0.01 m buckets instead of comparing every point pair.
-surface__snap_coordinates <- function(
-    surface,
-    profile = eplus_geom__profile()
-) {
-    tolerance <- profile$coordinate_distance
-    surface <- data.table::copy(surface)
-    point <- unique(surface[, .(POINT_X, POINT_Y, POINT_Z)])
-    data.table::setorderv(point, c("POINT_X", "POINT_Y", "POINT_Z"))
-    coordinate <- as.matrix(point)
-    representative <- matrix(numeric(), nrow = 0L, ncol = 3L)
-    mapping <- integer(nrow(point))
-    bucket <- new.env(hash = TRUE, parent = emptyenv())
-    offset <- as.matrix(expand.grid(X = -1L:1L, Y = -1L:1L, Z = -1L:1L))
-
-    for (index in seq_len(nrow(point))) {
-        cell <- floor(coordinate[index, ] / tolerance)
-        candidate <- integer()
-        for (offset_index in seq_len(nrow(offset))) {
-            key <- paste(cell + offset[offset_index, ], collapse = "|")
-            candidate <- c(candidate, bucket[[key]])
-        }
-        candidate <- unique(candidate)
-        if (length(candidate) > 0L) {
-            difference <- abs(
-                representative[candidate, , drop = FALSE] - coordinate[index, ]
-            )
-            # Zone edge matching in EnergyPlus compares x, y, and z separately
-            # against 0.01 m rather than using Euclidean distance.
-            close <- which(apply(difference, 1L, max) < tolerance)
-            if (length(close) > 0L) {
-                distance <- sqrt(rowSums(difference^2))
-                mapping[[index]] <- candidate[close[[which.min(distance[
-                    close
-                ])]]]
-                next
-            }
-        }
-
-        representative <- rbind(representative, coordinate[index, ])
-        mapping[[index]] <- nrow(representative)
-        key <- paste(cell, collapse = "|")
-        bucket[[key]] <- c(bucket[[key]], mapping[[index]])
-    }
-
-    point[,
-        COORDINATE_KEY := sprintf(
-            "%.3f|%.3f|%.3f",
-            POINT_X,
-            POINT_Y,
-            POINT_Z
-        )
-    ]
-    point[, `:=`(
-        SNAP_X = representative[mapping, 1L],
-        SNAP_Y = representative[mapping, 2L],
-        SNAP_Z = representative[mapping, 3L]
-    )]
-    surface[,
-        COORDINATE_KEY := sprintf(
-            "%.3f|%.3f|%.3f",
-            POINT_X,
-            POINT_Y,
-            POINT_Z
-        )
-    ]
-    surface[
-        point,
-        on = "COORDINATE_KEY",
-        `:=`(
-            POINT_X = i.SNAP_X,
-            POINT_Y = i.SNAP_Y,
-            POINT_Z = i.SNAP_Z
-        )
-    ]
-    surface[, COORDINATE_KEY := NULL]
-    surface
+    )
 }
 
 # Merge adjacent triangulation parts with a deterministic greedy policy whenever
@@ -1192,12 +922,9 @@ surface__merge_convex_parts <- function(
             numeric(1L)
         )
         scale <- incoming_length * outgoing_length
-        # A straight-through point may be a required room-shell T-junction and
-        # therefore cannot become an independently removable EnergyPlus vertex.
-        if (any(abs(turn) <= sin(angle_tolerance) * scale)) {
-            return(NULL)
-        }
-        if (!(all(turn > 0.0) || all(turn < 0.0))) {
+        # Collinear boundary points do not require a real exported diagonal.
+        turns <- turn[abs(turn) > sin(angle_tolerance) * scale]
+        if (!length(turns) || !(all(turns > 0.0) || all(turns < 0.0))) {
             return(NULL)
         }
         list(area = frame$area, key = paste(boundary, collapse = ","))
@@ -1289,15 +1016,20 @@ surface__merge_convex_parts <- function(
     }))
 }
 
-# Build one canonical vertex sequence per MAIN_ENCLOSURE middle plane. Convex
-# source polygons remain intact here, including protected collinear junctions.
-# Cleanup-aware room closure decides later whether a junction needs splitting.
+# Build one canonical polygon per source middle plane. Concavity alone does
+# not require decomposition; only explicit clipping consumers select parts.
+# A failed room shell is handled later by individual, verified local cuts.
 surface__normalize_topology <- function(
     surface,
     window = data.table::data.table(),
     profile = eplus_geom__profile()
 ) {
     coordinate_columns <- geom__coordinate_columns()
+    convex_planes <- surface__convex_planes(
+        surface,
+        window,
+        profile
+    )
     # Separate per-surface metadata from middle-plane coordinates so a shared
     # polygon is normalized once and then copied consistently to both rooms.
     metadata <- unique(
@@ -1311,47 +1043,33 @@ surface__normalize_topology <- function(
         surface[, c("PLANE", coordinate_columns), with = FALSE],
         by = c("PLANE", "POINT_NO")
     )
-    # Split edges only with coordinates from zones incident to the same middle
-    # plane. This closes local T-junctions without importing unrelated points
-    # from collinear walls elsewhere in the building.
-    room_plane <- unique(
-        metadata[!TYPE_SURFACE %in% c(1L, 2L), .(ROOM, PLANE)]
-    )
-    room_point <- merge(room_plane, point, by = "PLANE", allow.cartesian = TRUE)
-    plane_room <- room_plane[, .(ROOMS = list(ROOM)), by = "PLANE"]
+    # Canonical source planes already share their boundary vertices. EnergyPlus
+    # accepts harmless T-junctions in its second closure pass; do not insert or
+    # protect points from every other face in the room before any failure exists.
     point <- point[,
         {
-            rooms <- plane_room[PLANE == .BY$PLANE, ROOMS][[1L]]
-            candidates <- unique(
-                room_point[ROOM %in% rooms, .(POINT_X, POINT_Y, POINT_Z)]
-            )
-            surface__split_edges(.SD, candidates, profile)
-        },
-        by = "PLANE"
-    ]
-    point[,
-        COORDINATE_KEY := sprintf(
-            "%.3f|%.3f|%.3f",
-            POINT_X,
-            POINT_Y,
-            POINT_Z
-        )
-    ]
-    # A coordinate appearing on more than one plane is a zone-topology
-    # junction. Removing it as merely collinear would reopen a shared edge.
-    point[, PROTECTED := data.table::uniqueN(PLANE) > 1L, by = "COORDINATE_KEY"]
-    # Private collinear points can be removed safely before surface copies are
-    # oriented, which also prevents peer vertex-count differences in EnergyPlus.
-    point <- point[,
-        {
+            surface__validate_outline(.SD, profile, .BY$PLANE)
             value <- surface__simplify_polygon(.SD, profile)
-            if (nrow(value) < 3L) {
-                warning(
+            if (
+                nrow(value) >= 3L &&
+                    abs(
+                        geom__polygon_area(value) -
+                            geom__polygon_area(.SD)
+                    ) >
+                        profile$area
+            ) {
+                stop(
                     sprintf(
-                        paste(
-                            "Dropped DeST middle plane %s because its polygon collapses",
-                            "within EnergyPlus's 0.01 m vertex tolerance."
-                        ),
+                        "DeST middle plane %s loses area during vertex cleanup.",
+                        .BY$PLANE
+                    ),
+                    call. = FALSE
+                )
+            }
+            if (nrow(value) < 3L) {
+                stop(
+                    sprintf(
+                        "DeST middle plane %s collapses under EnergyPlus vertex cleanup; the source face cannot be silently omitted.",
                         .BY$PLANE
                     ),
                     call. = FALSE
@@ -1364,7 +1082,8 @@ surface__normalize_topology <- function(
     point <- point[,
         {
             concave <- !geom__polygon_is_convex(.SD, profile$angle)
-            if (concave) {
+            if (concave && .BY$PLANE %in% convex_planes) {
+                # Only consumers requiring convex clipping enter this branch.
                 # Prefer direct convex regions for shadow geometry. A protected
                 # point alone does not require this split: the later closure
                 # check decides which convex faces need junction repair.
@@ -1382,7 +1101,6 @@ surface__normalize_topology <- function(
     # face; both room-side copies inherit the same deterministic partition.
     point <- point[, surface__merge_convex_parts(.SD, profile), by = "PLANE"]
     point[, PART_COUNT := data.table::uniqueN(PART), by = "PLANE"]
-    point[, c("COORDINATE_KEY", "PROTECTED") := NULL]
 
     surface <- merge(metadata, point, by = "PLANE", allow.cartesian = TRUE)
     surface[, ORIGINAL_NAME := NAME]
@@ -1425,9 +1143,8 @@ surface__split_edges <- function(
         difference <- coordinates[following, ] - start
         length_squared <- sum(difference^2)
         if (length_squared <= tolerance^2) {
-            # Global coordinate snapping can intentionally collapse a DeST
-            # sliver. Keep one endpoint here; polygon simplification below
-            # removes the duplicate consistently from every incident plane.
+            # A repeated source endpoint needs only one copy. This does not
+            # move any coordinate or import nearby geometry from another face.
             output[[index]] <- data.table::data.table(
                 POINT_X = start[[1L]],
                 POINT_Y = start[[2L]],
@@ -1857,7 +1574,7 @@ surface__simplify_polygon <- function(
     }
 
     if (nrow(surface) >= 3L) {
-        # Snapping can collapse a very narrow source polygon into one line even
+        # Vertex cleanup can collapse a very narrow source polygon into one line even
         # when its remaining edges are long. Omit the zero-area face before any
         # normal or convexity calculation tries to interpret it.
         if (

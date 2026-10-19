@@ -614,6 +614,10 @@ to_idf <- function(
         conv$surface,
         "boundary_diagnostics"
     ))
+    audit$surface_geometry <- surface__geometry_audit(attr(
+        conv$surface,
+        "table"
+    ))
     audit$hvac <- list(
         requested = requested_hvac,
         resolved = hvac,

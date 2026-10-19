@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Preserve complete source surfaces with necessary local cuts only; retain shared-wall ownership and coordinates, reject opening-area loss, and report source-shell tolerance limits (#49).
+
 - Add explicit standalone sensible-gain feedback, standard-density ventilation and target-state ventilation prediction options, retaining existing defaults and documenting their version requirements and control approximations (#53).
 
 - Retain effective row K, ordered emissivities and SC-derived source angle optics in one direct equivalent window path; audit source radiation weights and declare native allocation, absorption-node and heat-capacity limits. No optical prepass or result replay is used (#52).

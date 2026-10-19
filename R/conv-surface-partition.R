@@ -1,5 +1,5 @@
 # Partition a simple polygon by safe diagonals before considering triangulation.
-# Resolve concave/straight vertices first; retain every boundary segment. NULL
+# Resolve concave vertices after removing harmless straight points. NULL
 # requests the established fallback for openings, crowded or unsupported input.
 surface__partition_by_diagonals <- function(
     surface,
@@ -10,6 +10,25 @@ surface__partition_by_diagonals <- function(
     count <- nrow(surface)
     if (count < 3L || count > 128L || nrow(avoid_points) > 0L) {
         return(NULL)
+    }
+    coordinates <- geom__coordinates(surface)
+    if (
+        anyNA(coordinates) ||
+            any(!is.finite(coordinates)) ||
+            anyDuplicated(as.data.frame(coordinates))
+    ) {
+        return(NULL)
+    }
+    {
+        # Ordinary convex decomposition must not turn a harmless straight point
+        # into a required diagonal. Remove only redundant boundary vertices here.
+        if (any(surface__redundant_vertices(surface, profile))) {
+            surface <- data.table::copy(surface)
+            data.table::set(surface, j = "PROTECTED", value = FALSE)
+            surface <- surface__simplify_polygon(surface, profile)
+            count <- nrow(surface)
+            if (count < 3L) return(NULL)
+        }
     }
     coordinates <- geom__coordinates(surface)
     if (anyNA(coordinates) || any(!is.finite(coordinates))) {

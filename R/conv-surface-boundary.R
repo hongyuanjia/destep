@@ -66,7 +66,15 @@ surface__preserve_boundaries <- function(
         )
     }
     data.table::set(surface, j = "BOUNDARY_MODE", value = "source")
-    surface <- surface__normalize_room_junctions(surface, window, profile)
+    surface__validate_peer_references(surface)
+    surface <- surface__repair_local_edges(surface, window, profile)
+    surface__validate_peer_references(surface)
+    surface
+}
+
+# Validate the saved graph before repair, and its derived graph afterwards.
+# A missing peer is an input error, not a reason to search for geometric cuts.
+surface__validate_peer_references <- function(surface) {
     reference <- unique(surface[,
         c("NAME", "BOUNDARY", "BOUNDARY_OBJECT"),
         with = FALSE
@@ -85,7 +93,7 @@ surface__preserve_boundaries <- function(
             call. = FALSE
         )
     }
-    surface
+    invisible(NULL)
 }
 
 # List each original interzone pair once, regardless of its geometric parts.
