@@ -224,3 +224,133 @@ test_that("conversion audit identifies supply humidity EMS", {
         fixed = TRUE
     )
 })
+
+# Public options must make approximations explicit and prevent internally
+# inconsistent flow-density assumptions before touching a source database.
+test_that("state control choices are explicit and validated", {
+    options <- destep_opts(
+        ventilation_density = "standard",
+        occupant_sensible = "temperature_feedback",
+        ventilation_control = "target_prediction"
+    )
+    expect_identical(conv__resolve_options(options), options)
+    expect_identical(destep_opts()$occupant_sensible, "nominal")
+    expect_identical(destep_opts()$ventilation_control, "outdoor_band")
+    expect_error(
+        destep_opts(ventilation_control = "target_prediction"),
+        "standard"
+    )
+    expect_error(
+        destep_opts(occupant_sensible = "native_replay"),
+        "occupant_sensible"
+    )
+    db <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+    on.exit(DBI::dbDisconnect(db))
+    expect_error(conv__generation_version(db, "23.1", options), "26.1")
+    expect_equal(
+        as.character(conv__generation_version(db, "26.1", options)),
+        "26.1.0"
+    )
+})
+
+# Multiple People in one room share feedback, while a second room retains its
+# own state even when the source nominal activity schedule is shared.
+test_that("people feedback binds independent room states without duplicate heat", {
+    ep <- eplusr::empty_idf("26.1")
+    ep$add(
+        Zone = list(name = "A"),
+        Zone = list(name = "B"),
+        `Schedule:Constant` = list(name = "One", hourly_value = 1),
+        `Schedule:Constant` = list(name = "Nominal", hourly_value = 61),
+        People = list(
+            name = "A Minimum",
+            zone_or_zonelist_or_space_or_spacelist_name = "A",
+            number_of_people_schedule_name = "One",
+            number_of_people_calculation_method = "People",
+            number_of_people = 1,
+            fraction_radiant = .4,
+            sensible_heat_fraction = 1,
+            activity_level_schedule_name = "Nominal"
+        ),
+        People = list(
+            name = "A Scheduled",
+            zone_or_zonelist_or_space_or_spacelist_name = "A",
+            number_of_people_schedule_name = "One",
+            number_of_people_calculation_method = "People",
+            number_of_people = 2,
+            fraction_radiant = .4,
+            sensible_heat_fraction = 1,
+            activity_level_schedule_name = "Nominal"
+        ),
+        People = list(
+            name = "B People",
+            zone_or_zonelist_or_space_or_spacelist_name = "B",
+            number_of_people_schedule_name = "One",
+            number_of_people_calculation_method = "People",
+            number_of_people = 3,
+            fraction_radiant = .4,
+            sensible_heat_fraction = 1,
+            activity_level_schedule_name = "Nominal"
+        )
+    )
+    original <- state_controls__rows(ep, "People")
+    audit <- state_controls__apply(
+        ep,
+        destep_opts(occupant_sensible = "temperature_feedback"),
+        "ideal_loads"
+    )
+    actual <- state_controls__rows(ep, "People")
+    expect_length(audit$people, 2L)
+    expect_identical(actual[[1L]][["10"]], actual[[2L]][["10"]])
+    expect_false(identical(actual[[1L]][["10"]], actual[[3L]][["10"]]))
+    for (i in seq_along(original)) {
+        expect_identical(
+            original[[i]][as.character(1:9)],
+            actual[[i]][as.character(1:9)]
+        )
+    }
+    expect_length(state_controls__rows(ep, "OtherEquipment"), 0L)
+    expect_length(state_controls__rows(ep, "ElectricEquipment"), 0L)
+    programs <- unlist(state_controls__rows(
+        ep,
+        "EnergyManagementSystem:Program"
+    ))
+    expect_true(any(grepl("IF TimeStepNum == 1", programs, fixed = TRUE)))
+    expect_true(any(grepl("5.536", programs, fixed = TRUE)))
+    expect_false(audit$source_results_consumed)
+    ems <- conv__mode_audit(ep, conv__conversion_options(destep_opts()))$ems
+    expect_true(all(ems$purpose == "people_sensible_temperature_feedback"))
+})
+
+# Standard density is a real emitted field, not only an R audit label. Reading
+# class rows must not leak Version or unrelated classes via data.table masking.
+test_that("standard density reaches only ventilation objects", {
+    ep <- eplusr::empty_idf("26.1")
+    ep$add(
+        Zone = list(name = "A"),
+        `Schedule:Constant` = list(name = "One", hourly_value = 1),
+        `ZoneVentilation:DesignFlowRate` = list(
+            name = "Vent",
+            zone_or_zonelist_or_space_or_spacelist_name = "A",
+            schedule_name = "One",
+            design_flow_rate_calculation_method = "AirChanges/Hour",
+            air_changes_per_hour = .3
+        )
+    )
+    expect_length(
+        state_controls__rows(ep, "ZoneVentilation:DesignFlowRate"),
+        1L
+    )
+    state_controls__apply(
+        ep,
+        destep_opts(ventilation_density = "standard"),
+        "ideal_loads"
+    )
+    expect_equal(
+        state_controls__rows(ep, "ZoneVentilation:DesignFlowRate")[[1L]][[
+            "27"
+        ]],
+        "Standard"
+    )
+    expect_equal(as.character(ep$version()), "26.1.0")
+})

@@ -212,9 +212,13 @@ MAP_ID_NAME <- list(
 #'       enabled setting. The `ventilation` attribute records this selection.
 #'       A room group with `IS_AC_ROOM = 0` retains minimum ventilation only;
 #'       unused maximum and temperature-range references are not consumed.
-#'       the AC availability time table does not gate the range increment.
+#'       In the default outdoor-band rule, the AC availability time table does
+#'       not gate the range increment. Explicit target prediction uses that
+#'       schedule in its own-state selection and supports intermediate flow.
 #'       The rule preserves the remaining range inputs
 #'       but does not reproduce DeST's internal ventilation control algorithm.
+#'       See [destep_opts()] for standalone target-state controls, their version
+#'       requirements and approximations; none consumes source simulation results.
 #'
 #' Window-side surfaces stored with `OF_ROOM = -1` are restored from the
 #' same side of their explicit `WINDOW.OF_ENCLOSURE` host. Restoration
@@ -364,7 +368,11 @@ to_idf <- function(
     # Resolve the requested output version, then generate common old syntax.
     # eplusr owns the upward release transitions after all objects are built.
     target_version <- eplusr::empty_idf(ver)$version()
-    generation_version <- conv__generation_version(tmpdb, target_version)
+    generation_version <- conv__generation_version(
+        tmpdb,
+        target_version,
+        options
+    )
     if (verbose) {
         ep <- eplusr::with_verbose(eplusr::empty_idf(generation_version))
     } else {
@@ -481,7 +489,11 @@ to_idf <- function(
         ideal_loads = if (hvac == "ideal_loads") {
             ideal_loads__convert(tmpdb, ep)
         },
-        ventilation = ventilation__convert(tmpdb, ep)
+        ventilation = ventilation__convert(
+            tmpdb,
+            ep,
+            options$ventilation_control
+        )
     )
 
     if (internal_gains__has_room_type_data(tmpdb)) {
@@ -517,6 +529,37 @@ to_idf <- function(
         eplusr::get_priv_env(ep)$log_unsaved()
         eplusr::get_priv_env(ep)$log_new_uuid()
         eplusr::get_priv_env(ep)$update_idf_env(add)
+    }
+
+    # Standalone EMS is assembled only after all normal objects exist, so its
+    # sensors and actuators bind to the same emitted gains and ventilation.
+    state_control_audit <- state_controls__apply(ep, options, hvac)
+    if (!is.null(conv$ventilation)) {
+        diagnostics <- attr(conv$ventilation, "table")
+        data.table::set(
+            diagnostics,
+            NULL,
+            "DENSITY_BASIS",
+            options$ventilation_density
+        )
+        if (options$ventilation_control == "target_prediction") {
+            selected <- which(
+                diagnostics$RANGE_CONTROL_METHOD ==
+                    "documented_outdoor_temperature_band"
+            )
+            data.table::set(
+                diagnostics,
+                selected,
+                "RANGE_CONTROL_METHOD",
+                "target_state_thirdorder_prediction"
+            )
+            data.table::set(
+                diagnostics,
+                selected,
+                "RANGE_CONTROL_FIDELITY",
+                "one_zone_step_lag_target_approximation"
+            )
+        }
     }
 
     # Ordinary target windows preserve selected effective inputs, while their
@@ -565,6 +608,7 @@ to_idf <- function(
         }
     )
     audit$options <- options
+    audit$state_controls <- state_control_audit
     audit$window_bindings <- window_bindings
     audit$surface_boundaries <- data.table::copy(attr(
         conv$surface,
