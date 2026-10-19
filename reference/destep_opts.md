@@ -3,9 +3,9 @@
 Build a reusable options object for [`to_idf()`](to_idf.md). A preset
 supplies defaults; explicitly named settings override those defaults.
 The constructor checks option values and dependencies; conversion checks
-model and target version requirements. Aggregate windows use a
-documented SimpleGlazing approximation and do not promise full DeST
-solver equivalence.
+model and target version requirements. Windows use a documented
+equivalent-glazing or SimpleGlazing approximation and do not promise
+full DeST solver equivalence.
 
 ## Usage
 
@@ -224,6 +224,18 @@ comfort-model metabolic input and its latent-gain reports exclude the
 independent moisture source. Interzone surfaces retain their paired
 surface references and constructions; no neighbor-air
 equivalent-temperature boundary is generated.
+
+## Window and radiation representation
+
+Windows use one direct equivalent representation; no optical prepass or
+weather-bound window-source schedules are generated. Supported
+positive-type N2 windows retain SC-derived angular optics, effective
+resistance and ordered emissivities. Other supported windows use the
+declared SimpleGlazing approximation. EnergyPlus allocates indoor solar
+and radiant internal gains; DeST receiving-surface weights are retained
+for audit, not applied by the target solver. Native window absorption
+nodes and glass heat capacity remain unrepresented. See
+[`to_idf()`](to_idf.md) for the saved input diagnostics.
 
 ## See also
 

@@ -2,6 +2,12 @@
 
 ## destep 0.0.0.9000
 
+- Retain effective row K, ordered emissivities and SC-derived source
+  angle optics in one direct equivalent window path; audit source
+  radiation weights and declare native allocation, absorption-node and
+  heat-capacity limits. No optical prepass or result replay is used
+  (#52).
+
 - Preserve blank optional equipment-list fractions as the unchanged
   default of one across supported generation versions, without replacing
   existing schedules or required fields (#51).
