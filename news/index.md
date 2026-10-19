@@ -2,6 +2,10 @@
 
 ## destep 0.0.0.9000
 
+- Preserve complete source surfaces with necessary local cuts only;
+  retain shared-wall ownership and coordinates, reject opening-area
+  loss, and report source-shell tolerance limits (#49).
+
 - Add explicit standalone sensible-gain feedback, standard-density
   ventilation and target-state ventilation prediction options, retaining
   existing defaults and documenting their version requirements and
