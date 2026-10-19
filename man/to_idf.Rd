@@ -16,7 +16,8 @@ latest EnergyPlus version supported by the
 \{\href{https://cran.r-project.org/package=eplusr}{eplusr}\} package.
 Objects are generated using the project's EnergyPlus 9.0.1 baseline.
 Earlier targets are not maintained. Effective moisture raises the generation
-baseline to 9.1 and requires a target of at least 9.1. Higher targets
+baseline to 9.1. Effective detailed N2 source angle tables require 9.2.
+Targets must support all effective features. Higher targets
 are produced with \code{\link[eplusr:transition]{eplusr::transition()}}, not separate object writers.
 Physical HVAC requires the generation version's local ExpandObjects;
 target and intermediate IDDs are resolved by eplusr for transition.
@@ -44,10 +45,28 @@ Its \code{window_bindings} table records the window, side, source surface,
 host enclosure/surface and original/restored ownership and type for
 each restored face. Restoration is also recorded in saved IDF comments.
 Its \code{windows} table records the
-source K/SC, nominal SHGC, face blackness and unresolved optical
-properties for each window. The same aggregate assumptions appear in
-the saved IDF glazing comments. This does not establish whole-building
-equivalence.
+type K/SC, row K, effective glass resistance, face blackness, chosen
+target representation and unresolved properties for each window.
+Supported positive-type two-layer windows use equivalent ordinary
+glazing with SC-derived source angle solar/grey-visible tables and ordered
+emissivities. Visible reflectance uses the recovered optical stack as
+a grey symmetric equivalent. Saved visible fields are audit metadata
+on this verified source branch; they do not control qualification.
+Other windows retain the nominal SimpleGlazing approximation. Angular
+interpolation and target diffuse integration remain approximations;
+native absorption node placement and glass heat capacity are not
+reproduced. Conversion does not run an optical preparation simulation.
+Its \code{solar} list records saved mode bindings/weights, unresolved
+references and raw receiver metadata. Saved source surface-family
+weights are audit information, not applied target distributions.
+EnergyPlus retains its own indoor solar and radiant-gain allocation.
+These assumptions also appear in saved IDF comments and do not
+establish whole-building equivalence.
+Its \code{simulation$response} records the actual target zone timestep and
+the verified native hourly-response/reporting boundary. Native hourly
+control loads and target system-step or averaged hourly loads need not
+share their peak value or hour. These notes do not alter target solver
+settings, shift the time axis or fit output loads.
 }
 \description{
 Convert a DeST model to EnergyPlus model
@@ -60,9 +79,13 @@ documented outdoor-temperature-band rule and warns about the assumed
 enabled setting. The \code{ventilation} attribute records this selection.
 A room group with \code{IS_AC_ROOM = 0} retains minimum ventilation only;
 unused maximum and temperature-range references are not consumed.
-the AC availability time table does not gate the range increment.
+In the default outdoor-band rule, the AC availability time table does
+not gate the range increment. Explicit target prediction uses that
+schedule in its own-state selection and supports intermediate flow.
 The rule preserves the remaining range inputs
 but does not reproduce DeST's internal ventilation control algorithm.
+See \code{\link[=destep_opts]{destep_opts()}} for standalone target-state controls, their version
+requirements and approximations; none consumes source simulation results.
 
 Window-side surfaces stored with \code{OF_ROOM = -1} are restored from the
 same side of their explicit \code{WINDOW.OF_ENCLOSURE} host. Restoration

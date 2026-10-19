@@ -861,58 +861,19 @@ subsurface__convert <- function(
 # to an equivalent EnergyPlus input. The warning prevents a documented source
 # concept from being omitted silently while the mapping remains unresolved.
 window__warn_transmitted_solar_distribution <- function(dest) {
-    fields <- "SUN_TRANS_DIST_MODE"
-    distribution_fields <- c(
-        "DIST_MODE_ID",
-        "DIST_AIR",
-        "DIST_ROOF",
-        "DIST_FLOOR",
-        "DIST_AROUND"
-    )
-    if (
-        !db_has_rows(dest, "WINDOW") ||
-            !db_has_rows(dest, "DIST_MODE") ||
-            !db_has_fields(dest, "WINDOW", fields) ||
-            !db_has_fields(dest, "DIST_MODE", distribution_fields)
-    ) {
+    audit <- solar__source_audit(dest)
+    if (!nrow(audit$bindings)) {
         return(invisible(FALSE))
     }
-
-    # Restrict the warning to distribution records referenced by actual windows;
-    # unrelated gain-distribution modes use the same DeST table.
-    modes <- data.table::as.data.table(DBI::dbGetQuery(
-        dest,
-        "
-        SELECT DISTINCT
-            D.DIST_MODE_ID,
-            D.DIST_AIR,
-            D.DIST_ROOF,
-            D.DIST_FLOOR,
-            D.DIST_AROUND
-        FROM WINDOW W
-        INNER JOIN DIST_MODE D
-        ON W.SUN_TRANS_DIST_MODE = D.DIST_MODE_ID
-        WHERE W.SUN_TRANS_DIST_MODE IS NOT NULL
-        ORDER BY D.DIST_MODE_ID
-    "
-    ))
-    if (nrow(modes) == 0L) {
+    # Reduced schemas without a mode field have no selected source mode to
+    # warn about; the public conversion audit still records the missing field.
+    if (all(audit$bindings$SOURCE_STATUS == "missing_binding_field")) {
         return(invisible(FALSE))
     }
-
     warn(
-        sprintf(
-            paste(
-                "DeST window transmitted-solar distribution mode(s) [%s]",
-                "are not converted. WINDOW.SUN_TRANS_DIST_MODE and the",
-                "referenced DIST_MODE air, roof, floor, and surrounding-surface",
-                "fractions have no established direct EnergyPlus projection;",
-                "the converted model uses the EnergyPlus building-level",
-                "solar-distribution algorithm."
-            ),
-            fmt_integer_sample(modes$DIST_MODE_ID)
-        ),
-        class = "destep_unsupported_solar_distribution"
+        "DeST window transmitted-solar distribution weights are audit-only; EnergyPlus determines the target receiving-surface distribution. See conversion$solar for saved bindings, weights, unresolved references and receiver metadata.",
+        class = "destep_unsupported_solar_distribution",
+        distributions = data.table::copy(audit$bindings)
     )
     invisible(TRUE)
 }

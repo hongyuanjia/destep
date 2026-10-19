@@ -185,7 +185,8 @@ MAP_ID_NAME <- list(
 #'        \{[eplusr](https://cran.r-project.org/package=eplusr)\} package.
 #'        Objects are generated using the project's EnergyPlus 9.0.1 baseline.
 #'        Earlier targets are not maintained. Effective moisture raises the generation
-#'        baseline to 9.1 and requires a target of at least 9.1. Higher targets
+#'        baseline to 9.1. Effective detailed N2 source angle tables require 9.2.
+#'        Targets must support all effective features. Higher targets
 #'        are produced with [eplusr::transition()], not separate object writers.
 #'        Physical HVAC requires the generation version's local ExpandObjects;
 #'        target and intermediate IDDs are resolved by eplusr for transition.
@@ -211,9 +212,13 @@ MAP_ID_NAME <- list(
 #'       enabled setting. The `ventilation` attribute records this selection.
 #'       A room group with `IS_AC_ROOM = 0` retains minimum ventilation only;
 #'       unused maximum and temperature-range references are not consumed.
-#'       the AC availability time table does not gate the range increment.
+#'       In the default outdoor-band rule, the AC availability time table does
+#'       not gate the range increment. Explicit target prediction uses that
+#'       schedule in its own-state selection and supports intermediate flow.
 #'       The rule preserves the remaining range inputs
 #'       but does not reproduce DeST's internal ventilation control algorithm.
+#'       See [destep_opts()] for standalone target-state controls, their version
+#'       requirements and approximations; none consumes source simulation results.
 #'
 #' Window-side surfaces stored with `OF_ROOM = -1` are restored from the
 #' same side of their explicit `WINDOW.OF_ENCLOSURE` host. Restoration
@@ -244,10 +249,28 @@ MAP_ID_NAME <- list(
 #'       host enclosure/surface and original/restored ownership and type for
 #'       each restored face. Restoration is also recorded in saved IDF comments.
 #'       Its `windows` table records the
-#'       source K/SC, nominal SHGC, face blackness and unresolved optical
-#'       properties for each window. The same aggregate assumptions appear in
-#'       the saved IDF glazing comments. This does not establish whole-building
-#'       equivalence.
+#'       type K/SC, row K, effective glass resistance, face blackness, chosen
+#'       target representation and unresolved properties for each window.
+#'       Supported positive-type two-layer windows use equivalent ordinary
+#'       glazing with SC-derived source angle solar/grey-visible tables and ordered
+#'       emissivities. Visible reflectance uses the recovered optical stack as
+#'       a grey symmetric equivalent. Saved visible fields are audit metadata
+#'       on this verified source branch; they do not control qualification.
+#'       Other windows retain the nominal SimpleGlazing approximation. Angular
+#'       interpolation and target diffuse integration remain approximations;
+#'       native absorption node placement and glass heat capacity are not
+#'       reproduced. Conversion does not run an optical preparation simulation.
+#'       Its `solar` list records saved mode bindings/weights, unresolved
+#'       references and raw receiver metadata. Saved source surface-family
+#'       weights are audit information, not applied target distributions.
+#'       EnergyPlus retains its own indoor solar and radiant-gain allocation.
+#'       These assumptions also appear in saved IDF comments and do not
+#'       establish whole-building equivalence.
+#'       Its `simulation$response` records the actual target zone timestep and
+#'       the verified native hourly-response/reporting boundary. Native hourly
+#'       control loads and target system-step or averaged hourly loads need not
+#'       share their peak value or hour. These notes do not alter target solver
+#'       settings, shift the time axis or fit output loads.
 #'
 #' @seealso [to_epw()], [destep_opts()] for supported inputs and HVAC limitations.
 #' @section Conversion scope:
@@ -345,7 +368,11 @@ to_idf <- function(
     # Resolve the requested output version, then generate common old syntax.
     # eplusr owns the upward release transitions after all objects are built.
     target_version <- eplusr::empty_idf(ver)$version()
-    generation_version <- conv__generation_version(tmpdb, target_version)
+    generation_version <- conv__generation_version(
+        tmpdb,
+        target_version,
+        options
+    )
     if (verbose) {
         ep <- eplusr::with_verbose(eplusr::empty_idf(generation_version))
     } else {
@@ -462,7 +489,11 @@ to_idf <- function(
         ideal_loads = if (hvac == "ideal_loads") {
             ideal_loads__convert(tmpdb, ep)
         },
-        ventilation = ventilation__convert(tmpdb, ep)
+        ventilation = ventilation__convert(
+            tmpdb,
+            ep,
+            options$ventilation_control
+        )
     )
 
     if (internal_gains__has_room_type_data(tmpdb)) {
@@ -500,21 +531,52 @@ to_idf <- function(
         eplusr::get_priv_env(ep)$update_idf_env(add)
     }
 
-    # Source K/SC gives an aggregate window approximation. Preserve its input
-    # limitations in the conversion audit without adding solver-specific optics.
+    # Standalone EMS is assembled only after all normal objects exist, so its
+    # sensors and actuators bind to the same emitted gains and ventilation.
+    state_control_audit <- state_controls__apply(ep, options, hvac)
+    if (!is.null(conv$ventilation)) {
+        diagnostics <- attr(conv$ventilation, "table")
+        data.table::set(
+            diagnostics,
+            NULL,
+            "DENSITY_BASIS",
+            options$ventilation_density
+        )
+        if (options$ventilation_control == "target_prediction") {
+            selected <- which(
+                diagnostics$RANGE_CONTROL_METHOD ==
+                    "documented_outdoor_temperature_band"
+            )
+            data.table::set(
+                diagnostics,
+                selected,
+                "RANGE_CONTROL_METHOD",
+                "target_state_thirdorder_prediction"
+            )
+            data.table::set(
+                diagnostics,
+                selected,
+                "RANGE_CONTROL_FIDELITY",
+                "one_zone_step_lag_target_approximation"
+            )
+        }
+    }
+
+    # Ordinary target windows preserve selected effective inputs, while their
+    # diffuse integration, absorption placement and glass dynamics differ.
     window_diagnostics <- attr(conv$const, "windows")
     if (!is.null(window_diagnostics) && nrow(window_diagnostics) > 0L) {
-        warning(
-            sprintf(
-                paste(
-                    "DeST window types %s use nominal SimpleGlazing K/SC",
-                    "approximation; source two-face BLACKNESS and detailed",
-                    "optics are not expressed. See attr(idf, 'conversion')$windows",
-                    "and IDF glazing comments."
-                ),
-                paste(unique(window_diagnostics$TYPE_ID), collapse = ", ")
+        warn(
+            paste(
+                "DeST windows use SC-derived source angle tables where supported,",
+                "and nominal SimpleGlazing K/SC approximation otherwise.",
+                "Grey symmetric visible reflection does not reproduce native daylighting room reflection.",
+                "One-degree angular interpolation, grey spectra and EnergyPlus diffuse integration are approximations.",
+                "Native absorption node placement and glass heat capacity are not reproduced.",
+                "See attr(idf, 'conversion')$windows and IDF glazing comments."
             ),
-            call. = FALSE
+            class = "destep_approximate_windows",
+            windows = data.table::copy(window_diagnostics)
         )
     }
 
@@ -546,6 +608,7 @@ to_idf <- function(
         }
     )
     audit$options <- options
+    audit$state_controls <- state_control_audit
     audit$window_bindings <- window_bindings
     audit$surface_boundaries <- data.table::copy(attr(
         conv$surface,
@@ -580,6 +643,7 @@ to_idf <- function(
         calendar = "365 days; no daylight saving; date-based values"
     )
     audit$simulation <- simulation__audit(ep)
+    audit$solar <- solar__source_audit(tmpdb)
     attr(ep, "conversion") <- audit
     ep$Version$comment(
         c(
@@ -598,7 +662,8 @@ to_idf <- function(
                 audit$hvac$water,
                 audit$hvac$effective_options
             ),
-            simulation__comments(audit$simulation)
+            simulation__comments(audit$simulation),
+            solar__comments(audit$solar)
         ),
         append = NULL
     )
