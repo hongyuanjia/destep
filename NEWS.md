@@ -1,5 +1,7 @@
 # destep 0.0.0.9000
 
+- Preserve blank optional equipment-list fractions as the unchanged default of one across supported generation versions, without replacing existing schedules or required fields (#51).
+
 - Preserve constant-one sequential load fractions when upgrading dry-gain
   models from EnergyPlus 9.0.1. Explicit default schedules prevent false
   incomplete-equipment-group errors with released eplusr 0.17.0 (#48).
