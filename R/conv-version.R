@@ -24,6 +24,10 @@ conv__generation_version <- function(dest, target) {
     } else {
         numeric_version("9.0.1")
     }
+    angle <- window__angle_generation_version(dest, target)
+    if (!is.null(angle) && angle > baseline) {
+        baseline <- angle
+    }
     baseline
 }
 
