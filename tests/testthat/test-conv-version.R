@@ -104,6 +104,99 @@ test_that("upward transition preserves file dependencies and conversion metadata
     expect_identical(list.files(directory), "schedule.csv")
 })
 
+test_that("optional blank equipment fractions use the documented unchanged default", {
+    path <- tempfile(fileext = ".idf")
+    on.exit(unlink(path))
+    writeLines(
+        c(
+            "Version,23.1;",
+            "Building,Transition fixture;",
+            "GlobalGeometryRules,UpperLeftCorner,Counterclockwise,Relative;",
+            "ZoneHVAC:IdealLoadsAirSystem,Ideal,,Supply;",
+            "ZoneHVAC:EquipmentList,List,SequentialLoad,ZoneHVAC:IdealLoadsAirSystem,Ideal,1,1;"
+        ),
+        path
+    )
+    ep <- eplusr::read_idf(path)
+    # Some installed parser versions already accept optional blanks. Exercise
+    # completion where needed and verify a valid input is otherwise unchanged.
+    before <- ep$to_table()
+    incomplete <- nrow(ep$validate()$incomplete_extensible) > 0L
+    normalized <- conv__complete_equipment_lists(ep)
+    expect_equal(nrow(normalized$validate()$incomplete_extensible), 0L)
+    if (incomplete) {
+        schedule <- normalized$to_table(class = "Schedule:Constant")
+        expect_equal(
+            as.numeric(schedule$value[schedule$field == "Hourly Value"]),
+            1
+        )
+    } else {
+        expect_identical(normalized$to_table(), before)
+    }
+    lists <- normalized$to_table(class = "ZoneHVAC:EquipmentList")
+    expect_equal(
+        lists$value[lists$field == "Zone Equipment 1 Cooling Sequence"],
+        "1"
+    )
+    expect_equal(
+        lists$value[
+            lists$field == "Zone Equipment 1 Heating or No-Load Sequence"
+        ],
+        "1"
+    )
+    normalized$save(path, overwrite = TRUE)
+    expect_true(eplusr::read_idf(path)$is_valid())
+})
+
+test_that("transition default completion preserves existing fractions and source names", {
+    path <- tempfile(fileext = ".idf")
+    on.exit(unlink(path))
+    writeLines(
+        c(
+            "Version,23.1;",
+            "Building,Transition fixture;",
+            "GlobalGeometryRules,UpperLeftCorner,Counterclockwise,Relative;",
+            "Schedule:Constant,Cooling half,,.5;",
+            "Schedule:Constant,destep Sequential Fraction One,,.25;",
+            "ZoneHVAC:IdealLoadsAirSystem,Ideal,,Supply;",
+            "ZoneHVAC:EquipmentList,List,SequentialLoad,ZoneHVAC:IdealLoadsAirSystem,Ideal,1,1,Cooling half;"
+        ),
+        path
+    )
+    source <- eplusr::read_idf(path)
+    before <- source$to_table()
+    incomplete <- nrow(source$validate()$incomplete_extensible) > 0L
+    ep <- conv__complete_equipment_lists(source)
+    fields <- ep$to_table(class = "ZoneHVAC:EquipmentList")
+    expect_equal(
+        fields$value[
+            fields$field ==
+                "Zone Equipment 1 Sequential Cooling Fraction Schedule Name"
+        ],
+        "Cooling half"
+    )
+    if (incomplete) {
+        expect_equal(
+            fields$value[
+                fields$field ==
+                    "Zone Equipment 1 Sequential Heating Fraction Schedule Name"
+            ],
+            "destep Sequential Fraction One 1"
+        )
+    } else {
+        expect_identical(ep$to_table(), before)
+    }
+    schedule <- ep$to_table(class = "Schedule:Constant")
+    expect_equal(
+        as.numeric(schedule$value[
+            schedule$name == "destep Sequential Fraction One" &
+                schedule$field == "Hourly Value"
+        ]),
+        .25
+    )
+    expect_true(ep$is_valid())
+})
+
 # A dry-gain model starts at 9.0.1. Upgrading its four-field equipment group
 # introduces optional fraction schedules; their blank default is constant one.
 test_that("9.0 equipment transitions retain full sequential load fractions", {
@@ -149,4 +242,60 @@ test_that("9.0 equipment transitions retain full sequential load fractions", {
         c("1", "1")
     )
     expect_identical(model$to_table(), before)
+})
+
+# A selected N2 window needs angular tables even without moisture. An unused
+# catalogue entry must not raise the minimum version for an otherwise dry model.
+test_that("effective angular glazing raises the complete conversion baseline", {
+    con <- version_test__source()
+    on.exit(DBI::dbDisconnect(con))
+    DBI::dbWriteTable(
+        con,
+        "WINDOW",
+        data.frame(
+            ID = integer(),
+            TYPE = integer(),
+            WINDOW_CONSTRUCTION = integer(),
+            K = double(),
+            SIDE1 = integer(),
+            SIDE2 = integer()
+        )
+    )
+    DBI::dbWriteTable(
+        con,
+        "WINDOW_TYPE_DATA",
+        data.frame(
+            ID = 46L,
+            NAME = "Selected N2",
+            K = 1.9,
+            SC = .883,
+            LAYER_NUM = 2L
+        )
+    )
+    DBI::dbWriteTable(
+        con,
+        "SURFACE",
+        data.frame(
+            SURFACE_ID = 1:2,
+            BLACKNESS = c(.84, .2)
+        )
+    )
+    expect_identical(
+        as.character(conv__generation_version(con, "9.0.1")),
+        "9.0.1"
+    )
+    DBI::dbExecute(con, "INSERT INTO WINDOW VALUES (1,46,4,1,1,2)")
+    expect_identical(
+        as.character(conv__generation_version(con, "26.1")),
+        "9.2.0"
+    )
+    expect_error(
+        conv__generation_version(con, "9.1"),
+        class = "destep_unsupported_window_angle_target"
+    )
+    DBI::dbExecute(con, "UPDATE ROOM_TYPE_DATA SET O_MAXNUMBER=2 WHERE ID=1")
+    expect_identical(
+        as.character(conv__generation_version(con, "26.1")),
+        "9.2.0"
+    )
 })

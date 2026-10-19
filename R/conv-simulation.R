@@ -58,6 +58,20 @@ simulation__audit <- function(ep) {
         selection = stats::setNames(
             rep("retained_default", length(effective)),
             names(effective)
+        ),
+        # Record solver/reporting boundaries separately from retained object
+        # defaults. This metadata does not change timesteps, control or outputs.
+        response = list(
+            native_reference = "DeST DPE July 2023 verified hourly branch",
+            native_time_step_hours = 1L,
+            target_zone_timesteps_per_hour = as.integer(read_field(
+                "Timestep",
+                "Number of Timesteps per Hour"
+            )),
+            source_history = "Modal history with current and previous source samples; source types have distinct consumers.",
+            load_output = "Native hourly control solution differs from target system-step load and averaged hourly rates.",
+            peak_alignment = "Peak value and hour are not guaranteed to match; no automatic time shift or load fitting.",
+            scope = "A temporal algorithm difference does not classify every unexplained residual as an engine difference."
         )
     )
 }
@@ -71,5 +85,16 @@ simulation__comments <- function(audit) {
         sep = "=",
         collapse = "; "
     )
-    paste0("destep simulation settings (retained defaults): ", values)
+    c(
+        paste0("destep simulation settings (retained defaults): ", values),
+        sprintf(
+            "destep response boundary: target zone timesteps per hour=%s; native reference=%s.",
+            audit$response$target_zone_timesteps_per_hour,
+            audit$response$native_reference
+        ),
+        audit$response$source_history,
+        audit$response$load_output,
+        audit$response$peak_alignment,
+        audit$response$scope
+    )
 }

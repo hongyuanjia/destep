@@ -8,7 +8,7 @@ partition_test__polygon <- function(x, y) {
     )
 }
 
-test_that("direct partitions preserve strict corners and source area", {
+test_that("direct partitions remove redundant corners and preserve source area", {
     cases <- list(
         rectangle = partition_test__polygon(c(0, 3, 3, 0), c(0, 0, 2, 2)),
         junction = partition_test__polygon(c(0, 1, 3, 3, 0), c(0, 0, 0, 2, 2)),
@@ -25,7 +25,7 @@ test_that("direct partitions preserve strict corners and source area", {
             c(0, 0, 4, 4, 1, 1, 4, 4)
         )
     )
-    expected <- c(rectangle = 1L, junction = 2L, paired = 3L, concave = 2L)
+    expected <- c(rectangle = 1L, junction = 1L, paired = 1L, concave = 2L)
     for (name in names(cases)) {
         for (reverse in c(FALSE, TRUE)) {
             input <- data.table::copy(cases[[name]])
@@ -53,7 +53,7 @@ test_that("direct partitions preserve strict corners and source area", {
             ))
             expect_equal(
                 nrow(unique(value[, .(POINT_X, POINT_Y, POINT_Z)])),
-                nrow(input)
+                nrow(surface__simplify_polygon(input))
             )
             if (name %in% names(expected)) {
                 expect_equal(data.table::uniqueN(value$PART), expected[[name]])

@@ -1,6 +1,6 @@
 # Use the project's 9.0.1 reference-validation baseline. Only effective source
 # features may raise it; transition cannot downgrade an unsupported feature.
-conv__generation_version <- function(dest, target) {
+conv__generation_version <- function(dest, target, options = destep_opts()) {
     target <- numeric_version(as.character(target))
     if (target < "9.0.1") {
         abort(
@@ -23,6 +23,29 @@ conv__generation_version <- function(dest, target) {
         numeric_version("9.1.0")
     } else {
         numeric_version("9.0.1")
+    }
+    angle <- window__angle_generation_version(dest, target)
+    if (!is.null(angle) && angle > baseline) {
+        baseline <- angle
+    }
+    # Explicit standalone state controls and density syntax need a maintained
+    # common baseline. Never silently drop a selected feature on an old target.
+    state <- options$occupant_sensible == "temperature_feedback"
+    if (state) {
+        if (target < "9.2") {
+            abort(
+                "Selected density/state controls require EnergyPlus 9.2 or newer."
+            )
+        }
+        baseline <- max(baseline, numeric_version("9.2.0"))
+    }
+    if (options$ventilation_density == "standard") {
+        if (target < "26.1") {
+            abort(
+                "Standard-density ventilation and target_prediction currently require EnergyPlus 26.1 or newer."
+            )
+        }
+        baseline <- max(baseline, numeric_version("26.1.0"))
     }
     baseline
 }
@@ -53,6 +76,7 @@ conv__transition <- function(model, target, verbose = FALSE) {
     if (model$version() < "9.1.0") {
         conv__complete_transition_fractions(transitioned)
     }
+    transitioned <- conv__complete_equipment_lists(transitioned)
     checkmate::assert_true(
         transitioned$is_valid(),
         .var.name = "transitioned EnergyPlus model"
@@ -102,4 +126,48 @@ conv__complete_transition_fractions <- function(model) {
     data.table::set(fields, i = rows, j = "value", value = name)
     model$update(fields[fields$id %in% fields$id[rows]])
     invisible(model)
+}
+
+# Some updater/parser combinations leave optional sequential-fraction fields
+# blank in an otherwise valid equipment group. EP defines a blank as constant
+# 1.0, while eplusr rejects empty extensible fields. Make only that documented
+# default explicit; never replace a saved schedule or incomplete required input.
+conv__complete_equipment_lists <- function(model) {
+    invalid <- model$validate()$incomplete_extensible
+    invalid <- invalid[invalid$class_name == "ZoneHVAC:EquipmentList"]
+    if (!nrow(invalid)) {
+        return(model)
+    }
+    missing <- invalid[is.na(invalid$value_chr) | invalid$value_chr == ""]
+    optional <- grepl(
+        "^Zone Equipment [0-9]+ Sequential (Cooling|Heating) Fraction Schedule Name$",
+        missing$field_name
+    )
+    if (!nrow(missing) || !all(optional)) {
+        return(model)
+    }
+    existing <- model$to_table()
+    name <- "destep Sequential Fraction One"
+    suffix <- 0L
+    # Source names may use the same stem; avoid overwriting an unrelated source.
+    while (name %in% existing$name) {
+        suffix <- suffix + 1L
+        name <- paste("destep Sequential Fraction One", suffix)
+    }
+    model$add("Schedule:Constant" := list(name = name, hourly_value = 1))
+    for (id in unique(missing$object_id)) {
+        fields <- missing$field_name[missing$object_id == id]
+        values <- stats::setNames(rep(list(name), length(fields)), fields)
+        arguments <- stats::setNames(list(values), paste0("..", id))
+        invisible(do.call(model$set, arguments))
+    }
+    model$Version$comment(
+        paste0(
+            "destep transition: blank optional ZoneHVAC equipment sequential fractions made explicit as ",
+            name,
+            "=1.0; existing schedules and equipment sequences retained."
+        ),
+        append = TRUE
+    )
+    model
 }

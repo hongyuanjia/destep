@@ -7,7 +7,7 @@
 # a max-minus-min supplement gated by outdoor-temperature setpoint schedules.
 # Native controlled runs also require ROOM_GROUP.IS_AC_ROOM to be nonzero;
 # the AC availability schedule does not gate this ventilation increment.
-ventilation__convert <- function(dest, ep) {
+ventilation__convert <- function(dest, ep, control = "outdoor_band") {
     if (!db_has_rows(dest, "ROOM_RELATION")) {
         return(NULL)
     }
@@ -175,7 +175,7 @@ ventilation__convert <- function(dest, ep) {
         !is.na(relation$IS_AC_ROOM) &
         relation$IS_AC_ROOM != 0L &
         relation$RANGE_CONTROL_CONVERTED
-    if (any(range_converted)) {
+    if (any(range_converted) && control == "outdoor_band") {
         warn(sprintf(
             paste0(
                 "Mapped %i DeST ventilation-range ROOM_RELATION row(s) using ",
