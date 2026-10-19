@@ -12,7 +12,10 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "auto",
   hvac_options = NULL,
-  surface_convection = "dest"
+  surface_convection = "dest",
+  ventilation_density = "outdoor",
+  occupant_sensible = "nominal",
+  ventilation_control = "outdoor_band"
 )
 }
 \arguments{
@@ -124,6 +127,30 @@ retains fixed source coefficients on walls, floors, roofs, windows and
 doors using ordinary EnergyPlus surface-property objects. \code{"energyplus"}
 omits these overrides so EnergyPlus selects its own coefficients.
 Furniture's internal-mass exchange definition is retained separately.}
+
+\item{ventilation_density}{[string] \code{"outdoor"} retains EnergyPlus's
+outdoor-density convention; \code{"standard"} uses its site standard
+density, closer to the audited DeST fixed-density air exchange.
+Standard density currently requires EnergyPlus 26.1 or newer. Humid-air specific
+heat and site-reference density remain target-engine approximations.}
+
+\item{occupant_sensible}{[string] \code{"nominal"} preserves prescribed
+sensible watts/person. \code{"temperature_feedback"} emits standalone EMS
+for max(0, nominal + 5.536 * (26 - previous-hour temperature)), using
+the target's last completed zone-step mean as its hourly endpoint.
+Moisture remains nominal. The source execution switch is not inferred.}
+
+\item{ventilation_control}{[string] \code{"outdoor_band"} retains the
+documented temperature-band approximation. \code{"target_prediction"}
+emits standalone EMS using the target's own ThirdOrder air history
+and one-zone-step-lagged non-air coefficients to select bounded,
+possibly intermediate natural ventilation, including below the heating
+lower bound. It requires IdealLoads, standard density and EnergyPlus
+26.1 or newer. This is an explicit control approximation; it does not
+reproduce the DeST coupled solver or guarantee improved annual loads.
+This option retains Site:Location (including elevation) when weather
+headers differ, keeping the predictor and standard-density flow on
+the same site reference. It does not read external simulation results.}
 }
 \value{
 An object of class \code{destep_options}, accepted by \code{to_idf(options = )}.
@@ -132,7 +159,7 @@ An object of class \code{destep_options}, accepted by \code{to_idf(options = )}.
 Build a reusable options object for \code{\link[=to_idf]{to_idf()}}. A preset supplies defaults;
 explicitly named settings override those defaults. The constructor checks
 option values and dependencies; conversion checks model and target version
-requirements. Aggregate windows use a documented SimpleGlazing
+requirements. Windows use a documented equivalent-glazing or SimpleGlazing
 approximation and do not promise full DeST solver equivalence.
 }
 \section{HVAC support and equivalent representations}{
@@ -197,8 +224,8 @@ equipment that has no implemented mapping.
 
 \section{People inputs and interzone surfaces}{
 
-Conversion retains nominal people sensible heat and \code{O_DAMP_PER_PERSON};
-DeST occupant temperature feedback is not reproduced. Nonzero people moisture
+Conversion retains nominal \code{O_DAMP_PER_PERSON}. Sensible heat uses the
+selected nominal or target-temperature-feedback representation. Nonzero people moisture
 requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
 target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
 temperature changes can leave a one-zone-step mass residual. People carries
@@ -206,6 +233,18 @@ sensible heat only: its activity is not a comfort-model metabolic input and
 its latent-gain reports exclude the independent moisture source.
 Interzone surfaces retain their paired surface references and constructions;
 no neighbor-air equivalent-temperature boundary is generated.
+}
+
+\section{Window and radiation representation}{
+
+Windows use one direct equivalent representation; no optical prepass or
+weather-bound window-source schedules are generated. Supported positive-type
+N2 windows retain SC-derived angular optics, effective resistance and ordered
+emissivities. Other supported windows use the declared SimpleGlazing
+approximation. EnergyPlus allocates indoor solar and radiant internal gains;
+DeST receiving-surface weights are retained for audit, not applied by the
+target solver. Native window absorption nodes and glass heat capacity remain
+unrepresented. See \code{\link[=to_idf]{to_idf()}} for the saved input diagnostics.
 }
 
 \examples{

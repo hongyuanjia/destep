@@ -11,7 +11,8 @@ building__convert <- function(dest, ep, which = NULL) {
             if (any(which < 1L) || any(which > nrow(bld))) {
                 stop(sprintf(
                     "'which' out of bound. Should be in [1, %i], but found '%i'.",
-                    nrow(bld), which
+                    nrow(bld),
+                    which
                 ))
             }
             bld <- bld[unique(which)]
@@ -20,7 +21,8 @@ building__convert <- function(dest, ep, which = NULL) {
             if (any(!which %in% bld$NAME)) {
                 stop(sprintf(
                     "'%s' is not a valid building name in current DeST model. Available names: %s",
-                    which, paste(unique(bld$NAME), collapse = ", ")
+                    which,
+                    paste(unique(bld$NAME), collapse = ", ")
                 ))
             }
             bld <- bld[J(unique(which)), on = "NAME"]
@@ -33,10 +35,17 @@ building__convert <- function(dest, ep, which = NULL) {
     # model +Y axis. DeST stores the drawing-space south-vector angle from +X,
     # which gives the equivalent rotation after a 90-degree offset.
     north_axis <- geom__north_axis(dest)
-    out <- conv__add(dest, ep, "Building" := list(
-        name = bld$NAME,
-        north_axis = north_axis
-    ))
+    out <- conv__add(
+        dest,
+        ep,
+        "Building" := list(
+            name = bld$NAME,
+            north_axis = north_axis,
+            # Keep the maintained 9.0.1 generation baseline's six-day warmup
+            # minimum when selected features require a newer generation IDD.
+            minimum_number_of_warmup_days = 6L
+        )
+    )
 
     # always attach the table to the output in case it is useful later
     attr(out, "table") <- bld

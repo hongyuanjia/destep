@@ -193,7 +193,20 @@ subsurface__split_by_surface <- function(
     surface = NULL,
     profile = eplus_geom__profile()
 ) {
-    expected <- unique(subsurface[, .(OUTPUT_ID, ORIGINAL_NAME)])
+    # Keep a per-source-side invariant before clipping. Checking only whether
+    # one piece survives allows a valid window to lose a thin strip silently.
+    expected <- subsurface[,
+        .(
+            ORIGINAL_NAME = ORIGINAL_NAME[[1L]],
+            SOURCE_ID = if ("ID" %in% names(.SD)) {
+                .SD[["ID"]][[1L]]
+            } else {
+                .BY$OUTPUT_ID
+            },
+            SOURCE_AREA = geom__polygon_area(.SD)
+        ),
+        by = "OUTPUT_ID"
+    ]
     if (is.null(surface)) {
         subsurface[, PART := 1L]
     } else {
@@ -295,8 +308,43 @@ subsurface__split_by_surface <- function(
     }
 
     if (!"SUBPART" %in% names(subsurface)) {
-        subsurface[, SUBPART := 1L]
+        data.table::set(subsurface, j = "SUBPART", value = 1L)
     }
+    # Hosts are nonoverlapping source-preserving partitions. Consequently the
+    # sum of clipped piece areas must equal the original opening; an outside
+    # source portion or discarded sub-centimetre strip is an error, not a repair.
+    pieces <- subsurface[,
+        .(area = geom__polygon_area(.SD)),
+        by = c("OUTPUT_ID", "PART", "SUBPART")
+    ]
+    total <- pieces[, .(OUTPUT_AREA = sum(.SD[["area"]])), by = "OUTPUT_ID"]
+    checked <- merge(expected, total, by = "OUTPUT_ID", sort = FALSE)
+    lost <- abs(checked$SOURCE_AREA - checked$OUTPUT_AREA) >
+        pmax(profile$area, checked$SOURCE_AREA * 1e-8)
+    if (any(lost)) {
+        row <- which(lost)[[1L]]
+        stop(structure(
+            list(
+                message = sprintf(
+                    paste(
+                        "DeST subsurface '%s' (source ID %s) changes area during host clipping:",
+                        "source %.9g m2, output %.9g m2. Check source containment or host partition;",
+                        "partial opening loss is not permitted."
+                    ),
+                    checked$ORIGINAL_NAME[[row]],
+                    checked$SOURCE_ID[[row]],
+                    checked$SOURCE_AREA[[row]],
+                    checked$OUTPUT_AREA[[row]]
+                ),
+                call = NULL,
+                source_id = checked$SOURCE_ID[[row]],
+                source_area = checked$SOURCE_AREA[[row]],
+                output_area = checked$OUTPUT_AREA[[row]]
+            ),
+            class = c("destep_subsurface_coverage_loss", "error", "condition")
+        ))
+    }
+
     data.table::setorderv(
         subsurface,
         c("OUTPUT_ID", "PART", "SUBPART", "POINT_NO")
@@ -813,58 +861,19 @@ subsurface__convert <- function(
 # to an equivalent EnergyPlus input. The warning prevents a documented source
 # concept from being omitted silently while the mapping remains unresolved.
 window__warn_transmitted_solar_distribution <- function(dest) {
-    fields <- "SUN_TRANS_DIST_MODE"
-    distribution_fields <- c(
-        "DIST_MODE_ID",
-        "DIST_AIR",
-        "DIST_ROOF",
-        "DIST_FLOOR",
-        "DIST_AROUND"
-    )
-    if (
-        !db_has_rows(dest, "WINDOW") ||
-            !db_has_rows(dest, "DIST_MODE") ||
-            !db_has_fields(dest, "WINDOW", fields) ||
-            !db_has_fields(dest, "DIST_MODE", distribution_fields)
-    ) {
+    audit <- solar__source_audit(dest)
+    if (!nrow(audit$bindings)) {
         return(invisible(FALSE))
     }
-
-    # Restrict the warning to distribution records referenced by actual windows;
-    # unrelated gain-distribution modes use the same DeST table.
-    modes <- data.table::as.data.table(DBI::dbGetQuery(
-        dest,
-        "
-        SELECT DISTINCT
-            D.DIST_MODE_ID,
-            D.DIST_AIR,
-            D.DIST_ROOF,
-            D.DIST_FLOOR,
-            D.DIST_AROUND
-        FROM WINDOW W
-        INNER JOIN DIST_MODE D
-        ON W.SUN_TRANS_DIST_MODE = D.DIST_MODE_ID
-        WHERE W.SUN_TRANS_DIST_MODE IS NOT NULL
-        ORDER BY D.DIST_MODE_ID
-    "
-    ))
-    if (nrow(modes) == 0L) {
+    # Reduced schemas without a mode field have no selected source mode to
+    # warn about; the public conversion audit still records the missing field.
+    if (all(audit$bindings$SOURCE_STATUS == "missing_binding_field")) {
         return(invisible(FALSE))
     }
-
     warn(
-        sprintf(
-            paste(
-                "DeST window transmitted-solar distribution mode(s) [%s]",
-                "are not converted. WINDOW.SUN_TRANS_DIST_MODE and the",
-                "referenced DIST_MODE air, roof, floor, and surrounding-surface",
-                "fractions have no established direct EnergyPlus projection;",
-                "the converted model uses the EnergyPlus building-level",
-                "solar-distribution algorithm."
-            ),
-            fmt_integer_sample(modes$DIST_MODE_ID)
-        ),
-        class = "destep_unsupported_solar_distribution"
+        "DeST window transmitted-solar distribution weights are audit-only; EnergyPlus determines the target receiving-surface distribution. See conversion$solar for saved bindings, weights, unresolved references and receiver metadata.",
+        class = "destep_unsupported_solar_distribution",
+        distributions = data.table::copy(audit$bindings)
     )
     invisible(TRUE)
 }
