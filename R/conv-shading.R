@@ -35,9 +35,17 @@ shading__source_table <- function(dest) {
         return(data.table::data.table())
     }
 
+    # Missing type metadata is unknown, never an implicit ordinary overhang.
+    # Keep inactive legacy databases readable without inventing a type.
+    group_column <- if (db_has_fields(dest, "LIB_SHADING", "GROUP")) {
+        "L.[GROUP]"
+    } else {
+        "NULL"
+    }
     shading <- data.table::as.data.table(DBI::dbGetQuery(
         dest,
-        "
+        sprintf(
+            "
         SELECT
             W.ID AS WINDOW_ID,
             W.NAME AS WINDOW_NAME,
@@ -46,6 +54,7 @@ shading__source_table <- function(dest) {
             S.TAO,
             S.ROU,
             S.LIB_SHADING_ID,
+            %s AS SHADING_GROUP,
             L.B0,
             L.B1,
             L.B2,
@@ -65,7 +74,9 @@ shading__source_table <- function(dest) {
         LEFT JOIN LIB_SHADING L ON S.LIB_SHADING_ID = L.ID
         WHERE W.SC > 0
         ORDER BY W.ID
-    "
+    ",
+            group_column
+        )
     ))
     if (nrow(shading) == 0L) {
         return(shading)
@@ -79,7 +90,9 @@ shading__source_table <- function(dest) {
     }
     numeric_fields <- setdiff(names(shading), c("WINDOW_NAME"))
     dt_force_numeric(shading, numeric_fields)
-    if (anyNA(shading)) {
+    if (
+        anyNA(shading[, setdiff(names(shading), "SHADING_GROUP"), with = FALSE])
+    ) {
         stop("An active DeST window shading definition is incomplete.")
     }
     shading
@@ -91,6 +104,45 @@ shading__source_table <- function(dest) {
 shading__validate_parameters <- function(shading, tolerance = 1e-7) {
     if (nrow(shading) == 0L) {
         return(invisible(shading))
+    }
+    # DIST and N remain stored on ordinary definitions too. Only GROUP
+    # identifies the family; louver geometry needs its own conversion rules.
+    unsupported_type <- !is.finite(shading$SHADING_GROUP) |
+        shading$SHADING_GROUP != 0
+    if (any(unsupported_type)) {
+        rows <- which(unsupported_type)
+        group <- shading$SHADING_GROUP[rows]
+        type <- rep("unknown shading type", length(rows))
+        type[which(group == 1)] <- "horizontal louvers"
+        type[which(group == 2)] <- "vertical louvers"
+        diagnostic <- data.frame(
+            window_id = shading$WINDOW_ID[rows],
+            window_name = shading$WINDOW_NAME[rows],
+            shading_id = shading$SHADINGID[rows],
+            library_id = shading$LIB_SHADING_ID[rows],
+            group = group,
+            type = type
+        )
+        abort(
+            paste0(
+                "Unsupported DeST shading type: ",
+                paste(
+                    sprintf(
+                        "%s (window %s '%s', library %s, GROUP=%s)",
+                        type,
+                        diagnostic$window_id,
+                        diagnostic$window_name,
+                        diagnostic$library_id,
+                        group
+                    ),
+                    collapse = "; "
+                ),
+                ". Only ordinary shading (GROUP=0) is currently supported; ",
+                "louver conversion is not implemented."
+            ),
+            class = "destep_unsupported_shading_type",
+            shading = diagnostic
+        )
     }
     # The opaque-panel reflectance is a bounded fraction. Reject invalid source
     # values instead of silently replacing them with EnergyPlus's default.
@@ -345,16 +397,19 @@ shading__convert <- function(
         )
     }
 
+    stored_geometry <- shading__stored_geometry(dest)
     built <- mapped[,
         {
             parameter <- shading[WINDOW_ID == ID[[1L]]][1L]
-            list(
-                result = list(shading__window_objects(
-                    .SD,
-                    parameter,
-                    geometry_profile
-                ))
+            objects <- shading__window_objects(.SD, parameter, geometry_profile)
+            shading__check_stored_geometry(
+                .SD,
+                parameter,
+                objects$objects,
+                stored_geometry,
+                geometry_profile
             )
+            list(result = list(objects))
         },
         by = "OUTPUT_PART_ID"
     ]$result
