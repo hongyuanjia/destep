@@ -577,38 +577,57 @@ test_that("can convert 'Construction' and 'Material'", {
 
     path <- ensure_dest_test_file()
     dest <- read_dest(path, verbose = TRUE)
+    on.exit(DBI::dbDisconnect(dest))
     conv__update_names(dest)
 
     # can convert 'Material', 'Construction'
     const <- const__convert(dest, ep)
     expect_type(const, "list")
     expect_named(const, c("object", "value"))
-    expect_equal(
+    # The real fixture's positive N2 type now uses recovered SC optics despite
+    # its dormant .78/.80 visible placeholders; object order is not physical.
+    expect_setequal(
         unique(const$object$class_name),
         c(
             "Material",
-            "WindowMaterial:SimpleGlazingSystem",
-            "Construction"
+            "WindowMaterial:Glazing",
+            "Construction",
+            "Table:IndependentVariable",
+            "Table:IndependentVariableList",
+            "Table:Lookup"
         )
     )
     glazing <- const$value[
-        class_name == "WindowMaterial:SimpleGlazingSystem"
+        class_name == "WindowMaterial:Glazing"
     ]
     expect_true(all(
         c(
-            "U-Factor",
-            "Solar Heat Gain Coefficient",
-            "Visible Transmittance"
+            "Conductivity",
+            "Solar Transmittance at Normal Incidence",
+            "Visible Transmittance at Normal Incidence",
+            "Front Side Visible Reflectance at Normal Incidence",
+            "Front Side Infrared Hemispherical Emissivity",
+            "Back Side Infrared Hemispherical Emissivity"
         ) %in%
             glazing$field_name
     ))
     diagnostics <- attr(const, "windows")
     expect_true(nrow(diagnostics) > 0L)
+    expect_true(all(diagnostics$DETAILED_EQUIVALENT))
+    expect_equal(
+        diagnostics$SOURCE_LIGHT_TRANS_RATIO,
+        rep(.78, nrow(diagnostics))
+    )
+    expect_equal(
+        diagnostics$SOURCE_LIGHT_REFLECT_RATIO,
+        rep(.8, nrow(diagnostics))
+    )
+    expect_equal(diagnostics$NORMAL_VISIBLE_TAU, diagnostics$NORMAL_SOLAR_TAU)
     expect_equal(diagnostics$NOMINAL_SHGC, 0.87 * diagnostics$SC)
     expect_true(all(is.finite(diagnostics$SIDE1_BLACKNESS)))
     expect_true(all(is.finite(diagnostics$SIDE2_BLACKNESS)))
     comments <- unlist(const$object$comment[
-        const$object$class_name == "WindowMaterial:SimpleGlazingSystem"
+        const$object$class_name == "WindowMaterial:Glazing"
     ])
     expect_true(any(grepl("BLACKNESS", comments, fixed = TRUE)))
     material_thickness <- const$value[

@@ -24,6 +24,10 @@ conv__generation_version <- function(dest, target, options = destep_opts()) {
     } else {
         numeric_version("9.0.1")
     }
+    angle <- window__angle_generation_version(dest, target)
+    if (!is.null(angle) && angle > baseline) {
+        baseline <- angle
+    }
     # Explicit standalone state controls and density syntax need a maintained
     # common baseline. Never silently drop a selected feature on an old target.
     state <- options$occupant_sensible == "temperature_feedback"

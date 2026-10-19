@@ -6,6 +6,10 @@ test_that("one options entry point retains source inputs and representation choi
     expect_identical(formals(to_idf)$options, "objects")
     basic <- destep_opts()
     expect_s3_class(basic, "destep_options")
+    expect_false(any(
+        c("window_model", "window_weather", "window_directory") %in%
+            names(basic)
+    ))
     expect_identical(basic$surface_convection, "dest")
     expect_identical(conv__resolve_options("objects"), basic)
     expect_identical(conv__resolve_options(basic), basic)
@@ -41,7 +45,10 @@ test_that("retired solver adapter options cannot silently alter a model", {
         "window_optics",
         "terrain",
         "solar_distribution",
-        "shadow_update_days"
+        "shadow_update_days",
+        "window_model",
+        "window_weather",
+        "window_directory"
     )) {
         args <- stats::setNames(list("dest"), option)
         expect_error(
@@ -69,6 +76,14 @@ test_that("retired solver adapter options cannot silently alter a model", {
     invalid <- destep_opts()
     invalid$unknown <- TRUE
     expect_error(to_idf(NULL, options = invalid), "fields")
+    # A previously prepared option must fail at the public boundary, rather
+    # than silently generating the single direct representation instead.
+    for (method in c("equivalent", "source_equivalent", "n2_multilayer")) {
+        expect_error(destep_opts(window_model = method), "Unknown or unnamed")
+        invalid <- destep_opts()
+        invalid$window_model <- method
+        expect_error(to_idf(NULL, options = invalid), "fields")
+    }
     expect_error(to_idf(NULL, options = list()), "destep_opts")
 })
 

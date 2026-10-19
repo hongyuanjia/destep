@@ -243,3 +243,59 @@ test_that("9.0 equipment transitions retain full sequential load fractions", {
     )
     expect_identical(model$to_table(), before)
 })
+
+# A selected N2 window needs angular tables even without moisture. An unused
+# catalogue entry must not raise the minimum version for an otherwise dry model.
+test_that("effective angular glazing raises the complete conversion baseline", {
+    con <- version_test__source()
+    on.exit(DBI::dbDisconnect(con))
+    DBI::dbWriteTable(
+        con,
+        "WINDOW",
+        data.frame(
+            ID = integer(),
+            TYPE = integer(),
+            WINDOW_CONSTRUCTION = integer(),
+            K = double(),
+            SIDE1 = integer(),
+            SIDE2 = integer()
+        )
+    )
+    DBI::dbWriteTable(
+        con,
+        "WINDOW_TYPE_DATA",
+        data.frame(
+            ID = 46L,
+            NAME = "Selected N2",
+            K = 1.9,
+            SC = .883,
+            LAYER_NUM = 2L
+        )
+    )
+    DBI::dbWriteTable(
+        con,
+        "SURFACE",
+        data.frame(
+            SURFACE_ID = 1:2,
+            BLACKNESS = c(.84, .2)
+        )
+    )
+    expect_identical(
+        as.character(conv__generation_version(con, "9.0.1")),
+        "9.0.1"
+    )
+    DBI::dbExecute(con, "INSERT INTO WINDOW VALUES (1,46,4,1,1,2)")
+    expect_identical(
+        as.character(conv__generation_version(con, "26.1")),
+        "9.2.0"
+    )
+    expect_error(
+        conv__generation_version(con, "9.1"),
+        class = "destep_unsupported_window_angle_target"
+    )
+    DBI::dbExecute(con, "UPDATE ROOM_TYPE_DATA SET O_MAXNUMBER=2 WHERE ID=1")
+    expect_identical(
+        as.character(conv__generation_version(con, "26.1")),
+        "9.2.0"
+    )
+})

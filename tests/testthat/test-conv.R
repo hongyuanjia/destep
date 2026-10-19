@@ -236,12 +236,17 @@ test_that("to_idf() works", {
     # can convert 'Material', 'Construction'
     expect_type(const <- const__convert(dest, ep), "list")
     expect_named(const, c("object", "value"))
-    expect_equal(
+    # SC-derived N2 glazing replaces the former SimpleGlazing fallback in the
+    # real fixture; construction order does not affect this object-class check.
+    expect_setequal(
         unique(const$object$class_name),
         c(
             "Material",
-            "WindowMaterial:SimpleGlazingSystem",
-            "Construction"
+            "WindowMaterial:Glazing",
+            "Construction",
+            "Table:IndependentVariable",
+            "Table:IndependentVariableList",
+            "Table:Lookup"
         )
     )
     expect_s3_class(attr(const, "table"), "data.table")
@@ -281,18 +286,18 @@ test_that("to_idf() works", {
     expect_s3_class(idf, "Idf")
     expect_true(nrow(attr(idf, "conversion")$windows) > 0L)
     expect_false("window_optics" %in% names(attr(idf, "conversion")$options))
-    expect_false("Table:Lookup" %in% idf$to_table()$class)
+    expect_true("Table:Lookup" %in% idf$to_table()$class)
     expect_true(idf$is_valid())
     saved <- tempfile(fileext = ".idf")
     idf$save(saved)
     saved_lines <- readLines(saved, warn = FALSE)
     expect_true(any(grepl(
-        "WINDOW_TYPE_DATA.ID=35",
+        "DeST TYPE=35;",
         saved_lines,
         fixed = TRUE
     )))
     expect_true(any(grepl(
-        "neither value is expressed by SimpleGlazing",
+        "Saved LIGHT_TRANS_RATIO=0.78 and LIGHT_REFLECT_RATIO=0.8 are not used",
         saved_lines,
         fixed = TRUE
     )))
