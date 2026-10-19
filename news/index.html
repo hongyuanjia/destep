@@ -33,7 +33,9 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li><p>Preserve complete source surfaces with necessary local cuts only; retain shared-wall ownership and coordinates, reject opening-area loss, and report source-shell tolerance limits (#49).</p></li>
+<ul><li><p>Distinguish source weather field errors from ambiguous or inconsistent hour interpretations without changing checks, thresholds, source values or radiation-time selection (#54).</p></li>
+<li><p>Reject unsupported louver types, missing active shading types, and stale shading geometry with source-object diagnostics before conversion (#50).</p></li>
+<li><p>Preserve complete source surfaces with necessary local cuts only; retain shared-wall ownership and coordinates, reject opening-area loss, and report source-shell tolerance limits (#49).</p></li>
 <li><p>Add explicit standalone sensible-gain feedback, standard-density ventilation and target-state ventilation prediction options, retaining existing defaults and documenting their version requirements and control approximations (#53).</p></li>
 <li><p>Retain effective row K, ordered emissivities and SC-derived source angle optics in one direct equivalent window path; audit source radiation weights and declare native allocation, absorption-node and heat-capacity limits. No optical prepass or result replay is used (#52).</p></li>
 <li><p>Preserve blank optional equipment-list fractions as the unchanged default of one across supported generation versions, without replacing existing schedules or required fields (#51).</p></li>

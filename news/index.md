@@ -2,6 +2,14 @@
 
 ## destep 0.0.0.9000
 
+- Distinguish source weather field errors from ambiguous or inconsistent
+  hour interpretations without changing checks, thresholds, source
+  values or radiation-time selection (#54).
+
+- Reject unsupported louver types, missing active shading types, and
+  stale shading geometry with source-object diagnostics before
+  conversion (#50).
+
 - Preserve complete source surfaces with necessary local cuts only;
   retain shared-wall ownership and coordinates, reject opening-area
   loss, and report source-shell tolerance limits (#49).
