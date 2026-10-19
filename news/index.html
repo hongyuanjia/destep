@@ -33,7 +33,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="destep-0009000">destep 0.0.0.9000<a class="anchor" aria-label="anchor" href="#destep-0009000"></a></h2>
-<ul><li><p>Retain effective row K, ordered emissivities and SC-derived source angle optics in one direct equivalent window path; audit source radiation weights and declare native allocation, absorption-node and heat-capacity limits. No optical prepass or result replay is used (#52).</p></li>
+<ul><li><p>Add explicit standalone sensible-gain feedback, standard-density ventilation and target-state ventilation prediction options, retaining existing defaults and documenting their version requirements and control approximations (#53).</p></li>
+<li><p>Retain effective row K, ordered emissivities and SC-derived source angle optics in one direct equivalent window path; audit source radiation weights and declare native allocation, absorption-node and heat-capacity limits. No optical prepass or result replay is used (#52).</p></li>
 <li><p>Preserve blank optional equipment-list fractions as the unchanged default of one across supported generation versions, without replacing existing schedules or required fields (#51).</p></li>
 <li><p>Preserve constant-one sequential load fractions when upgrading dry-gain models from EnergyPlus 9.0.1. Explicit default schedules prevent false incomplete-equipment-group errors with released eplusr 0.17.0 (#48).</p></li>
 <li><p>Restore window-side ownership stored as <code>OF_ROOM = -1</code> from the corresponding explicit host side during conversion. Unique, valid source relationships are required; ambiguous references and conflicting bindings stop conversion. Geometry and thermal inputs are retained. The warning, conversion audit and saved IDF comments record every restoration; the default input copy is preserved (#45).</p></li>

@@ -18,7 +18,10 @@ destep_opts(
   run_period = c(1L, 365L),
   hvac = "auto",
   hvac_options = NULL,
-  surface_convection = "dest"
+  surface_convection = "dest",
+  ventilation_density = "outdoor",
+  occupant_sensible = "nominal",
+  ventilation_control = "outdoor_band"
 )
 ```
 
@@ -152,6 +155,36 @@ destep_opts(
   EnergyPlus selects its own coefficients. Furniture's internal-mass
   exchange definition is retained separately.
 
+- ventilation_density:
+
+  \[string\] `"outdoor"` retains EnergyPlus's outdoor-density
+  convention; `"standard"` uses its site standard density, closer to the
+  audited DeST fixed-density air exchange. Standard density currently
+  requires EnergyPlus 26.1 or newer. Humid-air specific heat and
+  site-reference density remain target-engine approximations.
+
+- occupant_sensible:
+
+  \[string\] `"nominal"` preserves prescribed sensible watts/person.
+  `"temperature_feedback"` emits standalone EMS for max(0, nominal +
+  5.536 \* (26 - previous-hour temperature)), using the target's last
+  completed zone-step mean as its hourly endpoint. Moisture remains
+  nominal. The source execution switch is not inferred.
+
+- ventilation_control:
+
+  \[string\] `"outdoor_band"` retains the documented temperature-band
+  approximation. `"target_prediction"` emits standalone EMS using the
+  target's own ThirdOrder air history and one-zone-step-lagged non-air
+  coefficients to select bounded, possibly intermediate natural
+  ventilation, including below the heating lower bound. It requires
+  IdealLoads, standard density and EnergyPlus 26.1 or newer. This is an
+  explicit control approximation; it does not reproduce the DeST coupled
+  solver or guarantee improved annual loads. This option retains
+  Site:Location (including elevation) when weather headers differ,
+  keeping the predictor and standard-density flow on the same site
+  reference. It does not read external simulation results.
+
 ## Value
 
 An object of class `destep_options`, accepted by `to_idf(options = )`.
@@ -214,16 +247,16 @@ has no implemented mapping.
 
 ## People inputs and interzone surfaces
 
-Conversion retains nominal people sensible heat and `O_DAMP_PER_PERSON`;
-DeST occupant temperature feedback is not reproduced. Nonzero people
-moisture requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment
-companion uses target vapor enthalpy to express nominal g/h/person as
-latent watts. Rapid temperature changes can leave a one-zone-step mass
-residual. People carries sensible heat only: its activity is not a
-comfort-model metabolic input and its latent-gain reports exclude the
-independent moisture source. Interzone surfaces retain their paired
-surface references and constructions; no neighbor-air
-equivalent-temperature boundary is generated.
+Conversion retains nominal `O_DAMP_PER_PERSON`. Sensible heat uses the
+selected nominal or target-temperature-feedback representation. Nonzero
+people moisture requires EnergyPlus 9.1 or newer. An unmetered
+OtherEquipment companion uses target vapor enthalpy to express nominal
+g/h/person as latent watts. Rapid temperature changes can leave a
+one-zone-step mass residual. People carries sensible heat only: its
+activity is not a comfort-model metabolic input and its latent-gain
+reports exclude the independent moisture source. Interzone surfaces
+retain their paired surface references and constructions; no
+neighbor-air equivalent-temperature boundary is generated.
 
 ## Window and radiation representation
 
@@ -266,6 +299,15 @@ destep_opts()
 #> $surface_convection
 #> [1] "dest"
 #> 
+#> $ventilation_density
+#> [1] "outdoor"
+#> 
+#> $occupant_sensible
+#> [1] "nominal"
+#> 
+#> $ventilation_control
+#> [1] "outdoor_band"
+#> 
 #> attr(,"class")
 #> [1] "destep_options"
 # File schedules remain annual even when simulating days 59 through 61.
@@ -291,6 +333,15 @@ destep_opts(schedule_format = "file", schedule_directory = "schedules",
 #> 
 #> $surface_convection
 #> [1] "dest"
+#> 
+#> $ventilation_density
+#> [1] "outdoor"
+#> 
+#> $occupant_sensible
+#> [1] "nominal"
+#> 
+#> $ventilation_control
+#> [1] "outdoor_band"
 #> 
 #> attr(,"class")
 #> [1] "destep_options"

@@ -58,7 +58,10 @@ approximation and do not promise full DeST solver equivalence.</p>
 <span>  run_period <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fl">365L</span><span class="op">)</span>,</span>
 <span>  hvac <span class="op">=</span> <span class="st">"auto"</span>,</span>
 <span>  hvac_options <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  surface_convection <span class="op">=</span> <span class="st">"dest"</span></span>
+<span>  surface_convection <span class="op">=</span> <span class="st">"dest"</span>,</span>
+<span>  ventilation_density <span class="op">=</span> <span class="st">"outdoor"</span>,</span>
+<span>  occupant_sensible <span class="op">=</span> <span class="st">"nominal"</span>,</span>
+<span>  ventilation_control <span class="op">=</span> <span class="st">"outdoor_band"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -190,6 +193,36 @@ doors using ordinary EnergyPlus surface-property objects. <code>"energyplus"</co
 omits these overrides so EnergyPlus selects its own coefficients.
 Furniture's internal-mass exchange definition is retained separately.</p></dd>
 
+
+<dt id="arg-ventilation-density">ventilation_density<a class="anchor" aria-label="anchor" href="#arg-ventilation-density"></a></dt>
+<dd><p>[string] <code>"outdoor"</code> retains EnergyPlus's
+outdoor-density convention; <code>"standard"</code> uses its site standard
+density, closer to the audited DeST fixed-density air exchange.
+Standard density currently requires EnergyPlus 26.1 or newer. Humid-air specific
+heat and site-reference density remain target-engine approximations.</p></dd>
+
+
+<dt id="arg-occupant-sensible">occupant_sensible<a class="anchor" aria-label="anchor" href="#arg-occupant-sensible"></a></dt>
+<dd><p>[string] <code>"nominal"</code> preserves prescribed
+sensible watts/person. <code>"temperature_feedback"</code> emits standalone EMS
+for max(0, nominal + 5.536 * (26 - previous-hour temperature)), using
+the target's last completed zone-step mean as its hourly endpoint.
+Moisture remains nominal. The source execution switch is not inferred.</p></dd>
+
+
+<dt id="arg-ventilation-control">ventilation_control<a class="anchor" aria-label="anchor" href="#arg-ventilation-control"></a></dt>
+<dd><p>[string] <code>"outdoor_band"</code> retains the
+documented temperature-band approximation. <code>"target_prediction"</code>
+emits standalone EMS using the target's own ThirdOrder air history
+and one-zone-step-lagged non-air coefficients to select bounded,
+possibly intermediate natural ventilation, including below the heating
+lower bound. It requires IdealLoads, standard density and EnergyPlus
+26.1 or newer. This is an explicit control approximation; it does not
+reproduce the DeST coupled solver or guarantee improved annual loads.
+This option retains Site:Location (including elevation) when weather
+headers differ, keeping the predictor and standard-density flow on
+the same site reference. It does not read external simulation results.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -260,8 +293,8 @@ equipment that has no implemented mapping.</p>
     <h2 id="people-inputs-and-interzone-surfaces">People inputs and interzone surfaces<a class="anchor" aria-label="anchor" href="#people-inputs-and-interzone-surfaces"></a></h2>
 
 
-<p>Conversion retains nominal people sensible heat and <code>O_DAMP_PER_PERSON</code>;
-DeST occupant temperature feedback is not reproduced. Nonzero people moisture
+<p>Conversion retains nominal <code>O_DAMP_PER_PERSON</code>. Sensible heat uses the
+selected nominal or target-temperature-feedback representation. Nonzero people moisture
 requires EnergyPlus 9.1 or newer. An unmetered OtherEquipment companion uses
 target vapor enthalpy to express nominal g/h/person as latent watts. Rapid
 temperature changes can leave a one-zone-step mass residual. People carries
@@ -312,6 +345,15 @@ unrepresented. See <code><a href="to_idf.html">to_idf()</a></code> for the saved
 <span class="r-out co"><span class="r-pr">#&gt;</span> $surface_convection</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "dest"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $ventilation_density</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "outdoor"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $occupant_sensible</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "nominal"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $ventilation_control</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "outdoor_band"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "destep_options"</span>
 <span class="r-in"><span><span class="co"># File schedules remain annual even when simulating days 59 through 61.</span></span></span>
@@ -337,6 +379,15 @@ unrepresented. See <code><a href="to_idf.html">to_idf()</a></code> for the saved
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $surface_convection</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "dest"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $ventilation_density</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "outdoor"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $occupant_sensible</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "nominal"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $ventilation_control</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "outdoor_band"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "destep_options"</span>

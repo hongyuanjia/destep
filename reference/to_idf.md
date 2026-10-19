@@ -89,10 +89,15 @@ switch is absent, conversion retains its legacy documented
 outdoor-temperature-band rule and warns about the assumed enabled
 setting. The `ventilation` attribute records this selection. A room
 group with `IS_AC_ROOM = 0` retains minimum ventilation only; unused
-maximum and temperature-range references are not consumed. the AC
-availability time table does not gate the range increment. The rule
+maximum and temperature-range references are not consumed. In the
+default outdoor-band rule, the AC availability time table does not gate
+the range increment. Explicit target prediction uses that schedule in
+its own-state selection and supports intermediate flow. The rule
 preserves the remaining range inputs but does not reproduce DeST's
-internal ventilation control algorithm.
+internal ventilation control algorithm. See
+[`destep_opts()`](destep_opts.md) for standalone target-state controls,
+their version requirements and approximations; none consumes source
+simulation results.
 
 Window-side surfaces stored with `OF_ROOM = -1` are restored from the
 same side of their explicit `WINDOW.OF_ENCLOSURE` host. Restoration
