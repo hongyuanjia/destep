@@ -321,7 +321,11 @@ epw__validate_climate <- function(climate, climate_id) {
     if (length(issues)) {
         stop(
             sprintf(
-                "Invalid CLIMATE_DATA series for ID %s: %s",
+                paste(
+                    "Source weather data validation failed.",
+                    "Invalid CLIMATE_DATA series for ID %s: %s.",
+                    "Changing radiation_time cannot resolve these source-field errors."
+                ),
                 climate_id,
                 paste(issues, collapse = "; ")
             ),
@@ -597,15 +601,23 @@ epw__radiation_selection_error <- function(diagnostics, ambiguous) {
         },
         character(1L)
     )
+    # Passing both candidates leaves the timestamp unresolved; failing one or
+    # both does not by itself locate an error in the upstream weather record.
     reason <- if (ambiguous) {
         paste(
             "Both radiation-time candidates pass; the interval is ambiguous.",
+            "The hour interpretation cannot be determined from these checks;",
+            "this does not establish a source weather data error.",
             "Specify radiation_time='centered' or 'hour_start' from source provenance."
         )
     } else {
         paste(
             "Neither radiation-time candidate passes.",
-            "Check source weather, site metadata and radiation intervals."
+            "Source weather radiation checks fail under both supported hour interpretations;",
+            "choosing between them cannot resolve the failures.",
+            "Check the original HORI_TOTAL_RAD/HORI_SCATTER_RAD values, units",
+            "and site metadata against the source hour definition.",
+            "No source radiation values were shifted or clipped."
         )
     }
     stop(errorCondition(
@@ -631,8 +643,11 @@ epw__radiation <- function(
         stop(
             sprintf(
                 paste(
+                    "Source weather data error:",
                     "HORI_SCATTER_RAD exceeds HORI_TOTAL_RAD by more than 1 W/m2",
-                    "at %i hour(s); maximum excess is %.6f W/m2."
+                    "at %i hour(s); maximum excess is %.6f W/m2.",
+                    "This field inconsistency is independent of radiation_time;",
+                    "check the original radiation values and units."
                 ),
                 sum(discrepancy > 1),
                 max(discrepancy)
@@ -673,7 +688,10 @@ epw__radiation <- function(
                 paste(
                     "Positive horizontal beam radiation without sunlight at",
                     "%i hour(s), including HOUR %s; radiation_time='%s'.",
-                    "Check source radiation intervals and site metadata."
+                    "The source radiation, site metadata and selected hour interpretation",
+                    "are inconsistent; this check alone does not identify which is wrong.",
+                    "Verify the original values and source hour definition.",
+                    "No source radiation values were shifted or clipped."
                 ),
                 sum(unrepresented),
                 fmt_integer_sample(climate$HOUR[unrepresented]),
@@ -689,7 +707,10 @@ epw__radiation <- function(
                 paste(
                     "Derived direct normal radiation exceeds 1500 W/m2;",
                     "maximum is %.6f W/m2 at HOUR %s; radiation_time='%s'.",
-                    "Check source radiation intervals and site metadata."
+                    "The source radiation, site metadata and selected hour interpretation",
+                    "are inconsistent; this check alone does not identify which is wrong.",
+                    "Verify the original values and source hour definition.",
+                    "No source radiation values were shifted or clipped."
                 ),
                 max(direct_normal),
                 climate$HOUR[[which.max(direct_normal)]],

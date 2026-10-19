@@ -302,6 +302,14 @@ test_that("automatic radiation rejects ambiguous and wholly invalid inputs", {
         conditionMessage(ambiguous),
         "Both radiation-time candidates pass"
     )
+    expect_match(
+        conditionMessage(ambiguous),
+        "hour interpretation cannot be determined"
+    )
+    expect_match(
+        conditionMessage(ambiguous),
+        "does not establish a source weather data error"
+    )
     expect_match(conditionMessage(ambiguous), "centered:.*hour_start:")
 
     # A zero-beam series contains no information to distinguish the intervals.
@@ -318,6 +326,7 @@ test_that("automatic radiation rejects ambiguous and wholly invalid inputs", {
         HORI_TOTAL_RAD = c(1, 2000),
         HORI_SCATTER_RAD = c(0, 0)
     )
+    original <- invalid
     failed <- tryCatch(
         epw__radiation(invalid, environment, "auto"),
         destep_radiation_time_error = identity
@@ -328,6 +337,15 @@ test_that("automatic radiation rejects ambiguous and wholly invalid inputs", {
         conditionMessage(failed),
         "Neither radiation-time candidate passes"
     )
+    expect_match(
+        conditionMessage(failed),
+        "both supported hour interpretations"
+    )
+    expect_match(
+        conditionMessage(failed),
+        "choosing between them cannot resolve"
+    )
+    expect_identical(invalid, original)
     for (candidate in failed$candidates) {
         expect_false(candidate$passed)
         expect_equal(candidate$positive_beam_without_sun_hours, 1L)
@@ -335,6 +353,61 @@ test_that("automatic radiation rejects ambiguous and wholly invalid inputs", {
         expect_equal(candidate$positive_beam_without_sun_hour_sample, 0L)
         expect_equal(candidate$dni_above_1500_hour_sample, 12L)
     }
+})
+
+# A failed explicit choice can reflect either source inputs or the interval;
+# the message must not diagnose bad source data or silently retry another one.
+test_that("explicit radiation failures preserve uncertainty and source values", {
+    environment <- epw_test__environment()
+    for (hour in c(0L, 12L)) {
+        climate <- data.frame(
+            HOUR = hour,
+            HORI_TOTAL_RAD = if (hour == 0L) 1 else 2000,
+            HORI_SCATTER_RAD = 0
+        )
+        original <- climate
+        for (choice in c("centered", "hour_start")) {
+            error <- tryCatch(
+                epw__radiation(climate, environment, choice),
+                error = identity
+            )
+            expect_s3_class(error, "error")
+            message <- conditionMessage(error)
+            expect_match(message, paste0("radiation_time='", choice, "'"))
+            expect_match(message, "does not identify which is wrong")
+            expect_match(
+                message,
+                "No source radiation values were shifted or clipped"
+            )
+            expect_identical(climate, original)
+        }
+    }
+})
+
+# An inversion between the stored radiation components is independent of the
+# solar interval. Exercise the public API and confirm failed exports leave the
+# database untouched for every supported request, including automatic selection.
+test_that("source radiation errors are distinguished from hour interpretation", {
+    dest <- epw_test__database()
+    on.exit(DBI::dbDisconnect(dest), add = TRUE)
+    DBI::dbExecute(
+        dest,
+        paste(
+            "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD=90, HORI_SCATTER_RAD=100",
+            "WHERE HOUR=12"
+        )
+    )
+    original <- DBI::dbReadTable(dest, "CLIMATE_DATA")
+    for (choice in c("centered", "hour_start", "auto")) {
+        error <- tryCatch(to_epw(dest, choice), error = identity)
+        expect_s3_class(error, "error")
+        expect_false(inherits(error, "destep_radiation_time_error"))
+        message <- conditionMessage(error)
+        expect_match(message, "Source weather data error:", fixed = TRUE)
+        expect_match(message, "independent of radiation_time", fixed = TRUE)
+        expect_match(message, "maximum excess is 10.000000 W/m2", fixed = TRUE)
+    }
+    expect_identical(DBI::dbReadTable(dest, "CLIMATE_DATA"), original)
 })
 
 test_that("to_epw() propagates automatic selection and preserves weather values", {
@@ -376,7 +449,10 @@ test_that("to_epw() propagates automatic selection and preserves weather values"
         dest,
         "UPDATE CLIMATE_DATA SET HORI_TOTAL_RAD=NULL WHERE HOUR=0"
     )
-    expect_error(to_epw(dest, "auto"), "HORI_TOTAL_RAD contains missing")
+    expect_error(
+        to_epw(dest, "auto"),
+        "Source weather data validation failed.*HORI_TOTAL_RAD contains missing"
+    )
 })
 
 test_that("to_epw() writes hour-ending minute 60", {
