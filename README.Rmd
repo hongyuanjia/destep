@@ -20,7 +20,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-# destep
+# destep <img src="man/figures/logo.svg" align="right" height="192" alt="destep logo" />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hongyuanjia/destep/actions/workflows/R-CMD-check.yaml)
